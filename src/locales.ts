@@ -2,6 +2,7 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  'Задание экспорта сохранилось, но видео больше недоступно. Чтобы вырезать новые моменты, откройте его заново.': 'Your export job is still here, but the video is no longer available. Open it again to create new clips.',
   'Обработка отменена. Можно изменить моменты или настройки и вырезать снова.': 'Processing was cancelled. Adjust the moments or settings and try again.',
   "Видео больше недоступно, но результат экспорта сохранился. Чтобы вырезать новые моменты, откройте видео заново.": "The video is no longer available, but your export is still here. Open the video again to create new clips.",
   "Открыть другое видео": "Open another video",

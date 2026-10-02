@@ -28,6 +28,8 @@ Notable product changes are recorded here.
 - Honor the saved editing step after retrieving a previous job; retain status and downloads when its source has expired.
 - Keep light input borders distinguishable from their surface and distribute the font copyright/license with self-hosted assets.
 - Pause playback when leaving the Moments step, keep the player mounted while hidden, and restore saved playback position after readiness.
+- Apply theme colors without a transient control-background flash and keep the browser theme color aligned before first paint.
+- Describe retained jobs without implying files exist when an expired-source job has no artifacts.
 - Clarify the lossless copy choice as Original quality with its explicit boundary warning.
 - Authenticate the platform extractor consistently in the production container through the updated public core.
 - Distinguish failed exports with no files from partial success, and preserve original clip numbering in partial downloads.
