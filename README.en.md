@@ -4,6 +4,8 @@
 
 The editing interface for [cutmy.video](https://cutmy.video): select and export moments from video or audio manually. This repository is private. Media processing lives in the open-source [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
 
+[Using the editor](#using-the-editor) · [Features](#mvp-features) · [Development](#development) · [Structure](#structure) · [Support](#supporting-development)
+
 ## Using the editor
 
 1. Paste a public HTTPS URL or upload a file. The Examples section provides a short sample video.
@@ -29,7 +31,7 @@ Preferences and language are stored in the browser. The server defines media ret
 
 ## Development
 
-Requires Node.js 20.19+ and the core HTTP API on `127.0.0.1:8080`. Both the API and worker must run.
+Node.js 22 is recommended; the minimum supported version is 20.19. Both the core HTTP API on `127.0.0.1:8080` and its worker must run.
 
 ```sh
 npm ci
