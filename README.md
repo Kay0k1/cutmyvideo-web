@@ -55,7 +55,7 @@ npm run build
 Проверки браузера используют настоящее ядро и синтетические тестовые видео:
 
 ```sh
-npx playwright install chromium
+npx playwright install --with-deps chromium firefox webkit
 npm run test:e2e
 ```
 

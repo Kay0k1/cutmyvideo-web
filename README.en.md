@@ -55,7 +55,7 @@ npm run build
 Browser checks use the actual core and synthetic test videos:
 
 ```sh
-npx playwright install chromium
+npx playwright install --with-deps chromium firefox webkit
 npm run test:e2e
 ```
 
