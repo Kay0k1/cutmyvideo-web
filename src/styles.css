@@ -474,7 +474,7 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 @media (max-width: 420px) {
   .ranges-panel { padding: 0 15px 20px; }
 }
-@media (pointer: coarse) {
+@media (pointer: coarse), (max-width: 680px) {
   .language-switch button { min-width: 44px; }
   .steps-nav button { min-width: 44px; }
   .theme-toggle { min-width: 44px; }
@@ -506,4 +506,10 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
   .file-dropzone .field-hint { font-size: 11px; line-height: 1.6; margin-top: 8px; margin-bottom: 14px; }
   .upload-button { min-height: 44px; }
   .page-footer { margin-top: 0; padding: 12px 0; }
+}
+
+@media (max-width: 360px) {
+  .header-inner { column-gap: 7px; }
+  .workspace-nav { gap: 0; }
+  .workspace-nav button { padding-left: 3px; padding-right: 3px; }
 }
