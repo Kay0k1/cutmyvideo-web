@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { api, uploadThroughUI, waitJob } from './helpers'
+import { api, goToExport, goToMoments, goToSource, uploadThroughUI, waitJob } from './helpers'
 
 // Exact addresses supplied by the owner, independent of the app catalog.
 const wallets = [
@@ -18,7 +18,6 @@ async function expectEnglishCopy(page: import('@playwright/test').Page) {
 test('language switching preserves the real source, ranges and export', async ({ page }, testInfo) => {
   await page.goto('/')
   await expect(page.locator('html')).toHaveAttribute('lang', 'ru')
-  await expect(page.locator('button.upload-button')).toBeEnabled()
   await uploadThroughUI(page)
   await page.getByLabel('Начало', { exact: true }).fill('00:00:01.500')
   await page.getByLabel('Начало', { exact: true }).press('Tab')
@@ -27,17 +26,19 @@ test('language switching preserves the real source, ranges and export', async ({
 
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
-  await expect(page.getByRole('heading', { name: 'Cut a clip', exact: true })).toBeVisible()
   await expect(page.getByLabel('Start', { exact: true })).toHaveValue('00:00:01.500')
   await expect(page.getByLabel('End', { exact: true })).toHaveValue('00:00:04.000')
   await expect(page.locator('video')).toBeVisible()
-  await page.getByLabel('Video URL', { exact: true }).fill('not-a-url')
+  await goToSource(page)
+  await page.getByRole('button', { name: 'YouTube', exact: true }).click()
+  await page.getByLabel('YouTube link', { exact: true }).fill('not-a-url')
   await page.getByRole('button', { name: 'Open video', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('Enter a complete public URL')
-  await expect(page.getByLabel('Video URL', { exact: true })).toBeFocused()
+  await expect(page.getByRole('alert')).toContainText('Paste a YouTube video link')
+  await expect(page.getByLabel('YouTube link', { exact: true })).toBeFocused()
+  await page.getByLabel('YouTube link', { exact: true }).fill('')
+  await goToMoments(page)
   await expect(page.locator('video')).toBeVisible()
   await expect(page.getByLabel('Start', { exact: true })).toHaveValue('00:00:01.500')
-  await page.getByLabel('Video URL', { exact: true }).fill('')
   await expectEnglishCopy(page)
   await page.getByRole('button', { name: 'Preview clip', exact: true }).click()
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(1.8)
@@ -46,13 +47,13 @@ test('language switching preserves the real source, ranges and export', async ({
   await page.screenshot({ path: testInfo.outputPath('english-editor.png'), fullPage: true })
   await testInfo.attach('English editor', { path: testInfo.outputPath('english-editor.png'), contentType: 'image/png' })
 
+  await goToExport(page)
   const creationPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
   const creation = await creationPromise
   expect(creation.ok()).toBeTruthy()
   const id = (await creation.json()).id
   await page.getByRole('button', { name: 'Русский', exact: true }).click()
-  await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:01.500')
   const job = await waitJob(page.request, id)
   expect(job.status).toBe('succeeded')
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
@@ -65,6 +66,8 @@ test('language switching preserves the real source, ranges and export', async ({
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: testInfo.outputPath('english-results.png'), fullPage: true })
   await testInfo.attach('English results', { path: testInfo.outputPath('english-results.png'), contentType: 'image/png' })
+  await goToMoments(page)
+  await expect(page.getByLabel('Start', { exact: true })).toHaveValue('00:00:01.500')
 })
 
 test('navigation dialogs support Escape, trapped keyboard focus and focus return', async ({ page }) => {
@@ -104,7 +107,6 @@ test('donation copy returns every exact owner address once', async ({ page, cont
 
 test('saved defaults survive reload and are applied without changing clip boundaries', async ({ page }) => {
   await page.goto('/')
-  await expect(page.locator('button.upload-button')).toBeEnabled()
   await uploadThroughUI(page)
   await page.getByLabel('Начало', { exact: true }).fill('00:00:02.000')
   await page.getByLabel('Начало', { exact: true }).press('Tab')
@@ -118,11 +120,12 @@ test('saved defaults survive reload and are applied without changing clip bounda
   await dialog.getByRole('button', { name: 'Save settings', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(page.getByLabel('Start', { exact: true })).toHaveValue('00:00:02.000')
+  await goToExport(page)
   await expect(page.getByRole('button', { name: 'MP3 Audio', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await goToMoments(page)
   await expect(page.getByLabel('Timeline zoom', { exact: true })).toHaveValue('10000')
 
   await page.reload()
-  await expect(page.getByRole('button', { name: 'MP3 Audio', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByLabel('Start', { exact: true })).toHaveValue('00:00:02.000')
   await expect(page.getByLabel('Timeline zoom', { exact: true })).toHaveValue('10000')
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
@@ -131,14 +134,17 @@ test('saved defaults survive reload and are applied without changing clip bounda
   await page.keyboard.press('Escape')
   await uploadThroughUI(page)
   await expect(page.getByLabel('Start', { exact: true })).toHaveValue('00:00:00.000')
-  await expect(page.getByRole('button', { name: 'MP3 Audio', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(page.getByLabel('Timeline zoom', { exact: true })).toHaveValue('10000')
+  await goToExport(page)
+  await expect(page.getByRole('button', { name: 'MP3 Audio', exact: true })).toHaveAttribute('aria-pressed', 'true')
 })
 
-test('a real failed video export explains that no clips were created in both languages', async ({ page }) => {
+test('a real failed audio export explains that no clips were created in both languages', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'English', exact: true }).click()
-  await uploadThroughUI(page, process.env.CUTMY_E2E_AUDIO!)
+  await uploadThroughUI(page, process.env.CUTMY_E2E_VIDEO_ONLY!)
+  await goToExport(page)
+  await page.getByRole('button', { name: 'MP3 Audio', exact: true }).click()
   const creationPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
   const creation = await creationPromise

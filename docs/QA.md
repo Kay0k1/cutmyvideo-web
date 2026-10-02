@@ -5,9 +5,16 @@ and real FFmpeg outputs; screenshots or mocked API responses alone are not proof
 
 ## Acceptance checklist
 
-- Open a public media URL or upload a local video; display the actual title and
-  duration. Invalid, unsupported, oversized, or unavailable inputs produce a
-  useful explanation and leave a way to try another source.
+- The website accepts a genuine YouTube video link or a local MP4 with a video
+  stream. Watch, share and Shorts links resolve to the same real video. Non-MP4
+  files, including a renamed WAV claiming `video/mp4`, fail the browser's container
+  check before an upload. An audio-only MP4 does not replace an existing video.
+  Invalid, oversized or unavailable inputs explain how to try another source.
+- The first screen shows source choices. Moment controls and export settings
+  appear on their own steps. Moving backward or forward preserves intervals and
+  output choices; returning to the source step keeps the current draft until a
+  new source is accepted. Accepted replacements start at the moments step with
+  fresh ranges. Reload preserves the current step and completed files.
 - Play uploaded media, seek, and preview the selected interval. A platform embed
   and unavailable preview must be identified honestly; selection still works
   through exact time fields.
@@ -22,11 +29,18 @@ and real FFmpeg outputs; screenshots or mocked API responses alone are not proof
   copy mode explains its limitations before export.
 - Export shows the actual server state, handles failures and cancellation, and
   exposes only completed files. Reloading or changing source must not attach an
-  old job's files to a new source.
+  old job's files to a new source. A completed job must not override a chosen
+  earlier step on reload. A surviving artifact remains downloadable if source
+  restoration fails; the page explains how to reopen a source for new exports.
 - Source changes reset source-dependent ranges/player/job state. Saved drafts
   restore only after checking the source still belongs to the current session.
 - At 360 px and 390 px, controls remain reachable with no horizontal document
-  overflow; focus indicators are visible and reduced motion is respected.
+  overflow on every step and in navigation dialogs. Touch preview, stage movement,
+  export and a real download work; focus indicators remain visible.
+- Light and dark choices persist. System mode follows changes to the browser's
+  color preference. A stored theme is applied before the first rendering frame.
+  Normal text reaches 4.5:1 contrast and large text 3:1 in both themes; computed
+  solid-color checks supplement visual inspection of gradients and native UI.
 - Russian is the default. Switching to English preserves the source, exact
   boundaries, playback and job. English visible copy and accessible labels are
   checked for untranslated Russian strings, excluding user content and the
@@ -63,6 +77,10 @@ user is still typing; validate on commit or submission.
   — arrow keys, Home/End, and understandable time-valuetext.
 - [W3C WAI: form notifications](https://www.w3.org/WAI/tutorials/forms/notifications/)
   — actionable errors, association with fields, and focus recovery.
+- [W3C WCAG: minimum contrast](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)
+  — legible text in each theme, including helper text and placeholders.
+- [W3C WCAG: minimum target size](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)
+  — controls at least 24 CSS px or with the required surrounding space.
 
 Automated tests supplement visual and keyboard inspection. They do not establish
 full assistive technology compatibility; touch screen-reader testing requires a
@@ -89,10 +107,16 @@ actual 10,800-second media fixture with audio and whole-second video frames; the
 test selects 01:23:10–01:23:40, verifies a useful zoomed selection, and probes the
 real exported 30-second MP4. Its duration is never mocked.
 
-The suite generates a real 12-second video with audio and a short audio-only WAV
-in a temporary directory. Exporting that WAV as MP4 exercises an actual FFmpeg
-failure; both languages must explain that no clips were created and offer a next
-step instead of referring to nonexistent completed files.
+`CUTMY_E2E_YOUTUBE_ID` enables actual watch/share/Shorts metadata checks and a real
+middle-of-video export. For example, `aqz-KE-bpKQ` is the public Big Buck Bunny
+fixture used during development. This network-dependent check is opt-in and
+uses actual provider metadata, never a fabricated duration.
+
+The suite generates a real 12-second video with audio, a short WAV, an audio-only
+MP4 and a video-only MP4 in a temporary directory. The WAV fixtures exercise
+client rejection, including renamed input. Exporting video-only MP4 as MP3
+exercises an actual FFmpeg failure; both languages must explain that no clips
+were created and offer a next step instead of referring to nonexistent files.
 `CUTMY_E2E_MEDIA` can point to an existing equivalent fixture. The report records
 actual downloaded MP4/MP3 files, ffprobe output, and desktop/mobile screenshots.
 Accurate MP4 tests also compare the first output frame against the requested
@@ -103,9 +127,33 @@ be mistaken for a successful cancellation. Session isolation uses independent
 cookie jars; SSRF checks use HTTPS private addresses to reach the actual network
 guard rather than only fail scheme validation.
 
+Direct public HTTPS sources are tested against the reusable core API. They are
+not exposed as website inputs in this MVP.
+
+The expired-source regression substitutes only the source metadata response with
+a 404. Its job and downloaded MP4 are created by the real backend. This exercises
+the browser recovery path without inventing media, durations or successful jobs.
+
 For a deployed server with stricter request limits, run focused scenarios rather
 than the full development suite in one burst. A useful first HTTPS check is:
 
 ```sh
 CUTMY_E2E_URL=https://cutmy.video npm run test:e2e -- --project=desktop editor.spec.ts --grep 'real editor supports'
 ```
+
+## Recorded verification — 2026-10-02 redesign
+
+The final core passed ten API/media/security scenarios in 26 seconds, including
+the opt-in public HTTPS and actual YouTube watch/share/Shorts extraction checks.
+The redesigned browser flow passed its seventeen existing scenarios, including
+the opt-in real three-hour fixture, light/dark contrast, system theme changes,
+first-frame theme application, native preview, touch export/download, settings,
+localization and exact donation clipboard values. Two added recovery regressions
+also passed against real completed jobs. The corrected localization case and the
+two recovery cases were verified together in a focused 15.8-second run after the
+final restoration fix. These are combined results from independent runs, not a
+claim that all twenty-nine cases ran in one invocation.
+
+Screenshots and probes were inspected; no confirmed blocker remained in that
+tested scope. The production redesign smoke is performed separately after deploy
+and stays below the production mutation limit.

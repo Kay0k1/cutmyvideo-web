@@ -1,11 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { api, probeDownloadedFile, uploadThroughUI, waitJob } from './helpers'
+import { api, goToExport, goToMoments, goToSource, probeDownloadedFile, stepButton, uploadThroughUI, waitJob } from './helpers'
 
 test('real editor supports exact multiple ranges, preview, reload and export', async ({ page }, testInfo) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('/')
-  await expect(page.locator('button.upload-button')).toBeEnabled()
   await page.screenshot({ path: testInfo.outputPath('desktop-empty.png'), fullPage: true })
   await testInfo.attach('Desktop empty state', { path: testInfo.outputPath('desktop-empty.png'), contentType: 'image/png' })
   await uploadThroughUI(page)
@@ -41,6 +40,7 @@ test('real editor supports exact multiple ranges, preview, reload and export', a
   await page.screenshot({ path: testInfo.outputPath('desktop-editor.png'), fullPage: true })
   await testInfo.attach('Desktop editor', { path: testInfo.outputPath('desktop-editor.png'), contentType: 'image/png' })
 
+  await goToExport(page)
   const createResponse = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: /Вырезать/ }).click()
   const response = await createResponse
@@ -58,7 +58,6 @@ test('real editor supports exact multiple ranges, preview, reload and export', a
 
 test('range handles support keyboard and invalid time input can be corrected', async ({ page }) => {
   await page.goto('/')
-  await expect(page.locator('button.upload-button')).toBeEnabled()
   await uploadThroughUI(page)
   const start = page.getByLabel('Начало', { exact: true })
   await expect(start).toBeVisible()
@@ -77,22 +76,22 @@ test('range handles support keyboard and invalid time input can be corrected', a
   await expect(start).toHaveAttribute('aria-invalid', 'true')
   const submittedJobs: string[] = []
   page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith(`${api}/jobs`)) submittedJobs.push(request.url()) })
-  const exportButton = page.getByRole('button', { name: /Вырезать/ })
-  if (!(await exportButton.isDisabled())) {
-    await exportButton.click()
-    await expect(start).toBeFocused()
-  }
+  const exportStep = stepButton(page, 3)
+  await exportStep.click()
+  await expect(start).toBeFocused()
+  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
   await expect(page.getByRole('alert')).toContainText('Введите время')
   expect(submittedJobs).toEqual([])
   await start.fill('00:00:02.000')
   await start.press('Tab')
   await expect(handle).toHaveAttribute('aria-valuenow', '2000')
+  await expect(exportStep).toBeEnabled()
+  await goToExport(page)
   await expect(page.getByRole('button', { name: /Вырезать/ })).toBeEnabled()
 })
 
 test('replacing a source resets selections belonging to the old video', async ({ page }) => {
   await page.goto('/')
-  await expect(page.locator('button.upload-button')).toBeEnabled()
   await uploadThroughUI(page)
   const start = page.getByLabel('Начало', { exact: true })
   await expect(start).toBeVisible()
@@ -110,11 +109,11 @@ test('replacing a source resets selections belonging to the old video', async ({
 
 test('an active UI export survives reload and can be cancelled', async ({ page }) => {
   await page.goto('/')
-  await expect(page.locator('button.upload-button')).toBeEnabled()
   await uploadThroughUI(page)
   const add = page.getByRole('button', { name: 'Добавить фрагмент', exact: true })
   await expect(add).toBeVisible()
   for (let i = 0; i < 9; i++) await add.click()
+  await goToExport(page)
   const creationPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: /Вырезать/ }).click()
   const creation = await creationPromise
@@ -123,20 +122,22 @@ test('an active UI export survives reload and can be cancelled', async ({ page }
   const cancel = page.getByRole('button', { name: 'Отменить обработку', exact: true })
   await expect(cancel).toBeVisible()
   await expect.poll(async () => (await (await page.request.get(`${api}/jobs/${id}`)).json()).status, { intervals: [100, 100, 200] }).toBe('running')
-  await expect(page.getByLabel('Ссылка на видео', { exact: true })).toBeDisabled()
+  await goToSource(page)
+  await expect(page.getByLabel('Ссылка на YouTube', { exact: true })).toBeDisabled()
+  await goToExport(page)
   await page.reload()
   await expect(cancel).toBeVisible()
   await cancel.click()
   const terminal = await waitJob(page.request, id)
   expect(terminal.status).toBe('cancelled')
   await expect(page.getByRole('heading', { name: 'Обработка отменена', exact: true })).toBeVisible()
-  await expect(page.getByLabel('Ссылка на видео', { exact: true })).toBeEnabled()
+  await goToSource(page)
+  await expect(page.getByLabel('Ссылка на YouTube', { exact: true })).toBeEnabled()
 })
 
 test('a real three-hour source supports a precise middle selection and export', async ({ page }, testInfo) => {
   test.skip(!process.env.CUTMY_E2E_LONG_MEDIA, 'Set CUTMY_E2E_LONG_MEDIA to a real three-hour fixture.')
   await page.goto('/')
-  await expect(page.locator('button.upload-button')).toBeEnabled()
   await uploadThroughUI(page, process.env.CUTMY_E2E_LONG_MEDIA!)
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).duration)).toBeCloseTo(10_800, 0)
   await page.getByLabel('Начало', { exact: true }).fill('01:23:10.000')
@@ -152,6 +153,7 @@ test('a real three-hour source supports a precise middle selection and export', 
   expect(selected).toBeTruthy()
   expect(selected!.width / track!.width).toBeGreaterThan(0.4)
   expect(selected!.width / track!.width).toBeLessThan(0.6)
+  await goToExport(page)
   const responsePromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: /Вырезать/ }).click()
   const creation = await responsePromise
@@ -161,6 +163,7 @@ test('a real three-hour source supports a precise middle selection and export', 
   const probe = await probeDownloadedFile(page.request, job.items[0].artifact.download_url, 'three-hour-middle.mp4', testInfo)
   expect(Math.abs(Number(probe.format.duration) - 30)).toBeLessThan(0.2)
   expect(job.items[0].artifact.actual_start_ms).toBe(4_990_000)
+  await goToMoments(page)
   await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: testInfo.outputPath('three-hour-editor.png'), fullPage: true })
   await testInfo.attach('Three-hour source', { path: testInfo.outputPath('three-hour-editor.png'), contentType: 'image/png' })

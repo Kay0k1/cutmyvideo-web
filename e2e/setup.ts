@@ -23,5 +23,20 @@ export default function setup() {
     '-c:a', 'pcm_s16le', audioPath,
   ], { timeout: 10_000 })
   process.env.CUTMY_E2E_AUDIO = audioPath
+  const audioMP4Path = join(fixtureDir, 'qa-audio-only.mp4')
+  execFileSync('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2',
+    '-c:a', 'aac', '-f', 'mp4', audioMP4Path,
+  ], { timeout: 10_000 })
+  process.env.CUTMY_E2E_AUDIO_MP4 = audioMP4Path
+  const videoOnlyPath = join(fixtureDir, 'qa-video-only.mp4')
+  execFileSync('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-f', 'lavfi', '-i', 'testsrc2=duration=2:size=320x180:rate=25',
+    '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p',
+    '-an', '-movflags', '+faststart', videoOnlyPath,
+  ], { timeout: 10_000 })
+  process.env.CUTMY_E2E_VIDEO_ONLY = videoOnlyPath
   return () => rmSync(fixtureDir, { recursive: true, force: true })
 }

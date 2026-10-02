@@ -4,7 +4,48 @@ import { expect, type APIRequestContext, type Page, type TestInfo } from '@playw
 
 export const api = '/api/v1'
 
+export function stepNavigation(page: Page) {
+  return page.getByRole('navigation', { name: /^(Шаги работы|Editing steps)$/ })
+}
+
+export function stepButton(page: Page, step: 1 | 2 | 3) {
+  const labels = [/(?:^|\s)(?:Видео|Video)$/, /(?:^|\s)(?:Моменты|Moments)$/, /(?:^|\s)(?:Экспорт|Export)$/]
+  return stepNavigation(page).getByRole('button', { name: labels[step - 1] })
+}
+
+export async function goToSource(page: Page) {
+  const button = stepButton(page, 1)
+  await expect(button).toBeEnabled()
+  await button.click()
+  await expect(button).toHaveAttribute('aria-current', 'step')
+}
+
+export async function goToMoments(page: Page) {
+  const button = stepButton(page, 2)
+  await expect(button).toBeEnabled()
+  await button.click()
+  await expect(button).toHaveAttribute('aria-current', 'step')
+}
+
+export async function goToExport(page: Page) {
+  const button = stepButton(page, 3)
+  await expect(button).toBeEnabled()
+  await button.click()
+  await expect(button).toHaveAttribute('aria-current', 'step')
+}
+
+export async function setTheme(page: Page, theme: 'light' | 'dark' | 'system') {
+  await page.getByRole('button', { name: /^(Настройки|Settings)$/ }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel(/^(Тема оформления|Appearance)$/).selectOption(theme)
+  await dialog.getByRole('button', { name: /^(Сохранить настройки|Save settings)$/ }).click()
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(220) // Let the intentional color transition finish.
+}
+
 export async function uploadThroughUI(page: Page, filename = process.env.CUTMY_E2E_MEDIA!) {
+  await goToSource(page)
+  await page.getByRole('button', { name: /^(MP4 файл|MP4 file)$/ }).click()
   const button = page.locator('button.upload-button')
   await expect(button).toBeEnabled()
   const chooser = page.waitForEvent('filechooser')

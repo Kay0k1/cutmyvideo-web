@@ -109,3 +109,38 @@ test('cancelled queued or running exports reach a terminal state', async ({ requ
   expect(terminal.status).toBe('cancelled')
   expect(terminal.items.some((item: any) => item.status === 'queued' || item.status === 'running')).toBeFalsy()
 })
+
+test('normalizes real YouTube watch, share and Shorts links and exports a middle interval', async ({ request }, testInfo) => {
+  const id = process.env.CUTMY_E2E_YOUTUBE_ID
+  test.skip(!id, 'Set CUTMY_E2E_YOUTUBE_ID to enable actual YouTube metadata and extraction.')
+  test.setTimeout(180_000)
+  expect(id).toMatch(/^[\w-]{11}$/)
+  await request.get(`${api}/session`)
+  let source: any
+  const durations: number[] = []
+  for (const url of [
+    `youtube.com/watch?v=${id}&t=250&list=PLtracking`,
+    `https://youtu.be/${id}?si=tracking&t=250`,
+    `https://www.youtube.com/shorts/${id}?feature=share`,
+  ]) {
+    const response = await request.post(`${api}/sources`, { data: { url }, timeout: 120_000 })
+    expect(response.ok(), await response.text()).toBeTruthy()
+    source = await response.json()
+    expect(source.kind).toBe('youtube')
+    expect(source.embed_url).toBe(`https://www.youtube-nocookie.com/embed/${id}`)
+    expect(source.duration_ms).toBeGreaterThan(10_000)
+    durations.push(source.duration_ms)
+  }
+  expect(new Set(durations).size).toBe(1)
+  const start = Math.floor(source.duration_ms / 2 / 1000) * 1000
+  const creation = await request.post(`${api}/jobs`, {
+    data: { source_id: source.id, ranges: [{ start_ms: start, end_ms: start + 3000, label: 'YouTube middle' }], format: 'mp4', quality: '720p', cut_mode: 'accurate' },
+  })
+  expect(creation.ok(), await creation.text()).toBeTruthy()
+  const job = await waitJob(request, (await creation.json()).id)
+  expect(job.status, JSON.stringify(job)).toBe('succeeded')
+  const probe = await probeDownloadedFile(request, job.items[0].artifact.download_url, 'youtube-middle.mp4', testInfo)
+  expect(probe.streams.some((stream: any) => stream.codec_type === 'video')).toBeTruthy()
+  expect(probe.streams.some((stream: any) => stream.codec_type === 'audio')).toBeTruthy()
+  expect(Math.abs(Number(probe.format.duration) - 3)).toBeLessThan(0.2)
+})

@@ -1,9 +1,8 @@
 import { expect, test } from '@playwright/test'
-import { uploadThroughUI } from './helpers'
+import { api, goToExport, setTheme, uploadThroughUI, waitJob } from './helpers'
 
 test('mobile source and range controls remain usable at 360 and 390 px', async ({ page }, testInfo) => {
   await page.goto('/')
-  await expect(page.locator('button.upload-button')).toBeEnabled()
   for (const width of [360, 390]) {
     await page.setViewportSize({ width, height: 844 })
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1)
@@ -25,11 +24,34 @@ test('mobile source and range controls remain usable at 360 and 390 px', async (
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).paused)).toBe(true)
   for (const width of [360, 390]) {
     await page.setViewportSize({ width, height: 844 })
+    for (const theme of ['light', 'dark'] as const) {
+      await setTheme(page, theme)
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1)
+      await expect(page.getByLabel('Начало', { exact: true })).toBeVisible()
+      await page.evaluate(() => window.scrollTo(0, 0))
+      await page.screenshot({ path: testInfo.outputPath(`mobile-moments-${theme}-${width}.png`), fullPage: true })
+      await testInfo.attach(`Mobile moments ${theme} ${width}`, { path: testInfo.outputPath(`mobile-moments-${theme}-${width}.png`), contentType: 'image/png' })
+    }
+  }
+  await goToExport(page)
+  const creationPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
+  await page.getByRole('button', { name: /Вырезать/ }).tap()
+  const creation = await creationPromise
+  expect(creation.ok()).toBeTruthy()
+  const job = await waitJob(page.request, (await creation.json()).id)
+  expect(job.status).toBe('succeeded')
+  await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toHaveCount(2)
+  const downloadPromise = page.waitForEvent('download')
+  await page.getByRole('link', { name: 'Скачать', exact: true }).first().tap()
+  const download = await downloadPromise
+  expect(await download.failure()).toBeNull()
+  await download.saveAs(testInfo.outputPath('mobile-clip.mp4'))
+  for (const theme of ['light', 'dark'] as const) {
+    await setTheme(page, theme)
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1)
-    await expect(page.getByRole('button', { name: /Вырезать/ })).toBeVisible()
     await page.evaluate(() => window.scrollTo(0, 0))
-    await page.screenshot({ path: testInfo.outputPath(`mobile-editor-${width}.png`), fullPage: true })
-    await testInfo.attach(`Mobile editor ${width}`, { path: testInfo.outputPath(`mobile-editor-${width}.png`), contentType: 'image/png' })
+    await page.screenshot({ path: testInfo.outputPath(`mobile-output-${theme}.png`), fullPage: true })
+    await testInfo.attach(`Mobile output ${theme}`, { path: testInfo.outputPath(`mobile-output-${theme}.png`), contentType: 'image/png' })
   }
 })
 

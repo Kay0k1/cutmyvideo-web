@@ -36,6 +36,21 @@ test('rejects cross-site mutations and never serves uploaded media as active HTM
   expect(preview.headers()['content-type']).not.toMatch(/text\/html|svg|javascript/i)
 })
 
+test('the API rejects ambiguous YouTube links and lookalike hosts before fetching media', async ({ request }) => {
+  await request.get(`${api}/session`)
+  for (const url of [
+    'https://youtu.be/aqz-KE-bpKQ/extra',
+    'https://youtube.com/shorts/aqz-KE-bpKQ/extra',
+    'https://youtube.com/watch?v=aqz-KE-bpKQ&v=aqz-KE-bpKQ',
+    'https://youtube.com.evil.example/watch?v=aqz-KE-bpKQ',
+    'https://user:password@youtube.com/watch?v=aqz-KE-bpKQ',
+  ]) {
+    const response = await request.post(`${api}/sources`, { data: { url } })
+    expect(response.status(), url).toBe(400)
+    expect((await response.json()).error.code, url).toBe('invalid_youtube_url')
+  }
+})
+
 test('source, job and finished files are isolated between sessions', async ({ playwright, baseURL }) => {
   const owner = await playwright.request.newContext({ baseURL })
   const stranger = await playwright.request.newContext({ baseURL })
