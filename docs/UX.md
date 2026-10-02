@@ -25,3 +25,11 @@ Job feedback uses actual server stages rather than invented percentages. Partial
 - [YouTube iframe API](https://developers.google.com/youtube/iframe_api_reference): current time, seek, and playback control for embedded sources.
 
 Browser QA covers real upload/export, invalid input, multiple intervals, keyboard controls, reload, cancellation, source replacement, and narrow screens. YouTube embedding is an optional preview; errors leave manual timecode editing available.
+
+## Navigation and language
+
+The editor remains the primary screen. Examples/help, defaults, and support use native modal dialogs that preserve editing state, trap focus, close with Escape, and return focus to their trigger. The header becomes two compact rows on mobile.
+
+Russian is the primary language. The same centralized catalog localizes the complete English editor, validation, job stages, accessible names, examples, settings, and support. Switching language never recreates the source or job. User titles and filenames remain unchanged. Preferences and language are stored locally; no video or credential is stored in these preferences.
+
+Support displays the exact supplied addresses and copies them locally. Network names remain explicit, addresses wrap on narrow screens, and no transaction or external payment request is initiated.
