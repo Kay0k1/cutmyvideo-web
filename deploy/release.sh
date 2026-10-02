@@ -18,6 +18,10 @@ done
 
 core_sha="$(git -C "$core_dir" rev-parse HEAD)"
 web_sha="$(git -C "$web_dir" rev-parse HEAD)"
+if [[ "$(cat "$web_dir/core.version")" != "$core_sha" ]]; then
+  printf 'The core checkout does not match the revision tested by the website CI.\n' >&2
+  exit 1
+fi
 release="${core_sha:0:12}-${web_sha:0:12}"
 archive_dir="$(mktemp -d)"
 trap 'rm -rf "$archive_dir"' EXIT
