@@ -474,7 +474,7 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 @media (max-width: 420px) {
   .ranges-panel { padding: 0 15px 20px; }
 }
-@media (pointer: coarse), (max-width: 680px) {
+@media (pointer: coarse), (max-width: 959px) {
   .language-switch button { min-width: 44px; }
   .steps-nav button { min-width: 44px; }
   .theme-toggle { min-width: 44px; }
