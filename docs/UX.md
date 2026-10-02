@@ -28,7 +28,7 @@ The plan preserves the existing soft palette, Geologica, themes, copy, and three
 
 The header, progress, headings, and unnecessary gaps are smaller on desktop. Primary editing controls fit the tested standard desktop viewports, including 1280×720 and 1366×768. Export puts the selected moments and ready downloads beside its settings. Short files or clips are actual data; no display-only filler is introduced to occupy spare space.
 
-Phones keep the logical player → boundaries → moments flow with natural vertical scrolling. Both initial source choices fit a 360×640 screen. All enabled touch controls, including language/theme actions and header/footer links, retain at least 44×44 CSS-pixel hit areas. Browser zoom and validation can increase page height; controls remain in normal flow.
+Phones keep the logical player → boundaries → moments flow with natural vertical scrolling. On short landscape phone screens, the preview canvas stays between 180 and 240 pixels high with the video contained at its original proportions; portrait preview sizing is unchanged. Both initial source choices fit a 360×640 screen. All enabled touch controls, including language/theme actions and header/footer links, retain at least 44×44 CSS-pixel hit areas. Browser zoom and validation can increase page height; controls remain in normal flow.
 
 See [QA.md](QA.md) for the viewport, browser-engine, locale, and theme matrix. Browser emulation checks logical screen sizes and touch interaction rather than claiming tests on particular physical phone or Mac hardware.
 

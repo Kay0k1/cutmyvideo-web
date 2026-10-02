@@ -27,6 +27,7 @@ Notable product changes are recorded here.
 - Fit the desktop editing controls and Continue action into standard laptop/desktop viewports, including 1280×720, through compact chrome and a two-column workspace.
 - Keep long clip lists bounded, reveal newly added/selected rows without scrolling the page, and retain visibility after viewport resizing.
 - Place ready downloads beside export settings on desktop; preserve natural phone layout and 44-pixel touch targets for header/footer actions.
+- Bound short phone-landscape previews to 180–240 pixels while preserving native controls, video proportions, and portrait sizing.
 - Keep the narrow header within 320 CSS pixels and retain 44-pixel phone hit areas when the primary pointer changes.
 - Fit both initial source choices into a 360×640 phone viewport without removing input hints or actions.
 - Build the shared core image once for API and worker, avoiding concurrent exports to the same release tag.

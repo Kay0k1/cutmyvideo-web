@@ -513,3 +513,13 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
   .workspace-nav { gap: 0; }
   .workspace-nav button { padding-left: 3px; padding-right: 3px; }
 }
+@media (orientation: landscape) and (max-width: 959px) and (max-height: 500px) {
+  .editing-grid .player-frame video,
+  .editing-grid .youtube-player {
+    height: clamp(180px, 52dvh, 240px);
+    aspect-ratio: auto;
+    max-height: none;
+  }
+  .editing-grid .player-frame video { object-fit: contain; }
+  .editing-grid .player-unavailable { min-height: clamp(180px, 52dvh, 240px); }
+}
