@@ -32,6 +32,10 @@ from using all of the machine's available CPU and memory.
 
 ## Release and rollback
 
+`deploy/release.sh` uploads clean, committed source archives and records the exact
+core and product commits. Set `CUTMY_SSH_TARGET`, `CUTMY_SSH_KEY`, and optionally
+`CUTMY_CORE_DIR`; it does not need GitHub credentials on the server.
+
 Build and test both repositories before updating the active release. Upload
 source archives, not local credentials or `.git` directories. Record both commit
 SHAs in the release record. Run the migrations and health checks before announcing
