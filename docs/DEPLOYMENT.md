@@ -35,6 +35,7 @@ from using all of the machine's available CPU and memory.
 `deploy/release.sh` uploads clean, committed source archives and records the exact
 core and product commits. Set `CUTMY_SSH_TARGET`, `CUTMY_SSH_KEY`, and optionally
 `CUTMY_CORE_DIR`; it does not need GitHub credentials on the server.
+The core checkout must match `core.version`, the revision verified by product CI.
 
 Build and test both repositories before updating the active release. Upload
 source archives, not local credentials or `.git` directories. Record both commit
@@ -59,10 +60,11 @@ active database. Never run `docker compose down -v` during a normal deployment.
 
 ## Checks before release
 
-- Frontend build and timecode tests.
+- Frontend build, timecode, source parsing and localization tests.
 - Core tests, race checks, and PostgreSQL integration tests.
 - Real upload → manual ranges → MP4 and MP3 export → download.
 - Independent browser session cannot access another session's files.
+- Source → moments → export navigation, restored work and light/dark preferences.
 - Responsive and keyboard controls at desktop and mobile widths.
 - HTTPS, health endpoints, restart behavior, TTL cleanup and disk capacity.
 
