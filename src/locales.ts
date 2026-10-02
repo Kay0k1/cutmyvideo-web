@@ -2,6 +2,15 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  'Обработка отменена. Можно изменить моменты или настройки и вырезать снова.': 'Processing was cancelled. Adjust the moments or settings and try again.',
+  "Видео больше недоступно, но результат экспорта сохранился. Чтобы вырезать новые моменты, откройте видео заново.": "The video is no longer available, but your export is still here. Open the video again to create new clips.",
+  "Открыть другое видео": "Open another video",
+  "Видео сохраняется без перекодирования, в качестве исходного файла.": "The video keeps the original file quality without re-encoding.",
+  "«Точные границы» перекодируют видео. «Исходное качество» сохраняет его без перекодирования, но начало и конец могут сдвинуться. Фактические границы указаны рядом с готовым файлом.": "Exact boundaries re-encode the video. Original quality avoids re-encoding, but the start and end may shift. Actual boundaries are shown next to the ready file.",
+  "YouTube иногда ограничивает доступ с сервера или требует входа. В таком случае загрузите MP4. Не все кодеки можно просмотреть в браузере; время и экспорт можно настроить вручную.": "YouTube sometimes restricts server access or requires login. Upload an MP4 in that case. Some codecs cannot be previewed in a browser; you can still enter times and export manually.",
+  "Видео слишком долго отвечает. Попробуйте ещё раз или загрузите MP4.": "The video took too long to respond. Try again or upload an MP4.",
+  "Не удалось загрузить файл. Выберите одно видео MP4 и попробуйте ещё раз.": "Upload failed. Choose one MP4 video and try again.",
+
   "Включить тёмную тему": "Switch to dark theme",
   "Включить светлую тему": "Switch to light theme",
   "Тема оформления": "Appearance",
@@ -111,7 +120,7 @@ export const english: Record<string, string> = {
   'До 720p': 'Up to 720p',
   'Лучшее доступное': 'Best available',
   'Качество выше исходного не создаётся.': 'The source quality is never increased.',
-  'Исходное качество': 'Source quality',
+  'Исходное качество': 'Original quality',
   'В режиме сохранения потоков используется качество исходного файла.': 'Preserve streams uses the original file quality.',
   'Границы и качество': 'Boundaries and quality',
   'Точные границы': 'Exact boundaries',

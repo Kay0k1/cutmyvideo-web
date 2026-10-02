@@ -5,6 +5,10 @@ Notable product changes are recorded here.
 ## Unreleased
 
 ### Added
+- Three-stage website workflow: choose a source, edit moments, then export and download; previous steps preserve ranges, player position, and completed files.
+- Restrained light/dark/system appearance, persistent theme choice, CSP-compatible initialization before first paint, and self-hosted Geologica Variable with Cyrillic.
+- Website-specific YouTube/MP4 inputs with strict canonical sharing-link validation, upload type/container checks, and rejection of MP4 files without video while preserving the existing draft.
+- Stage-aware document titles, larger 44-pixel controls, complete RU/EN step copy, and a YouTube example consistent with the current website scope.
 - React and TypeScript editing workbench foundation, pinned dependencies, and reproducible builds.
 - UX decisions grounded in W3C slider accessibility and GOV.UK form-error guidance.
 - Manual editing: source links and uploads, native/YouTube preview, millisecond timecodes, zoomed trim range, keyboard controls, and multiple labelled fragments.
@@ -20,6 +24,11 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Align website YouTube parsing with the public core's canonical URL rules; pin production releases to core revision fe2f46e with safe private process-failure diagnostics.
+- Honor the saved editing step after retrieving a previous job; retain status and downloads when its source has expired.
+- Keep light input borders distinguishable from their surface and distribute the font copyright/license with self-hosted assets.
+- Pause playback when leaving the Moments step, keep the player mounted while hidden, and restore saved playback position after readiness.
+- Clarify the lossless copy choice as Original quality with its explicit boundary warning.
 - Authenticate the platform extractor consistently in the production container through the updated public core.
 - Distinguish failed exports with no files from partial success, and preserve original clip numbering in partial downloads.
 - Pin the Node.js 22 builder and maintained stable Nginx image by digest for reproducible deployment.

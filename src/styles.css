@@ -3,7 +3,7 @@
   font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased;
   color-scheme: light;
   --page: #f4f6f5; --surface: #ffffff; --soft: #edf2ef; --input: #ffffff;
-  --ink: #203431; --muted: #5c7067; --line: #d9e2dc; --strong-line: #9baea2;
+  --ink: #203431; --muted: #5c7067; --line: #d9e2dc; --strong-line: #7d9387;
   --accent: #35645b; --on-accent: #ffffff; --accent-hover: #284f47; --selection: #e3efe8;
   --trim: #eac389; --trim-ink: #623e10; --trim-line: #a67635;
   --error: #a53836; --error-bg: #fff1ef; --success: #346c4b; --focus: #35645b;

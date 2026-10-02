@@ -3,12 +3,14 @@ export function canonicalYouTubeUrl(value: string): string | null {
   let parsed: URL;
   const trimmed = value.trim();
   const candidate = trimmed.startsWith('//') ? `https:${trimmed}` : trimmed.includes('://') ? trimmed : `https://${trimmed}`;
+  if (candidate.split('://')[1]?.split(/[/?#]/)[0].includes('@')) return null;
   try { parsed = new URL(candidate); } catch { return null; }
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.port) return null;
   const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
   if (!['youtube.com', 'www.youtube.com', 'm.youtube.com', 'music.youtube.com', 'youtu.be', 'www.youtu.be', 'youtube-nocookie.com', 'www.youtube-nocookie.com'].includes(host)) return null;
   if (parsed.search.includes(';') || /%(?![a-fA-F0-9]{2})/.test(parsed.search)) return null;
-  const path = parsed.pathname.replace(/^\/+|\/+$/g, '');
+  let path: string;
+  try { path = decodeURIComponent(parsed.pathname).replace(/^\/+|\/+$/g, ''); } catch { return null; }
   const parts = path.split('/');
   let id: string | null = null;
   if (host.endsWith('youtu.be') && parts.length === 1) id = parts[0];

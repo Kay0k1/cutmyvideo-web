@@ -1,35 +1,53 @@
-# Editing workbench
+# Editing flow
 
-The primary task is selecting short moments in long media, then obtaining real files. The screen starts with an actionable source form; no sample media, invented waveform, decorative analytics, or marketing hero.
+The website helps someone take a few moments out of a long video. The current website accepts a YouTube video link or an uploaded MP4 containing video, up to the production upload limit of 1 GiB. The reusable public engine supports broader media operations; those capabilities are not presented as website inputs.
 
-## Design decisions
+## Plan → critique → build
 
-- Paper `#ffffff`, workspace `#f3f5f7`, ink `#172434`, quiet text `#536477`, selection blue `#2157d8`, trim amber `#bd6600`.
-- Self-hosted Onest for readable Russian labels. Tabular numerals for editable timecodes, without a separate decorative monospace typeface.
-- Persistent source form, wide player and timeline, compact export column. On mobile the reading order follows source → player → selection → export → results.
-- Borders mark actual groups. One blue selection rail carries the visual identity. Avoid unrelated card grids, gradients, decorative motion, and fake media imagery.
+The earlier all-at-once workbench exposed a source form, empty player, timeline, clip list, and export controls before a video existed. Although functional, it asked a new visitor to understand too many controls. Simply rounding the existing layout would leave that problem in place.
 
-The initial sketch was reviewed against the brief: a dashboard with statistic cards would add no value to trimming. Those elements were removed in favor of the player, range controls, and files. Typography and clear controls do the work.
+The chosen design uses three actual stages: **Video → Moments → Export**. The first screen offers one source choice and one action. A loaded source moves to the editing stage. Export has its own summary and settings. Numbered progress, a stage heading, and a stage-aware document title explain where the user is. Backward navigation preserves the source, selected intervals, playhead, and completed downloads. Replacing the video is explicit and only replaces the old draft after validation succeeds.
+
+Critique of the proposed design ruled out decorative hero copy, media thumbnails without a source, waveform imitations, statistics, and a separate card for every field. The visual direction stays quiet: generous spacing around the first action, a single workspace for editing, and borders only where they explain real groups. The final implementation was inspected using actual uploaded media in both themes and at phone widths.
+
+## Typography and themes
+
+- Self-hosted **Geologica Variable**, including Cyrillic and Latin, uses one family with restrained weight differences. Timecodes use tabular numerals. The pinned Fontsource package provides the font; its unmodified SIL Open Font License and copyright are distributed at `/licenses/geologica.txt`.
+- Light: page `#f4f6f5`, surface `#ffffff`, ink `#203431`, secondary text `#5c7067`, action `#35645b`, selected range `#e3efe8`.
+- Dark: page `#18201f`, surface `#222c29`, ink `#e7eeea`, secondary text `#a4b7ac`, action `#a8cbb9`, selected range `#344d40`.
+- Amber trim handles distinguish editable boundaries from the green playback/selection controls. Handles and primary touch actions provide at least 44 CSS pixels of target area.
+- The header switches directly between light and dark. System appearance is a named option in Settings and responds to system changes. The preference survives reloads.
+- An early external same-origin script sets appearance before first paint, compatible with the production CSP that prohibits inline scripts. Native inputs, selects, dialogs, focus outlines, and media surrounds follow the same theme tokens.
+- Reduced motion removes transitions and the spinner animation. Focus remains visible in both themes. Muted text on the page was darkened after contrast review.
 
 ## Interaction and accessibility
 
-Range handles have stable tab order, bounded keyboard movement, accessible time values, and exact text fields as the touch/assistive-technology fallback. An overview and zoomed timeline make short selections possible in a multi-hour source. Labels and input remain visible when validation fails. The selected range does not silently trigger downloads. Export requires a deliberate action.
+Range handles have stable tab order, dynamic opposite-boundary limits, arrow/Home/End/Page key support, and accessible time values. Exact text fields provide a touch and assistive-technology alternative. The overview plus a zoomed timeline lets someone find a 15-second selection inside a multi-hour video. Invalid fields keep their entered text, show a localized explanation, and receive focus when advancing to export.
 
-Job feedback uses actual server stages rather than invented percentages. Partial successful results remain downloadable. Cancelling and reloading must not lose the current job. Download links use same-origin session authorization.
+The player stays mounted when its stage is hidden, leaves the accessibility and tab order through the native `hidden` attribute, and pauses when leaving Moments. Returning preserves playback position; reload restores the saved position after the player becomes ready. If a source cannot be previewed, timecode editing and export remain available.
 
-## Primary references
+YouTube sharing, Shorts, live, and embed URLs normalize to a genuine YouTube video identity. Ambiguous paths, duplicate video IDs, lookalike hosts, credentials, and custom ports are rejected. MP4 validation checks extension, MIME, a structurally valid container header, and server-probed video dimensions. Changing a filename cannot turn another container or an audio-only file into a supported video. Rejected replacements preserve the old source and intervals.
 
-- [W3C multi-thumb slider pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider-multithumb/): stable tab sequence and dynamic bounds.
-- [W3C slider pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider/): keyboard movement and meaningful values.
-- [GOV.UK error summary](https://design-system.service.gov.uk/components/error-summary/): visible field errors and recovery actions.
-- [YouTube iframe API](https://developers.google.com/youtube/iframe_api_reference): current time, seek, and playback control for embedded sources.
+The copy mode is named **Original quality** in the interface. The explanation states that it avoids re-encoding, may shift start/end boundaries, and needs compatible codecs. Exact boundaries re-encode the video. The UI never promises a higher quality than the source.
 
-Browser QA covers real upload/export, invalid input, multiple intervals, keyboard controls, reload, cancellation, source replacement, and narrow screens. YouTube embedding is an optional preview; errors leave manual timecode editing available.
+Job feedback uses actual server stages rather than invented percentages. Successful files remain downloadable when another interval fails. Cancellation and reload retain the current job. Downloads use same-origin session authorization and do not load whole files into browser memory.
 
 ## Navigation and language
 
-The editor remains the primary screen. Examples/help, defaults, and support use native modal dialogs that preserve editing state, trap focus, close with Escape, and return focus to their trigger. The header becomes two compact rows on mobile.
+Examples/help, defaults, and support use native dialogs with an explicit focus loop, Escape dismissal, and focus returned to the trigger. Dialogs preserve the editing stage and draft. Mobile navigation uses two compact rows and long wallet addresses wrap within a scrollable dialog.
 
-Russian is the primary language. The same centralized catalog localizes the complete English editor, validation, job stages, accessible names, examples, settings, and support. Switching language never recreates the source or job. User titles and filenames remain unchanged. Preferences and language are stored locally; no video or credential is stored in these preferences.
+Russian is primary. One catalog covers the full English workflow, source validation, statuses, accessible names, keyboard hints, examples, settings, and support. Switching language does not recreate the player, source, or job. User titles and filenames remain unchanged. Preferences, language, and theme are browser-local; credentials are not placed in local storage.
 
-Support displays the exact supplied addresses and copies them locally. Network names remain explicit, addresses wrap on narrow screens, and no transaction or external payment request is initiated.
+Support displays exactly the supplied TRON, Solana, Ethereum, and Bitcoin addresses and copies them locally. Network names are explicit; no transfer or external payment request is initiated.
+
+## Primary references
+
+- [W3C multi-page forms](https://www.w3.org/WAI/tutorials/forms/multi-page/): logical stages, progress, meaningful titles, and preserving data when returning.
+- [W3C multi-thumb slider pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider-multithumb/): stable tab sequence and dynamic bounds.
+- [W3C slider pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider/): keyboard movement and meaningful values.
+- [W3C target size guidance](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html): 44-pixel touch targets.
+- [W3C switch pattern](https://www.w3.org/WAI/ARIA/apg/patterns/switch/): a binary theme action must have a clear meaning. The header uses an action button with the next appearance in its accessible name; System is a separate preference.
+- [GOV.UK error summary](https://design-system.service.gov.uk/components/error-summary/): visible field errors and recovery actions.
+- [YouTube iframe API](https://developers.google.com/youtube/iframe_api_reference): current time, seek, and playback control for embedded sources.
+
+Browser QA uses the real engine and covers uploads, precise multiple exports, long sources, stage navigation, playback preservation, rejected replacements, keyboard controls, reload, cancellation, themes, complete localization, clipboard addresses, and narrow screens. See [QA.md](QA.md) for executed checks and results.

@@ -27,7 +27,7 @@ const stageNames: Record<string, string> = {
 
 function jobDescription(job: Job, t: (text: string, values?: Record<string, string | number>) => string): string {
   if (job.status === 'queued') return t('Задание сохранено. Можно закрыть страницу и вернуться позже.');
-  if (job.status === 'cancelled') return t('Новые фрагменты не создаются. Готовые файлы можно скачать.');
+  if (job.status === 'cancelled') return t(job.items.some(item => item.artifact) ? 'Новые фрагменты не создаются. Готовые файлы можно скачать.' : 'Обработка отменена. Можно изменить моменты или настройки и вырезать снова.');
   if (job.status === 'succeeded') return t('Все фрагменты готовы к скачиванию.');
   if (job.status === 'failed') return t(job.items.some(item => item.artifact)
     ? 'Часть фрагментов не удалось обработать. Готовые файлы доступны ниже.'
@@ -109,6 +109,8 @@ export default function App() {
         if (disposed) return;
         if (!restored.current) {
           const saved = rememberedDraft();
+          const savedStep = saved.step === 1 || saved.step === 2 || saved.step === 3 ? saved.step : undefined;
+          let sourceWasRestored = false;
           if (typeof saved.source_id === 'string') {
             try {
               const original = await api.source(saved.source_id);
@@ -117,7 +119,7 @@ export default function App() {
               const restoredRanges = valid.length ? valid : [newRange(original.duration_ms)];
               const active = restoredRanges.find(range => range.id === saved.selected_id) ?? restoredRanges[0];
               setSource(original); setRanges(restoredRanges); setSelectedId(active.id); setFields(active);
-              setStep(saved.step === 1 || saved.step === 3 ? saved.step : 2);
+              sourceWasRestored = true; setStep(savedStep ?? 2);
               const position = typeof saved.current_ms === 'number' && Number.isFinite(saved.current_ms) ? Math.max(0, Math.min(original.duration_ms, saved.current_ms)) : 0;
               restoredPosition.current = position; setCurrent(position);
               setViewCenter((active.start_ms + active.end_ms) / 2);
@@ -126,7 +128,7 @@ export default function App() {
             } catch { if (!disposed) setSourceError('Предыдущий источник больше недоступен. Откройте его заново.'); }
           }
           if (typeof saved.job_id === 'string') {
-            try { const previous = await api.job(saved.job_id); if (!disposed) { setJob(previous); setStep(3); } } catch { /* Old job may have expired. */ }
+            try { const previous = await api.job(saved.job_id); if (!disposed) { setJob(previous); setStep(sourceWasRestored ? savedStep ?? 3 : 3); } } catch { /* Old job may have expired. */ }
           }
           restored.current = true;
         }
@@ -171,10 +173,10 @@ export default function App() {
   }, [step]);
 
   function goToStep(next: 1 | 2 | 3) {
-    if (next > 1 && !source) return;
-    if (step === 2 && next === 3) {
+    if (next > 1 && !source && !(next === 3 && job)) return;
+    if (source && selected && next === 3) {
       const range = validateFields(true);
-      if (!range) return;
+      if (!range) { setStep(2); window.setTimeout(() => validateFields(true), 0); return; }
       setRanges(previous => previous.map(item => item.id === range.id ? range : item));
     }
     setStep(next);
@@ -331,6 +333,8 @@ export default function App() {
   const files = job?.items.filter(item => item.artifact) ?? [];
   const qualityLabel = source?.width && source?.height ? `${source.width} × ${source.height}` : null;
 
+  const jobProgress = job && <section className={`job-status ${job.status}`} aria-label={t("Состояние экспорта")} aria-live="polite"><div className="job-status-heading">{activeJob(job) ? <span className="spinner" /> : <Icon name={job.status === 'succeeded' ? 'check' : 'file'} size={20} />}<h3>{t(stageNames[job.status === 'running' ? job.stage : job.status] ?? 'Обрабатываем фрагменты')}</h3></div><p>{jobDescription(job, t)}</p><p className="job-file-count">{t('Готово: {count} из {total}', { count: files.length, total: job.items.length })}</p>{job.items.some(item => item.status === 'failed') && <div className="failed-items"><p>{t("Не удалось создать:")}</p><ul>{job.items.filter(item => item.status === 'failed').map(item => <li key={item.id}>{item.label || `${t('Фрагмент')} ${job.items.indexOf(item) + 1}`}</li>)}</ul><p>{t("Попробуйте точные границы, другое качество или загрузите видео файлом.")}</p></div>}{activeJob(job) && <button type="button" className="button secondary cancel-button" disabled={cancelling} onClick={() => void cancelJob()}>{cancelling ? t("Отменяем…") : t("Отменить обработку")}</button>}</section>;
+
   const stageTitles = ['Откройте видео', 'Выберите моменты', 'Сохраните фрагменты'];
   const stageDescriptions = ['Ссылка на YouTube или MP4 с вашего устройства.', 'Отметьте начало и конец. Каждый момент станет отдельным файлом.', 'Выберите видео или аудио и скачайте результат.'];
 
@@ -342,7 +346,7 @@ export default function App() {
       <div className="header-actions"><LanguageSwitch /><ThemeToggle /></div>
     </div></header>
     <main id="editor" className={`stage-page stage-${step}`}>
-      <nav className="steps-nav" aria-label={t('Шаги работы')}><ol>{(['Видео', 'Моменты', 'Экспорт'] as const).map((label, index) => <li key={label}><button type="button" disabled={index > 0 && !source} aria-current={step === index + 1 ? 'step' : undefined} onClick={() => goToStep((index + 1) as 1 | 2 | 3)}><span className="step-number">{index + 1}</span><span>{t(label)}</span></button>{index < 2 && <span className="step-connector" aria-hidden="true" />}</li>)}</ol></nav>
+      <nav className="steps-nav" aria-label={t('Шаги работы')}><ol>{(['Видео', 'Моменты', 'Экспорт'] as const).map((label, index) => <li key={label}><button type="button" disabled={sourceBusy || (index > 0 && !source && !(index === 2 && job))} aria-current={step === index + 1 ? 'step' : undefined} onClick={() => goToStep((index + 1) as 1 | 2 | 3)}><span className="step-number">{index + 1}</span><span>{t(label)}</span></button>{index < 2 && <span className="step-connector" aria-hidden="true" />}</li>)}</ol></nav>
       <div className="page-heading"><div><p className="step-caption">{t('Шаг {current} из 3', { current: step })}</p><h1 ref={stageHeading} tabIndex={-1}>{t(stageTitles[step - 1])}</h1><p>{t(stageDescriptions[step - 1])}</p></div>{step !== 1 && <button className="text-button change-source" type="button" onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button>}</div>
       {step === 1 && <SourceChooser url={url} onUrl={value => { setUrl(value); setSourceError(''); }} onOpen={() => void openSource()} onFile={file => void openSource(file)} source={source} busy={sourceBusy} processing={busy} ready={sessionReady} error={sourceError} onCancel={() => { sourceController.current?.abort(); setSourceBusy(false); }} onReconnect={() => { setSourceError(''); setSessionAttempt(n => n + 1); }} onResume={() => goToStep(2)} />}
       {source && <section className="moments-stage" hidden={step !== 2} aria-label={t('Выбор фрагментов')}>
@@ -372,24 +376,25 @@ export default function App() {
         <div className="stage-actions"><button className="text-button" type="button" onClick={() => setShowShortcuts(!showShortcuts)} aria-expanded={showShortcuts}><span className="keycap">?</span>{t('Горячие клавиши')}</button><button className="button primary" type="button" onClick={() => goToStep(3)} disabled={sourceBusy}>{t('К настройкам экспорта')}<Icon name="chevron" size={17} /></button></div>
         {showShortcuts && <div className="shortcut-guide"><span><kbd>I</kbd>{t('начало по позиции плеера')}</span><span><kbd>O</kbd>{t('конец')}</span><span><kbd>{t('Пробел')}</kbd>{t('пауза / воспроизведение')}</span><span><kbd>←</kbd><kbd>→</kbd>{t('на ручке: 0,1 с;')}<kbd>Shift</kbd>{t(': 1 с')}</span><p>{t('Клавиши I, O и пробел работают вне полей ввода. В плеере действуют его собственные клавиши.')}</p></div>}
       </section>}
-      {step === 3 && source && <div className="output-stage">
-        <div className="output-grid"><section className="output-selection" aria-labelledby="output-selection-heading"><div className="output-source"><Icon name="file" size={20} /><span>{source.title}</span></div><h2 id="output-selection-heading">{t('Выбранные моменты')}</h2><ol>{ranges.map((range, index) => <li key={range.id}><span className="range-index">{index + 1}</span><div><strong>{range.label || `${t('Фрагмент')} ${index + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></div><span>{durationLabel(range.end_ms - range.start_ms, locale)}</span></li>)}</ol><button className="text-button" type="button" onClick={() => goToStep(2)}><Icon name="chevron" size={17} style={{ transform: 'rotate(180deg)' }} />{t('К выбору моментов')}</button></section>
+      {step === 3 && (source || job) && <div className="output-stage">
+        {source && <div className="output-grid"><section className="output-selection" aria-labelledby="output-selection-heading"><div className="output-source"><Icon name="file" size={20} /><span>{source.title}</span></div><h2 id="output-selection-heading">{t('Выбранные моменты')}</h2><ol>{ranges.map((range, index) => <li key={range.id}><span className="range-index">{index + 1}</span><div><strong>{range.label || `${t('Фрагмент')} ${index + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></div><span>{durationLabel(range.end_ms - range.start_ms, locale)}</span></li>)}</ol><button className="text-button" type="button" onClick={() => goToStep(2)}><Icon name="chevron" size={17} style={{ transform: 'rotate(180deg)' }} />{t('К выбору моментов')}</button></section>
         <section className="export-panel" aria-labelledby="export-heading"><form onSubmit={exportClips}>
           <div className="export-heading"><Icon name="download" size={20} /><h2 id="export-heading">{t("Экспорт")}</h2></div>
           <fieldset disabled={!source || submitting}><legend className="sr-only">{t("Настройки экспорта")}</legend>
             <div className="format-picker" role="group" aria-label={t("Формат файла")}><button type="button" className={output.format === 'mp4' ? 'active' : ''} onClick={() => setOutput(previous => ({ ...previous, format: 'mp4' }))} aria-pressed={output.format === 'mp4'}><strong>MP4</strong><span>{t("Видео")}</span></button><button type="button" className={output.format === 'mp3' ? 'active' : ''} onClick={() => setOutput(previous => ({ ...previous, format: 'mp3', cut_mode: 'accurate' }))} aria-pressed={output.format === 'mp3'}><strong>MP3</strong><span>{t("Аудио")}</span></button></div>
-            {output.format === 'mp4' && <div className="export-field"><label htmlFor="quality">{t("Качество видео")}</label><select id="quality" value={output.quality} disabled={preserveLocalQuality} onChange={event => setOutput(previous => ({ ...previous, quality: event.target.value as OutputSettings['quality'] }))}>{preserveLocalQuality ? <option value={output.quality}>{t('Исходное качество')}</option> : <><option value="1080p">{t("До 1080p")}</option><option value="720p">{t("До 720p")}</option><option value="best">{t("Лучшее доступное")}</option></>}</select><p className="field-hint">{t(preserveLocalQuality ? 'В режиме сохранения потоков используется качество исходного файла.' : 'Качество выше исходного не создаётся.')}</p></div>}
-            <div className="export-field"><label htmlFor="cut-mode">{t("Границы и качество")}</label><select id="cut-mode" value={output.cut_mode} disabled={output.format === 'mp3'} onChange={event => setOutput(previous => ({ ...previous, cut_mode: event.target.value as OutputSettings['cut_mode'] }))}><option value="accurate">{t("Точные границы")}</option><option value="copy">{t("Сохранить потоки")}</option></select><p className="mode-hint">{output.format === 'mp3' ? t("Аудио будет преобразовано в MP3.") : output.cut_mode === 'accurate' ? t("Видео будет перекодировано. Начало и конец — по выбранным таймкодам.") : t("Без перекодирования. Границы могут сдвинуться; некоторые кодеки несовместимы с MP4.")}</p></div>
+            {output.format === 'mp4' && <div className="export-field"><label htmlFor="quality">{t("Качество видео")}</label><select id="quality" value={output.quality} disabled={preserveLocalQuality} onChange={event => setOutput(previous => ({ ...previous, quality: event.target.value as OutputSettings['quality'] }))}>{preserveLocalQuality ? <option value={output.quality}>{t('Исходное качество')}</option> : <><option value="1080p">{t("До 1080p")}</option><option value="720p">{t("До 720p")}</option><option value="best">{t("Лучшее доступное")}</option></>}</select><p className="field-hint">{t(preserveLocalQuality ? 'Видео сохраняется без перекодирования, в качестве исходного файла.' : 'Качество выше исходного не создаётся.')}</p></div>}
+            <div className="export-field"><label htmlFor="cut-mode">{t("Границы и качество")}</label><select id="cut-mode" value={output.cut_mode} disabled={output.format === 'mp3'} onChange={event => setOutput(previous => ({ ...previous, cut_mode: event.target.value as OutputSettings['cut_mode'] }))}><option value="accurate">{t("Точные границы")}</option><option value="copy">{t("Исходное качество")}</option></select><p className="mode-hint">{output.format === 'mp3' ? t("Аудио будет преобразовано в MP3.") : output.cut_mode === 'accurate' ? t("Видео будет перекодировано. Начало и конец — по выбранным таймкодам.") : t("Без перекодирования. Границы могут сдвинуться; некоторые кодеки несовместимы с MP4.")}</p></div>
           </fieldset>
           <div className="export-summary"><span>{source ? countLabel(ranges.length, 'clip', locale) : t("Фрагменты не выбраны")}</span>{source && <strong>{durationLabel(totalDuration, locale)}</strong>}</div>
           <button className="button primary export-submit" type="submit" disabled={!source || busy || sourceBusy || invalidDraft}>{submitting ? <><span className="spinner" />{t("Создаём задание…")}</> : activeJob(job) ? <><span className="spinner" />{t("Идёт обработка…")}</> : <><Icon name="cut" size={18} />{ranges.length > 1 ? t("Вырезать фрагменты") : t("Вырезать фрагмент")}</>}</button>
           {!source && <p className="export-empty-hint">{t("Сначала откройте видео.")}</p>}
           {source && <p className="export-empty-hint">{t("Результат:")}{' '}{ranges.length > 1 ? t("отдельные файлы") : t("один файл")} {output.format.toUpperCase()}.</p>}
         </form>
-        {job && <section className={`job-status ${job.status}`} aria-label={t("Состояние экспорта")} aria-live="polite"><div className="job-status-heading">{activeJob(job) ? <span className="spinner" /> : <Icon name={job.status === 'succeeded' ? 'check' : 'file'} size={20} />}<h3>{t(stageNames[job.status === 'running' ? job.stage : job.status] ?? 'Обрабатываем фрагменты')}</h3></div><p>{jobDescription(job, t)}</p><p className="job-file-count">{t('Готово: {count} из {total}', { count: files.length, total: job.items.length })}</p>{job.items.some(item => item.status === 'failed') && <div className="failed-items"><p>{t("Не удалось создать:")}</p><ul>{job.items.filter(item => item.status === 'failed').map(item => <li key={item.id}>{item.label || `${t('Фрагмент')} ${job.items.indexOf(item) + 1}`}</li>)}</ul><p>{t("Попробуйте точные границы, другое качество или загрузите видео файлом.")}</p></div>}{activeJob(job) && <button type="button" className="button secondary cancel-button" disabled={cancelling} onClick={() => void cancelJob()}>{cancelling ? t("Отменяем…") : t("Отменить обработку")}</button>}</section>}
+        {jobProgress}
         {jobError && <p className="error-message" role="alert">{t(jobError)}</p>}
         </section>
-        </div>
+        </div>}
+        {!source && <section className="export-panel orphan-results"><p className="field-hint">{t('Видео больше недоступно, но результат экспорта сохранился. Чтобы вырезать новые моменты, откройте видео заново.')}</p><button className="text-button" type="button" onClick={() => goToStep(1)}>{t('Открыть другое видео')}</button>{jobProgress}{jobError && <p className="error-message" role="alert">{t(jobError)}</p>}</section>}
       {files.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading">{t("Готовые файлы")}</h2><p>{t("Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(files.length, 'file', locale)}</span></div><ul className="file-list">{files.map((item, index) => {
         const artifact = item.artifact!;
         const itemNumber = (job?.items.indexOf(item) ?? index) + 1;
