@@ -9,11 +9,93 @@ jobs:
   frontend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
       - run: npm run build
       - run: npm test
+      - run: npm audit --omit=dev
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: cutmy
+          POSTGRES_PASSWORD: cutmy_ci_only
+          POSTGRES_DB: cutmy
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cutmy -d cutmy"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgres://cutmy:cutmy_ci_only@127.0.0.1:5432/cutmy?sslmode=disable
+      DATA_DIR: /tmp/cutmy-ci-data
+      PUBLIC_ORIGIN: http://127.0.0.1:5173
+      COOKIE_SECURE: 'false'
+      MUTATIONS_PER_MINUTE: '200'
+      CUTMY_E2E_URL: http://127.0.0.1:5173
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: web
+      - id: core-ref
+        run: echo "sha=$(cat web/core.version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: Kay0k1/cutmyvideo-core
+          ref: ${{ steps.core-ref.outputs.sha }}
+          path: core
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.1'
+          cache-dependency-path: core/go.sum
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install media tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - run: go build -o /tmp/cutmy ./cmd/cutmy
+        working-directory: core
+      - run: npm ci
+        working-directory: web
+      - run: npx playwright install --with-deps chromium
+        working-directory: web
+      - name: Start real backend and website
+        run: |
+          /tmp/cutmy server > /tmp/cutmy-server.log 2>&1 &
+          backend_ready=false
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/readyz; then backend_ready=true; break; fi
+            sleep 1
+          done
+          if [ "$backend_ready" != true ]; then cat /tmp/cutmy-server.log; exit 1; fi
+          /tmp/cutmy worker > /tmp/cutmy-worker.log 2>&1 &
+          cd web
+          npm run dev -- --host 127.0.0.1 > /tmp/cutmy-web.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/readyz && curl -fsS http://127.0.0.1:5173/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/cutmy-server.log /tmp/cutmy-web.log
+          exit 1
+      - run: npm run test:e2e
+        working-directory: web
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: integration-diagnostics
+          path: |
+            web/playwright-report
+            web/test-results
+            /tmp/cutmy-server.log
+            /tmp/cutmy-worker.log
+          retention-days: 7
