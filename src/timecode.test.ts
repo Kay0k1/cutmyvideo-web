@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatTimecode, parseTimecode, validateRange, zoomWindow } from './timecode';
+import { displayTimecode, formatTimecode, parseTimecode, validateRange, zoomWindow } from './timecode';
 
 describe('source timeline values', () => {
   it('accepts multi-hour times, total minutes and decimal seconds', () => {
@@ -16,6 +16,10 @@ describe('source timeline values', () => {
     for (const ms of [0, 100, 59999, 3600000, 10845293]) {
       expect(parseTimecode(formatTimecode(ms, true))).toBe(ms);
     }
+  });
+  it('keeps fractional boundaries visible in the saved selection list', () => {
+    expect(displayTimecode(1250)).toBe('00:00:01.250');
+    expect(displayTimecode(3000)).toBe('00:00:03');
   });
   it('rejects reversed, out-of-source and subminimum selections', () => {
     expect(validateRange(1000, 900, 5000)).not.toBeNull();

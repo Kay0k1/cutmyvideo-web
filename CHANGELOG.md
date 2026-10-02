@@ -11,3 +11,7 @@ Notable product changes are recorded here. Dates use the project owner's Moscow 
 - MP4/MP3 export with quality and cut-mode settings, real job polling, cancellation, partial downloads, and browser-local draft restoration.
 - Responsive Russian interface with actionable errors, honest quality descriptions, and self-hosted fonts.
 - Production static-web container and immutable asset caching.
+
+### Fixed
+- Preserve fractional seconds in saved-range summaries, fit selected boundaries into the timeline, and name short-source zoom accurately.
+- Separate source resolution and duration on mobile, preserve keyboard skip navigation, and keep trim targets at least 24 pixels wide.

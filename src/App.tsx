@@ -5,7 +5,7 @@ import { Icon } from './Icons';
 import { Player } from './Player';
 import type { PlayerControls } from './Player';
 import { Timeline } from './Timeline';
-import { durationLabel, formatBytes, formatTimecode, parseTimecode, validateRange, zoomWindow } from './timecode';
+import { displayTimecode, durationLabel, formatBytes, formatTimecode, parseTimecode, validateRange, zoomWindow } from './timecode';
 import type { ClipRange, Job, OutputSettings, Source } from './types';
 
 const storageKey = 'cutmy.workbench.v1';
@@ -77,6 +77,7 @@ export default function App() {
   const busy = activeJob(job) || submitting;
   const duration = source?.duration_ms ?? 0;
   const view = zoomWindow(duration, viewCenter, span);
+  const zoomOptions = [duration, 300000, 60000, 10000].filter((value, index, all) => value > 0 && value <= duration && all.indexOf(value) === index);
   const totalDuration = ranges.reduce((sum, range) => sum + range.end_ms - range.start_ms, 0);
   const invalidDraft = !!selected && !!validateRange(parseTimecode(startText), parseTimecode(endText), duration);
 
@@ -103,6 +104,7 @@ export default function App() {
               const active = restoredRanges.find(range => range.id === saved.selected_id) ?? restoredRanges[0];
               setSource(original); setRanges(restoredRanges); setSelectedId(active.id); setFields(active);
               setViewCenter((active.start_ms + active.end_ms) / 2);
+              setSpan(Math.min(original.duration_ms, 60000));
               if (saved.output && ['mp4', 'mp3'].includes(saved.output.format) && ['best', '1080p', '720p'].includes(saved.output.quality) && ['copy', 'accurate'].includes(saved.output.cut_mode)) setOutput(saved.output);
             } catch { if (!disposed) setSourceError('Предыдущий источник больше недоступен. Откройте его заново.'); }
           }
@@ -213,7 +215,7 @@ export default function App() {
       const range = newRange(opened.duration_ms);
       player.current?.pause(); previewEnd.current = null;
       setSource(opened); setRanges([range]); setSelectedId(range.id); setFields(range);
-      setCurrent(0); setViewCenter((range.start_ms + range.end_ms) / 2); setSpan(60000);
+      setCurrent(0); setViewCenter((range.start_ms + range.end_ms) / 2); setSpan(Math.min(opened.duration_ms, 60000));
       setJob(null); setJobError(''); setPreviewing(false); setPlayerAvailable(false);
       setNotice('Источник открыт. Укажите границы фрагмента.');
     } catch (error) {
@@ -224,6 +226,13 @@ export default function App() {
   function pickRange(range: ClipRange) {
     previewEnd.current = null; setPreviewing(false); player.current?.pause();
     setSelectedId(range.id); setFields(range); setViewCenter((range.start_ms + range.end_ms) / 2);
+  }
+
+  function fitSelection() {
+    if (!selected) return;
+    setViewCenter((selected.start_ms + selected.end_ms) / 2);
+    const needed = Math.min(duration, (selected.end_ms - selected.start_ms) * 1.2);
+    if (needed > span) setSpan([...zoomOptions].sort((a, b) => a - b).find(value => value >= needed) ?? duration);
   }
 
   function addRange() {
@@ -306,7 +315,7 @@ export default function App() {
           }} />
 
           {source && selected ? <div className="selection-editor">
-            <div className="timeline-toolbar"><h2>Границы фрагмента</h2><div className="zoom-controls"><button type="button" className="icon-button" aria-label="Предыдущий участок шкалы" disabled={view[0] <= 0} onClick={() => setViewCenter(Math.max(0, viewCenter - span / 2))}><Icon name="chevron" size={16} style={{ transform: 'rotate(180deg)' }} /></button><label htmlFor="zoom" className="sr-only">Масштаб шкалы</label><select id="zoom" value={span} onChange={event => { setSpan(Number(event.target.value)); setViewCenter((selected.start_ms + selected.end_ms) / 2); }}><option value={duration}>Всё видео</option><option value={300000}>5 минут</option><option value={60000}>1 минута</option><option value={10000}>10 секунд</option></select><button type="button" className="icon-button" aria-label="Следующий участок шкалы" disabled={view[1] >= duration} onClick={() => setViewCenter(Math.min(duration, viewCenter + span / 2))}><Icon name="chevron" size={16} /></button></div></div>
+            <div className="timeline-toolbar"><h2>Границы фрагмента</h2><div className="zoom-controls"><button type="button" className="icon-button" aria-label="Предыдущий участок шкалы" disabled={view[0] <= 0} onClick={() => setViewCenter(Math.max(0, viewCenter - span / 2))}><Icon name="chevron" size={16} style={{ transform: 'rotate(180deg)' }} /></button><label htmlFor="zoom" className="sr-only">Масштаб шкалы</label><select id="zoom" value={span} onChange={event => { setSpan(Number(event.target.value)); setViewCenter((selected.start_ms + selected.end_ms) / 2); }}>{zoomOptions.map(value => <option key={value} value={value}>{value === duration ? 'Всё видео' : value === 300000 ? '5 минут' : value === 60000 ? '1 минута' : '10 секунд'}</option>)}</select><button type="button" className="icon-button" aria-label="Следующий участок шкалы" disabled={view[1] >= duration} onClick={() => setViewCenter(Math.min(duration, viewCenter + span / 2))}><Icon name="chevron" size={16} /></button></div></div>
             <Timeline duration={duration} current={current} ranges={ranges} selected={selected} view={view} onSeek={seek} onRange={changeBounds} />
             <div className="time-fields">
               <div><label htmlFor="range-start">Начало</label><input ref={startField} id="range-start" className="time-input" type="text" inputMode="text" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitFields(); } }} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" onClick={() => marker('start')}><span className="marker-bracket">[</span> По позиции плеера <kbd>I</kbd></button></div>
@@ -316,10 +325,10 @@ export default function App() {
             </div>
             <p id="time-hint" className="field-hint">Часы:минуты:секунды. Можно ввести 83:10 или 01:23:10.250.</p>
             {rangeError && <p id="range-error" className="error-message" role="alert">{rangeError}</p>}
-            <div className="selection-actions"><button className="button secondary" type="button" disabled={!playerAvailable} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} />{previewing ? 'Остановить просмотр' : 'Посмотреть фрагмент'}</button><button className="text-button center-selection" type="button" onClick={() => setViewCenter((selected.start_ms + selected.end_ms) / 2)}>Показать границы на шкале</button></div>
+            <div className="selection-actions"><button className="button secondary" type="button" disabled={!playerAvailable} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} />{previewing ? 'Остановить просмотр' : 'Посмотреть фрагмент'}</button><button className="text-button center-selection" type="button" onClick={fitSelection}>Показать границы на шкале</button></div>
             <div className="ranges-heading"><h2>Фрагменты <span className="count">{ranges.length}</span></h2><button className="text-button" type="button" onClick={addRange} disabled={ranges.length >= 10}><Icon name="plus" size={16} />Добавить фрагмент</button></div>
-            <ol className="range-list">{ranges.map((range, index) => <li key={range.id} className={range.id === selectedId ? 'selected' : ''}><button className="range-select" type="button" onClick={() => pickRange(range)} aria-pressed={range.id === selectedId}><span className="range-index">{index + 1}</span><span className="range-description"><strong>{range.label || `Фрагмент ${index + 1}`}</strong><span>{formatTimecode(range.start_ms)} — {formatTimecode(range.end_ms)}</span></span><span className="range-length">{durationLabel(range.end_ms - range.start_ms)}</span></button><button className="icon-button delete-range" type="button" aria-label={`Удалить фрагмент ${index + 1}`} onClick={() => removeRange(range.id)} disabled={ranges.length === 1}><Icon name="trash" size={17} /></button></li>)}</ol>
-            <label className="clip-name-label" htmlFor="clip-name">Название выбранного фрагмента <span>необязательно</span></label><input id="clip-name" className="clip-name" type="text" maxLength={80} placeholder={`Фрагмент ${ranges.findIndex(range => range.id === selected.id) + 1}`} value={selected.label} onChange={event => setRanges(previous => previous.map(range => range.id === selected.id ? { ...range, label: event.target.value } : range))} />
+            <ol className="range-list">{ranges.map((range, index) => <li key={range.id} className={range.id === selectedId ? 'selected' : ''}><button className="range-select" type="button" onClick={() => pickRange(range)} aria-pressed={range.id === selectedId}><span className="range-index">{index + 1}</span><span className="range-description"><strong>{range.label || `Фрагмент ${index + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></span><span className="range-length">{durationLabel(range.end_ms - range.start_ms)}</span></button><button className="icon-button delete-range" type="button" aria-label={`Удалить фрагмент ${index + 1}`} onClick={() => removeRange(range.id)} disabled={ranges.length === 1}><Icon name="trash" size={17} /></button></li>)}</ol>
+            <label className="clip-name-label" htmlFor="clip-name">Название выбранного фрагмента <span>необязательно</span></label><input id="clip-name" className="clip-name" type="text" maxLength={50} placeholder={`Фрагмент ${ranges.findIndex(range => range.id === selected.id) + 1}`} value={selected.label} onChange={event => setRanges(previous => previous.map(range => range.id === selected.id ? { ...range, label: event.target.value } : range))} />
           </div> : <div className="empty-selection"><span className="trim-example" aria-hidden="true">[&nbsp;&nbsp;]</span><div><h2>Один момент или несколько</h2><p>Выбирайте границы на шкале или вводите точное время.<br className="desktop-break" /> Каждый фрагмент сохранится отдельным файлом.</p></div></div>}
         </section>
 

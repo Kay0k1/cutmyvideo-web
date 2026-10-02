@@ -30,6 +30,10 @@ export function durationLabel(ms: number): string {
   return `${Math.floor(seconds / 60)} мин ${Number((seconds % 60).toFixed(1))} с`;
 }
 
+export function displayTimecode(ms: number): string {
+  return formatTimecode(ms, Math.round(ms) % 1000 !== 0);
+}
+
 export function validateRange(start: number | null, end: number | null, duration: number): string | null {
   if (start === null || end === null) return 'Введите время в формате 01:23:10.000 или 83:10.';
   if (start < 0 || end > duration) return 'Границы должны находиться внутри видео.';
