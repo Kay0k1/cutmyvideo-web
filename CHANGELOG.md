@@ -18,6 +18,8 @@ Notable product changes are recorded here. Dates use the project owner's Moscow 
 - Integration coverage for real exports, long-source timing, keyboard editing, reload, cancellation, source replacement, mobile layout, and session isolation.
 
 ### Fixed
+- Distinguish failed exports with no files from partial success, and preserve original clip numbering in partial downloads.
+- Pin the Node.js 22 builder and maintained stable Nginx image by digest for reproducible deployment.
 - Keep invalid source links in the editor and show the selected language's actionable validation message.
 - Preserve fractional seconds in saved-range summaries, fit selected boundaries into the timeline, and name short-source zoom accurately.
 - Separate source resolution and duration on mobile, preserve keyboard skip navigation, and keep trim targets at least 24 pixels wide.

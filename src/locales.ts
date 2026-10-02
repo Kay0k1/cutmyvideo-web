@@ -106,6 +106,7 @@ export const english: Record<string, string> = {
   'Новые фрагменты не создаются. Готовые файлы можно скачать.': 'No further clips will be created. Ready files can be downloaded.',
   'Все фрагменты готовы к скачиванию.': 'All clips are ready to download.',
   'Часть фрагментов не удалось обработать. Готовые файлы доступны ниже.': 'Some clips could not be processed. Completed files are available below.',
+  'Не удалось создать фрагменты. Измените настройки экспорта или попробуйте другой источник.': 'No clips could be created. Change export settings or try another source.',
   'Фрагмент {index} из {total}.': 'Clip {index} of {total}.',
   'Задание выполняется. Страница обновляется автоматически.': 'Your export is running. This page updates automatically.',
   'Предыдущий источник больше недоступен. Откройте его заново.': 'Your previous source is no longer available. Open it again.',

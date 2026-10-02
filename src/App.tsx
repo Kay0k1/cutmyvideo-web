@@ -26,7 +26,9 @@ function jobDescription(job: Job, t: (text: string, values?: Record<string, stri
   if (job.status === 'queued') return t('Задание сохранено. Можно закрыть страницу и вернуться позже.');
   if (job.status === 'cancelled') return t('Новые фрагменты не создаются. Готовые файлы можно скачать.');
   if (job.status === 'succeeded') return t('Все фрагменты готовы к скачиванию.');
-  if (job.status === 'failed') return t('Часть фрагментов не удалось обработать. Готовые файлы доступны ниже.');
+  if (job.status === 'failed') return t(job.items.some(item => item.artifact)
+    ? 'Часть фрагментов не удалось обработать. Готовые файлы доступны ниже.'
+    : 'Не удалось создать фрагменты. Измените настройки экспорта или попробуйте другой источник.');
   const position = job.items.findIndex(item => item.status === 'running');
   if (position >= 0) return t('Фрагмент {index} из {total}.', { index: position + 1, total: job.items.length });
   return t('Задание выполняется. Страница обновляется автоматически.');
@@ -367,8 +369,9 @@ export default function App() {
 
       {files.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading">{t("Готовые файлы")}</h2><p>{t("Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(files.length, 'file', locale)}</span></div><ul className="file-list">{files.map((item, index) => {
         const artifact = item.artifact!;
+        const itemNumber = (job?.items.indexOf(item) ?? index) + 1;
         const adjusted = Math.abs(artifact.actual_start_ms - item.start_ms) > 100 || Math.abs(artifact.actual_end_ms - item.end_ms) > 100;
-        return <li key={artifact.id}><span className="file-icon"><Icon name="file" size={23} /></span><div className="file-description"><h3>{item.label || `${t('Фрагмент')} ${index + 1}`}</h3><p>{artifact.filename}</p><span>{formatBytes(artifact.size_bytes, locale)}<span className="meta-separator"> / </span>{formatTimecode(artifact.actual_start_ms, true)} — {formatTimecode(artifact.actual_end_ms, true)}</span>{adjusted && <p className="adjusted-note">{t("Фактические границы отличаются от выбранных.")}</p>}</div><a className="button secondary download-button" href={artifact.download_url} download={artifact.filename}><Icon name="download" size={17} />{t("Скачать")}</a></li>;
+        return <li key={artifact.id}><span className="file-icon"><Icon name="file" size={23} /></span><div className="file-description"><h3>{item.label || `${t('Фрагмент')} ${itemNumber}`}</h3><p>{artifact.filename}</p><span>{formatBytes(artifact.size_bytes, locale)}<span className="meta-separator"> / </span>{formatTimecode(artifact.actual_start_ms, true)} — {formatTimecode(artifact.actual_end_ms, true)}</span>{adjusted && <p className="adjusted-note">{t("Фактические границы отличаются от выбранных.")}</p>}</div><a className="button secondary download-button" href={artifact.download_url} download={artifact.filename}><Icon name="download" size={17} />{t("Скачать")}</a></li>;
       })}</ul></section>}
       <footer className="page-footer"><span>cutmyvideo</span><a href="https://github.com/Kay0k1/cutmyvideo-core" target="_blank" rel="noreferrer">{t("Открытое ядро на GitHub")}</a></footer>
       <div className="sr-only" role="status" aria-live="polite">{t(notice)}</div>
