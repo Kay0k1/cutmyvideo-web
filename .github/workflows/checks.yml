@@ -67,7 +67,7 @@ jobs:
         working-directory: core
       - run: npm ci
         working-directory: web
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium firefox webkit
         working-directory: web
       - name: Start real backend and website
         run: |
