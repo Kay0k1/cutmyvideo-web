@@ -20,6 +20,7 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Authenticate the platform extractor consistently in the production container through the updated public core.
 - Distinguish failed exports with no files from partial success, and preserve original clip numbering in partial downloads.
 - Pin the Node.js 22 builder and maintained stable Nginx image by digest for reproducible deployment.
 - Keep invalid source links in the editor and show the selected language's actionable validation message.
