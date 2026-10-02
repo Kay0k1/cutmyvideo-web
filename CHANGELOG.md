@@ -24,6 +24,7 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Build the shared core image once for API and worker, avoiding concurrent exports to the same release tag.
 - Align website YouTube parsing with the public core's canonical URL rules; pin production releases to core revision fe2f46e with safe private process-failure diagnostics.
 - Honor the saved editing step after retrieving a previous job; retain status and downloads when its source has expired.
 - Keep light input borders distinguishable from their surface and distribute the font copyright/license with self-hosted assets.

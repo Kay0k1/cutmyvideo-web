@@ -29,6 +29,8 @@ Caddy obtains HTTPS certificates automatically. Only the edge publishes ports;
 PostgreSQL, media workers, and the API remain on the internal Compose network.
 The API and worker share the media volume. Resource limits prevent processing
 from using all of the machine's available CPU and memory.
+The API builds the core image once; the worker uses that same image without a
+second build targeting the same image tag.
 
 ## Release and rollback
 
