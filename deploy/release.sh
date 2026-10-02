@@ -40,6 +40,12 @@ printf 'CORE_COMMIT=%s\nWEB_COMMIT=%s\n' "$2" "$3" > release.env
 export RELEASE_TAG="$release"
 docker compose --env-file /opt/cutmy/shared/production.env -f web/deploy/compose.yaml build
 docker compose --env-file /opt/cutmy/shared/production.env -f web/deploy/compose.yaml up -d --wait --wait-timeout 120
+# Keep later restarts and backups on the same image tags as this release.
+env_next="$(mktemp /opt/cutmy/shared/production.env.XXXXXX)"
+sed '/^RELEASE_TAG=/d' /opt/cutmy/shared/production.env > "$env_next"
+printf 'RELEASE_TAG=%s\n' "$release" >> "$env_next"
+chmod 600 "$env_next"
+mv "$env_next" /opt/cutmy/shared/production.env
 ln -sfn "$release_dir" /opt/cutmy/current.next
 mv -Tf /opt/cutmy/current.next /opt/cutmy/current
 printf 'Deployed release %s\n' "$release"

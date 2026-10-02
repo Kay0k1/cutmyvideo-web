@@ -1,7 +1,7 @@
 # Deployment and operation
 
 The product lives in this private repository. The reusable processing engine is
-in the public `Kay0k1/cutmy-core` repository. No deployment passwords, SSH keys,
+in the public `Kay0k1/cutmyvideo-core` repository. No deployment passwords, SSH keys,
 GitHub credentials, or production environment files belong in either checkout.
 
 ## Layout
