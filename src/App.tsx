@@ -311,7 +311,7 @@ export default function App() {
 
       <section className="source-panel" aria-labelledby="source-heading">
         <h2 id="source-heading" className="sr-only">{t("Открыть источник")}</h2>
-        <form className="source-form" onSubmit={event => { event.preventDefault(); void openSource(); }}>
+        <form className="source-form" noValidate onSubmit={event => { event.preventDefault(); void openSource(); }}>
           <div className="source-field"><label htmlFor="source-url">{t("Ссылка на видео")}</label><div className="source-input-wrap"><Icon name="link" size={19} /><input ref={sourceInput} id="source-url" type="url" placeholder="https://…" value={url} onChange={event => { setUrl(event.target.value); setSourceError(''); }} disabled={sourceBusy || busy} aria-invalid={!!sourceError} aria-describedby={sourceError ? 'source-error' : 'source-hint'} autoComplete="off" spellCheck={false} /></div></div>
           <button className="button primary source-open" type="submit" disabled={!sessionReady || sourceBusy || busy}>{sourceBusy ? <><span className="spinner" />{t("Открываем…")}</> : t("Открыть видео")}</button>
           <span className="source-or">{t("или")}</span>

@@ -18,5 +18,6 @@ Notable product changes are recorded here. Dates use the project owner's Moscow 
 - Integration coverage for real exports, long-source timing, keyboard editing, reload, cancellation, source replacement, mobile layout, and session isolation.
 
 ### Fixed
+- Keep invalid source links in the editor and show the selected language's actionable validation message.
 - Preserve fractional seconds in saved-range summaries, fit selected boundaries into the timeline, and name short-source zoom accurately.
 - Separate source resolution and duration on mobile, preserve keyboard skip navigation, and keep trim targets at least 24 pixels wide.
