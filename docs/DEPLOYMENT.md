@@ -47,7 +47,10 @@ migrations.
 ## Backups
 
 `deploy/backup.sh` creates a compressed PostgreSQL dump with seven-day local
-retention. Files in the media volume are temporary results, not permanent user
+retention. The release script installs `deploy/backup.cron` for a daily backup at
+03:17 in the server's timezone; the server must have cron running. Run the backup
+script once after first deployment and verify the compressed dump before relying
+on the schedule. Files in the media volume are temporary results, not permanent user
 storage. A local backup does not survive loss of the server; off-server backups
 can be configured when choosing the hosting provider's backup service.
 

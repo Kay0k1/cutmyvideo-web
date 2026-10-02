@@ -1,6 +1,6 @@
 # Changelog
 
-Notable product changes are recorded here. Dates use the project owner's Moscow timezone.
+Notable product changes are recorded here.
 
 ## Unreleased
 
@@ -16,6 +16,8 @@ Notable product changes are recorded here. Dates use the project owner's Moscow 
 - Direct links to support and optional language selection; copy feedback without payment transactions.
 - Russian primary README and separate English documentation.
 - Integration coverage for real exports, long-source timing, keyboard editing, reload, cancellation, source replacement, mobile layout, and session isolation.
+- HTTPS deployment with an internal API/database, persistent volumes, resource limits, reproducible release archives, and daily database backups with seven-day local retention.
+- GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
 - Distinguish failed exports with no files from partial success, and preserve original clip numbering in partial downloads.

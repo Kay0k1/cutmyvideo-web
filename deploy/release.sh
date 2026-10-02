@@ -48,5 +48,6 @@ chmod 600 "$env_next"
 mv "$env_next" /opt/cutmy/shared/production.env
 ln -sfn "$release_dir" /opt/cutmy/current.next
 mv -Tf /opt/cutmy/current.next /opt/cutmy/current
+install -m 0644 web/deploy/backup.cron /etc/cron.d/cutmyvideo-backup
 printf 'Deployed release %s\n' "$release"
 REMOTE
