@@ -1,8 +1,16 @@
 import { execFileSync } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
-import { expect, type APIRequestContext, type TestInfo } from '@playwright/test'
+import { expect, type APIRequestContext, type Page, type TestInfo } from '@playwright/test'
 
 export const api = '/api/v1'
+
+export async function uploadThroughUI(page: Page, filename = process.env.CUTMY_E2E_MEDIA!) {
+  const button = page.locator('button.upload-button')
+  await expect(button).toBeEnabled()
+  const chooser = page.waitForEvent('filechooser')
+  await button.click()
+  await (await chooser).setFiles(filename)
+}
 
 export async function upload(request: APIRequestContext) {
   const { readFile } = await import('node:fs/promises')

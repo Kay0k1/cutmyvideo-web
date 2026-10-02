@@ -16,5 +16,12 @@ export default function setup() {
     ], { timeout: 30_000 })
   }
   process.env.CUTMY_E2E_MEDIA = mediaPath
+  const audioPath = join(fixtureDir, 'qa-audio-only.wav')
+  execFileSync('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-y',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:duration=2',
+    '-c:a', 'pcm_s16le', audioPath,
+  ], { timeout: 10_000 })
+  process.env.CUTMY_E2E_AUDIO = audioPath
   return () => rmSync(fixtureDir, { recursive: true, force: true })
 }

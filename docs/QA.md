@@ -27,6 +27,17 @@ and real FFmpeg outputs; screenshots or mocked API responses alone are not proof
   restore only after checking the source still belongs to the current session.
 - At 360 px and 390 px, controls remain reachable with no horizontal document
   overflow; focus indicators are visible and reduced motion is respected.
+- Russian is the default. Switching to English preserves the source, exact
+  boundaries, playback and job. English visible copy and accessible labels are
+  checked for untranslated Russian strings, excluding user content and the
+  language selector. The chosen language survives reload.
+- Examples, settings and support dialogs keep keyboard focus inside, close with
+  Escape, and return focus to their trigger. Narrow-screen dialogs remain usable.
+- Saved export and zoom defaults survive reload and apply to the current and next
+  source without changing selected intervals. MP3 always uses accurate mode.
+- Each of the four owner-supplied donation addresses is shown once and copied
+  exactly to the actual clipboard. Expected values come from the owner, not the
+  app's constants; the tests never initiate a transaction.
 - Separate browser sessions cannot read each other's sources, jobs, previews or
   downloads. User URLs cannot reach loopback, private networks, link-local cloud
   metadata, or unsafe destinations through redirects and media manifests.
@@ -78,7 +89,10 @@ actual 10,800-second media fixture with audio and whole-second video frames; the
 test selects 01:23:10–01:23:40, verifies a useful zoomed selection, and probes the
 real exported 30-second MP4. Its duration is never mocked.
 
-The suite generates a real 12-second video with audio in a temporary directory.
+The suite generates a real 12-second video with audio and a short audio-only WAV
+in a temporary directory. Exporting that WAV as MP4 exercises an actual FFmpeg
+failure; both languages must explain that no clips were created and offer a next
+step instead of referring to nonexistent completed files.
 `CUTMY_E2E_MEDIA` can point to an existing equivalent fixture. The report records
 actual downloaded MP4/MP3 files, ffprobe output, and desktop/mobile screenshots.
 Accurate MP4 tests also compare the first output frame against the requested
@@ -88,3 +102,10 @@ Cancellation is tested on a multi-item export so a tiny completed encode cannot
 be mistaken for a successful cancellation. Session isolation uses independent
 cookie jars; SSRF checks use HTTPS private addresses to reach the actual network
 guard rather than only fail scheme validation.
+
+For a deployed server with stricter request limits, run focused scenarios rather
+than the full development suite in one burst. A useful first HTTPS check is:
+
+```sh
+CUTMY_E2E_URL=https://cutmy.video npm run test:e2e -- --project=desktop editor.spec.ts --grep 'real editor supports'
+```

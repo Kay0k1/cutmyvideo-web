@@ -1,14 +1,14 @@
 import { expect, test } from '@playwright/test'
-import { api, probeDownloadedFile, waitJob } from './helpers'
+import { api, probeDownloadedFile, uploadThroughUI, waitJob } from './helpers'
 
 test('real editor supports exact multiple ranges, preview, reload and export', async ({ page }, testInfo) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Загрузить файл', exact: true })).toBeEnabled()
+  await expect(page.locator('button.upload-button')).toBeEnabled()
   await page.screenshot({ path: testInfo.outputPath('desktop-empty.png'), fullPage: true })
   await testInfo.attach('Desktop empty state', { path: testInfo.outputPath('desktop-empty.png'), contentType: 'image/png' })
-  await page.locator('input[type=file]').setInputFiles(process.env.CUTMY_E2E_MEDIA!)
+  await uploadThroughUI(page)
   const video = page.locator('video')
   await expect(video).toBeVisible()
   await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).duration)).toBeCloseTo(12, 1)
@@ -58,8 +58,8 @@ test('real editor supports exact multiple ranges, preview, reload and export', a
 
 test('range handles support keyboard and invalid time input can be corrected', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Загрузить файл', exact: true })).toBeEnabled()
-  await page.locator('input[type=file]').setInputFiles(process.env.CUTMY_E2E_MEDIA!)
+  await expect(page.locator('button.upload-button')).toBeEnabled()
+  await uploadThroughUI(page)
   const start = page.getByLabel('Начало', { exact: true })
   await expect(start).toBeVisible()
   const handle = page.getByRole('slider', { name: 'Начало фрагмента на шкале' })
@@ -92,8 +92,8 @@ test('range handles support keyboard and invalid time input can be corrected', a
 
 test('replacing a source resets selections belonging to the old video', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Загрузить файл', exact: true })).toBeEnabled()
-  await page.locator('input[type=file]').setInputFiles(process.env.CUTMY_E2E_MEDIA!)
+  await expect(page.locator('button.upload-button')).toBeEnabled()
+  await uploadThroughUI(page)
   const start = page.getByLabel('Начало', { exact: true })
   await expect(start).toBeVisible()
   await start.fill('00:00:04.000')
@@ -101,7 +101,7 @@ test('replacing a source resets selections belonging to the old video', async ({
   await page.getByRole('button', { name: 'Добавить фрагмент', exact: true }).click()
   await expect(page.locator('.range-list > li')).toHaveCount(2)
   const responsePromise = page.waitForResponse(response => response.url().endsWith(`${api}/uploads`) && response.request().method() === 'POST')
-  await page.locator('input[type=file]').setInputFiles(process.env.CUTMY_E2E_MEDIA!)
+  await uploadThroughUI(page)
   expect((await responsePromise).ok()).toBeTruthy()
   await expect(start).toHaveValue('00:00:00.000')
   await expect(page.getByLabel('Конец', { exact: true })).toHaveValue('00:00:12.000')
@@ -110,8 +110,8 @@ test('replacing a source resets selections belonging to the old video', async ({
 
 test('an active UI export survives reload and can be cancelled', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Загрузить файл', exact: true })).toBeEnabled()
-  await page.locator('input[type=file]').setInputFiles(process.env.CUTMY_E2E_MEDIA!)
+  await expect(page.locator('button.upload-button')).toBeEnabled()
+  await uploadThroughUI(page)
   const add = page.getByRole('button', { name: 'Добавить фрагмент', exact: true })
   await expect(add).toBeVisible()
   for (let i = 0; i < 9; i++) await add.click()
@@ -136,8 +136,8 @@ test('an active UI export survives reload and can be cancelled', async ({ page }
 test('a real three-hour source supports a precise middle selection and export', async ({ page }, testInfo) => {
   test.skip(!process.env.CUTMY_E2E_LONG_MEDIA, 'Set CUTMY_E2E_LONG_MEDIA to a real three-hour fixture.')
   await page.goto('/')
-  await expect(page.getByRole('button', { name: 'Загрузить файл', exact: true })).toBeEnabled()
-  await page.locator('input[type=file]').setInputFiles(process.env.CUTMY_E2E_LONG_MEDIA!)
+  await expect(page.locator('button.upload-button')).toBeEnabled()
+  await uploadThroughUI(page, process.env.CUTMY_E2E_LONG_MEDIA!)
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).duration)).toBeCloseTo(10_800, 0)
   await page.getByLabel('Начало', { exact: true }).fill('01:23:10.000')
   await page.getByLabel('Начало', { exact: true }).press('Tab')
