@@ -39,6 +39,7 @@ export interface Job {
     start_ms: number;
     end_ms: number;
     status: JobStatus;
+    message?: string;
     artifact: Artifact | null;
   }[];
 }
