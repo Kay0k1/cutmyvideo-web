@@ -10,6 +10,28 @@ The chosen design uses three actual stages: **Video → Moments → Export**. Th
 
 Critique of the proposed design ruled out decorative hero copy, media thumbnails without a source, waveform imitations, statistics, and a separate card for every field. The visual direction stays quiet: generous spacing around the first action, a single workspace for editing, and borders only where they explain real groups. The final implementation was inspected using actual uploaded media in both themes and at phone widths.
 
+## Compact layout review
+
+The staged workflow still stacked a large player, the whole timeline, time fields, and the clip list vertically. The resulting desktop page was approximately 1,768 pixels tall. The current layout uses the available width before adding height:
+
+```text
+Source title and duration
+┌───────────────────────┬─────────────────────────┐
+│ Player                │ Overview and trim range │
+│ Clip list             │ Exact start / end       │
+│ Selected clip name    │ Preview and fit range   │
+└───────────────────────┴─────────────────────────┘
+Keyboard help                              Continue
+```
+
+The plan preserves the existing soft palette, Geologica, themes, copy, and three stages. Its critique rejected a fixed-height page with hidden overflow: that could cut off validation, keyboard focus, or zoomed text. Instead, the page keeps natural height, the desktop player scales within sensible limits, and only potentially long clip/result lists have bounded overflow. Selecting or adding a clip adjusts that list's scroll position; resizing keeps the selected row visible without scrolling the whole document.
+
+The header, progress, headings, and unnecessary gaps are smaller on desktop. Primary editing controls fit the tested standard desktop viewports, including 1280×720 and 1366×768. Export puts the selected moments and ready downloads beside its settings. Short files or clips are actual data; no display-only filler is introduced to occupy spare space.
+
+Phones keep the logical player → boundaries → moments flow with natural vertical scrolling. Both initial source choices fit a 360×640 screen. All enabled touch controls, including language/theme actions and header/footer links, retain at least 44×44 CSS-pixel hit areas. Browser zoom and validation can increase page height; controls remain in normal flow.
+
+See [QA.md](QA.md) for the viewport, browser-engine, locale, and theme matrix. Browser emulation checks logical screen sizes and touch interaction rather than claiming tests on particular physical phone or Mac hardware.
+
 ## Typography and themes
 
 - Self-hosted **Geologica Variable**, including Cyrillic and Latin, uses one family with restrained weight differences. Timecodes use tabular numerals. The pinned Fontsource package provides the font; its unmodified SIL Open Font License and copyright are distributed at `/licenses/geologica.txt`.

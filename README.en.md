@@ -29,7 +29,9 @@ Changing videos replaces the old moments only after the new source opens success
 - Russian by default and a complete English interface; switching language preserves selections.
 - Examples, help, and persistent defaults for format, quality, cut mode, and timeline zoom.
 - Support section with four wallet addresses and copy actions. The application does not perform transfers.
-- Responsive layout, visible focus, labelled sliders, and actionable errors.
+- Compact desktop workspace: player and moments beside the timeline and exact times, with ready downloads beside export settings.
+- The initial screen fits a small phone; mobile editing follows a natural order with comfortable touch targets. Long desktop lists scroll within their own area.
+- Visible focus, labelled sliders, and actionable errors.
 
 Preferences, language, and appearance are stored in the browser. The server defines media retention and processing limits. YouTube can restrict server access or require login; uploading an MP4 is the fallback.
 

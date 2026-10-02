@@ -24,6 +24,10 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Fit the desktop editing controls and Continue action into standard laptop/desktop viewports, including 1280×720, through compact chrome and a two-column workspace.
+- Keep long clip lists bounded, reveal newly added/selected rows without scrolling the page, and retain visibility after viewport resizing.
+- Place ready downloads beside export settings on desktop; preserve natural phone layout and 44-pixel touch targets for header/footer actions.
+- Fit both initial source choices into a 360×640 phone viewport without removing input hints or actions.
 - Build the shared core image once for API and worker, avoiding concurrent exports to the same release tag.
 - Align website YouTube parsing with the public core's canonical URL rules; pin production releases to core revision fe2f46e with safe private process-failure diagnostics.
 - Honor the saved editing step after retrieving a previous job; retain status and downloads when its source has expired.
