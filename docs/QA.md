@@ -37,6 +37,12 @@ and real FFmpeg outputs; screenshots or mocked API responses alone are not proof
 - At 360 px and 390 px, controls remain reachable with no horizontal document
   overflow on every step and in navigation dialogs. Touch preview, stage movement,
   export and a real download work; focus indicators remain visible.
+- Laptop, desktop and tablet layouts keep the player, both handles, precise
+  fields, preview, add-fragment and Continue on the first viewport. Source opening
+  and export/download controls also fit without unnecessary page scrolling. Ten
+  moments use a bounded desktop list; adding a moment reveals its selected row.
+  Phones retain a natural vertical layout rather than shrinking controls to fit:
+  touch targets are at least 44 by 44 CSS pixels, with no horizontal clipping.
 - Light and dark choices persist. System mode follows changes to the browser's
   color preference. A stored theme is applied before the first rendering frame.
   Normal text reaches 4.5:1 contrast and large text 3:1 in both themes; computed
@@ -93,7 +99,7 @@ then start the frontend on port 5173. Install FFmpeg and ffprobe on the test hos
 
 ```sh
 npm ci
-npx playwright install chromium
+npx playwright install --with-deps chromium firefox webkit
 npm run test:e2e
 ```
 
@@ -121,6 +127,49 @@ were created and offer a next step instead of referring to nonexistent files.
 actual downloaded MP4/MP3 files, ffprobe output, and desktop/mobile screenshots.
 Accurate MP4 tests also compare the first output frame against the requested
 position of the original fixture, catching accidental cuts from time zero.
+
+The focused responsive checks run against all three browser engines:
+
+```sh
+npm run test:e2e -- --project=layout-chromium --project=layout-firefox --project=layout-webkit
+```
+
+Each engine opens a real MP4, verifies decoded native playback and keyboard
+handles, exports two precise intervals, downloads both files through browser
+links, and checks streams, duration and first frames. A separate touch context
+shares that same real session, source and job, avoiding additional exports.
+Native touch taps seek the media, preview a range and download a result. Chromium
+also checks a trusted touch drag through its browser input protocol; Firefox and
+WebKit use native taps and exact-field fallback, without pretending that synthetic
+DOM pointer events prove physical dragging.
+
+The viewport matrix covers 1440×900, 1366×768, 1280×800, 1280×720, 1920×1080,
+2560×1440 and 1024×768; phones at 360×640, 390×844 and 430×932, plus each landscape
+orientation. Every size is measured on all three steps in both languages and
+themes. A 320×720 CSS-pixel viewport additionally checks narrow reflow. This is
+not a browser-zoom test or a claim that setting device pixel density simulates
+zoom. Reports include measured control rectangles, real files and screenshots.
+Landscape phone previews are capped below 70% of viewport height while retaining
+at least 140 CSS pixels for the native player; the editor continues vertically.
+
+These are automated Linux Chromium, Firefox and WebKit checks. WebKit approximates
+Safari's rendering engine; they do not establish testing on physical Macs,
+iPhones, laptops or Android hardware. Real device, native browser chrome and
+assistive technology checks remain separate.
+
+`CUTMY_E2E_OUTPUT` can place both results and the HTML report in an external
+directory, useful when running with a read-only source mount.
+
+During Linux WebKit runtime diagnosis, playback from zero sometimes stalled in a
+bare native video despite a fully buffered, valid H.264/AAC file. The same behavior
+occurred through a simple Node HTTP server without React, Vite, the Go API, cookies
+or application code, and with two independently encoded fixtures. Full responses
+and byte ranges matched the original files. Fresh nonzero seeks played and decoded
+frames normally. The integrated check exercises actual nonzero range previews,
+checks frame decoding, progress and automatic pause, and waits for native seek
+completion before further touch actions. It does not replace playback checks with
+metadata assertions or imply that this Linux runtime proves physical Safari audio
+compatibility.
 
 Cancellation is tested on a multi-item export so a tiny completed encode cannot
 be mistaken for a successful cancellation. Session isolation uses independent
@@ -157,3 +206,33 @@ claim that all twenty-nine cases ran in one invocation.
 Screenshots and probes were inspected; no confirmed blocker remained in that
 tested scope. The production redesign smoke is performed separately after deploy
 and stays below the production mutation limit.
+
+## Recorded verification — 2026-10-03 compact layout
+
+The final responsive scenarios passed in Chromium 153, Firefox 155 and Linux
+WebKit 26.6 in one 7.1-minute invocation. Each engine measured 224 layouts:
+168 stage/language/theme/viewport combinations and 56 alternate MP4 chooser
+states. Across all 672 measurements, horizontal document overflow, horizontally
+clipped controls and undersized touch targets were zero. The report contains
+141 original screenshots, including short laptops, portrait and landscape phones,
+320-pixel reflow and the ten-moment list.
+
+All engines decoded and previewed the actual selected interval, automatically
+paused, operated keyboard handles, exported two real 2.520-second H.264/AAC MP4s,
+downloaded them through browser links and matched their first frames to the
+requested source positions. Touch contexts also sought, previewed and downloaded
+the real source/job; Chromium additionally performed a trusted touch drag. The
+final landscape cap and 44-pixel targets were covered by this invocation.
+
+The existing functional/security/localization/theme suite separately passed
+26 checks in 1.9 minutes. Its three network/long-source opt-ins were intentionally
+skipped in this scope; their earlier verification remains recorded above. The
+subsequent changes affected only the landscape height cap and narrow hit areas,
+which the final cross-engine matrix covers. Production verification runs
+separately after release with only one upload and one export per engine.
+
+Chromium tall full-page captures were found to clear touch emulation in the test
+runtime. The harness restores that browser override after captures; all 84 phone
+stage measurements in its final JSON retained the intended coarse pointer. No
+product playback workaround or assertion retry was introduced for the independent
+Linux WebKit behavior described above.
