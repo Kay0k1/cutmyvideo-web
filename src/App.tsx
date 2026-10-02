@@ -84,6 +84,7 @@ export default function App() {
   const endField = useRef<HTMLInputElement>(null);
   const restored = useRef(false);
   const stageHeading = useRef<HTMLHeadingElement>(null);
+  const rangeList = useRef<HTMLOListElement>(null);
   const previousStep = useRef(step);
   const restoredPosition = useRef<number | null>(null);
   const selected = ranges.find(range => range.id === selectedId) ?? ranges[0];
@@ -171,6 +172,23 @@ export default function App() {
     if (previousStep.current !== step) { stageHeading.current?.focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' }); }
     previousStep.current = step;
   }, [step]);
+
+  useEffect(() => {
+    const list = rangeList.current;
+    if (step !== 2 || !list) return;
+    const revealSelected = () => {
+      const row = [...list.children].find(element => (element as HTMLElement).dataset.rangeId === selectedId) as HTMLElement | undefined;
+      if (!row) return;
+      const top = row.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+      const bottom = top + row.offsetHeight;
+      if (top < list.scrollTop) list.scrollTop = top;
+      else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+    };
+    revealSelected();
+    const observer = new ResizeObserver(revealSelected);
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, [step, selectedId, ranges.length]);
 
   function goToStep(next: 1 | 2 | 3) {
     if (next > 1 && !source && !(next === 3 && job)) return;
@@ -293,6 +311,7 @@ export default function App() {
     setRanges(remaining);
     if (selectedId === id) pickRange(remaining[0]);
     setNotice('Фрагмент удалён.');
+    window.requestAnimationFrame(() => rangeList.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus({ preventScroll: true }));
   }
 
   function preview() {
@@ -335,6 +354,13 @@ export default function App() {
 
   const jobProgress = job && <section className={`job-status ${job.status}`} aria-label={t("Состояние экспорта")} aria-live="polite"><div className="job-status-heading">{activeJob(job) ? <span className="spinner" /> : <Icon name={job.status === 'succeeded' ? 'check' : 'file'} size={20} />}<h3>{t(stageNames[job.status === 'running' ? job.stage : job.status] ?? 'Обрабатываем фрагменты')}</h3></div><p>{jobDescription(job, t)}</p><p className="job-file-count">{t('Готово: {count} из {total}', { count: files.length, total: job.items.length })}</p>{job.items.some(item => item.status === 'failed') && <div className="failed-items"><p>{t("Не удалось создать:")}</p><ul>{job.items.filter(item => item.status === 'failed').map(item => <li key={item.id}>{item.label || `${t('Фрагмент')} ${job.items.indexOf(item) + 1}`}</li>)}</ul><p>{t("Попробуйте точные границы, другое качество или загрузите видео файлом.")}</p></div>}{activeJob(job) && <button type="button" className="button secondary cancel-button" disabled={cancelling} onClick={() => void cancelJob()}>{cancelling ? t("Отменяем…") : t("Отменить обработку")}</button>}</section>;
 
+  const resultsPanel = files.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading">{t("Готовые файлы")}</h2><p>{t("Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(files.length, 'file', locale)}</span></div><ul className="file-list">{files.map((item, index) => {
+        const artifact = item.artifact!;
+        const itemNumber = (job?.items.indexOf(item) ?? index) + 1;
+        const adjusted = Math.abs(artifact.actual_start_ms - item.start_ms) > 100 || Math.abs(artifact.actual_end_ms - item.end_ms) > 100;
+        return <li key={artifact.id}><span className="file-icon"><Icon name="file" size={23} /></span><div className="file-description"><h3>{item.label || `${t('Фрагмент')} ${itemNumber}`}</h3><p>{artifact.filename}</p><span>{formatBytes(artifact.size_bytes, locale)}<span className="meta-separator"> / </span>{formatTimecode(artifact.actual_start_ms, true)} — {formatTimecode(artifact.actual_end_ms, true)}</span>{adjusted && <p className="adjusted-note">{t("Фактические границы отличаются от выбранных.")}</p>}</div><a className="button secondary download-button" href={artifact.download_url} download={artifact.filename}><Icon name="download" size={17} />{t("Скачать")}</a></li>;
+      })}</ul></section>;
+
   const stageTitles = ['Откройте видео', 'Выберите моменты', 'Сохраните фрагменты'];
   const stageDescriptions = ['Ссылка на YouTube или MP4 с вашего устройства.', 'Отметьте начало и конец. Каждый момент станет отдельным файлом.', 'Выберите видео или аудио и скачайте результат.'];
 
@@ -352,6 +378,7 @@ export default function App() {
       {source && <section className="moments-stage" hidden={step !== 2} aria-label={t('Выбор фрагментов')}>
         <div className="editing-panel">
           <div className="media-heading"><div className="source-title"><Icon name="file" size={18} /><span>{source.title}</span></div><span className="source-meta">{qualityLabel && <>{qualityLabel}<span className="meta-separator"> / </span></>}{formatTimecode(duration)}</span></div>
+          <div className="editing-grid">
           <Player ref={player} source={source} onAvailable={available => { setPlayerAvailable(available); if (available && restoredPosition.current !== null) { player.current?.seek(restoredPosition.current); restoredPosition.current = null; } }} onTime={ms => {
             setCurrent(Math.min(duration, ms));
             if (previewEnd.current !== null && ms >= previewEnd.current) { player.current?.pause(); previewEnd.current = null; setPreviewing(false); }
@@ -368,16 +395,20 @@ export default function App() {
             <p id="time-hint" className="field-hint">{t("Часы:минуты:секунды. Можно ввести 83:10 или 01:23:10.250.")}</p>
             {rangeError && <p id="range-error" className="error-message" role="alert">{t(rangeError)}</p>}
             <div className="selection-actions"><button className="button secondary" type="button" disabled={!playerAvailable} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} />{previewing ? t("Остановить просмотр") : t("Посмотреть фрагмент")}</button><button className="text-button center-selection" type="button" onClick={fitSelection}>{t("Показать границы на шкале")}</button></div>
-            <div className="ranges-heading"><h2>{t("Фрагменты")}<span className="count">{ranges.length}</span></h2><button className="text-button" type="button" onClick={addRange} disabled={ranges.length >= 10}><Icon name="plus" size={16} />{t("Добавить фрагмент")}</button></div>
-            <ol className="range-list">{ranges.map((range, index) => <li key={range.id} className={range.id === selectedId ? 'selected' : ''}><button className="range-select" type="button" onClick={() => pickRange(range)} aria-pressed={range.id === selectedId}><span className="range-index">{index + 1}</span><span className="range-description"><strong>{range.label || `${t('Фрагмент')} ${index + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></span><span className="range-length">{durationLabel(range.end_ms - range.start_ms, locale)}</span></button><button className="icon-button delete-range" type="button" aria-label={`${t('Удалить фрагмент')} ${index + 1}`} onClick={() => removeRange(range.id)} disabled={ranges.length === 1}><Icon name="trash" size={17} /></button></li>)}</ol>
-            <label className="clip-name-label" htmlFor="clip-name">{t("Название выбранного фрагмента")}<span>{t("необязательно")}</span></label><input id="clip-name" className="clip-name" type="text" maxLength={50} placeholder={`${t('Фрагмент')} ${ranges.findIndex(range => range.id === selected.id) + 1}`} value={selected.label} onChange={event => setRanges(previous => previous.map(range => range.id === selected.id ? { ...range, label: event.target.value } : range))} />
+
           </div>}
+          {selected && <section className="ranges-panel" aria-label={t('Фрагменты')}>
+            <div className="ranges-heading"><h2>{t("Фрагменты")}<span className="count">{ranges.length}</span></h2><button className="text-button" type="button" onClick={addRange} disabled={ranges.length >= 10}><Icon name="plus" size={16} />{t("Добавить фрагмент")}</button></div>
+            <ol ref={rangeList} className="range-list">{ranges.map((range, index) => <li key={range.id} data-range-id={range.id} className={range.id === selectedId ? 'selected' : ''}><button className="range-select" type="button" onClick={() => pickRange(range)} aria-pressed={range.id === selectedId}><span className="range-index">{index + 1}</span><span className="range-description"><strong>{range.label || `${t('Фрагмент')} ${index + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></span><span className="range-length">{durationLabel(range.end_ms - range.start_ms, locale)}</span></button><button className="icon-button delete-range" type="button" aria-label={`${t('Удалить фрагмент')} ${index + 1}`} onClick={() => removeRange(range.id)} disabled={ranges.length === 1}><Icon name="trash" size={17} /></button></li>)}</ol>
+            <label className="clip-name-label" htmlFor="clip-name">{t("Название выбранного фрагмента")}<span>{t("необязательно")}</span></label><input id="clip-name" className="clip-name" type="text" maxLength={50} placeholder={`${t('Фрагмент')} ${ranges.findIndex(range => range.id === selected.id) + 1}`} value={selected.label} onChange={event => setRanges(previous => previous.map(range => range.id === selected.id ? { ...range, label: event.target.value } : range))} />
+          </section>}
+          </div>
         </div>
         <div className="stage-actions"><button className="text-button" type="button" onClick={() => setShowShortcuts(!showShortcuts)} aria-expanded={showShortcuts}><span className="keycap">?</span>{t('Горячие клавиши')}</button><button className="button primary" type="button" onClick={() => goToStep(3)} disabled={sourceBusy}>{t('К настройкам экспорта')}<Icon name="chevron" size={17} /></button></div>
         {showShortcuts && <div className="shortcut-guide"><span><kbd>I</kbd>{t('начало по позиции плеера')}</span><span><kbd>O</kbd>{t('конец')}</span><span><kbd>{t('Пробел')}</kbd>{t('пауза / воспроизведение')}</span><span><kbd>←</kbd><kbd>→</kbd>{t('на ручке: 0,1 с;')}<kbd>Shift</kbd>{t(': 1 с')}</span><p>{t('Клавиши I, O и пробел работают вне полей ввода. В плеере действуют его собственные клавиши.')}</p></div>}
       </section>}
       {step === 3 && (source || job) && <div className="output-stage">
-        {source && <div className="output-grid"><section className="output-selection" aria-labelledby="output-selection-heading"><div className="output-source"><Icon name="file" size={20} /><span>{source.title}</span></div><h2 id="output-selection-heading">{t('Выбранные моменты')}</h2><ol>{ranges.map((range, index) => <li key={range.id}><span className="range-index">{index + 1}</span><div><strong>{range.label || `${t('Фрагмент')} ${index + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></div><span>{durationLabel(range.end_ms - range.start_ms, locale)}</span></li>)}</ol><button className="text-button" type="button" onClick={() => goToStep(2)}><Icon name="chevron" size={17} style={{ transform: 'rotate(180deg)' }} />{t('К выбору моментов')}</button></section>
+        {source && <div className="output-grid"><div className="output-overview"><section className="output-selection" aria-labelledby="output-selection-heading"><div className="output-source"><Icon name="file" size={20} /><span>{source.title}</span></div><h2 id="output-selection-heading">{t('Выбранные моменты')}</h2><ol>{ranges.map((range, index) => <li key={range.id}><span className="range-index">{index + 1}</span><div><strong>{range.label || `${t('Фрагмент')} ${index + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></div><span>{durationLabel(range.end_ms - range.start_ms, locale)}</span></li>)}</ol><button className="text-button" type="button" onClick={() => goToStep(2)}><Icon name="chevron" size={17} style={{ transform: 'rotate(180deg)' }} />{t('К выбору моментов')}</button></section>{resultsPanel}</div>
         <section className="export-panel" aria-labelledby="export-heading"><form onSubmit={exportClips}>
           <div className="export-heading"><Icon name="download" size={20} /><h2 id="export-heading">{t("Экспорт")}</h2></div>
           <fieldset disabled={!source || submitting}><legend className="sr-only">{t("Настройки экспорта")}</legend>
@@ -395,12 +426,7 @@ export default function App() {
         </section>
         </div>}
         {!source && <section className="export-panel orphan-results"><p className="field-hint">{t(files.length > 0 ? 'Видео больше недоступно, но результат экспорта сохранился. Чтобы вырезать новые моменты, откройте видео заново.' : 'Задание экспорта сохранилось, но видео больше недоступно. Чтобы вырезать новые моменты, откройте его заново.')}</p><button className="text-button" type="button" onClick={() => goToStep(1)}>{t('Открыть другое видео')}</button>{jobProgress}{jobError && <p className="error-message" role="alert">{t(jobError)}</p>}</section>}
-      {files.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading">{t("Готовые файлы")}</h2><p>{t("Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(files.length, 'file', locale)}</span></div><ul className="file-list">{files.map((item, index) => {
-        const artifact = item.artifact!;
-        const itemNumber = (job?.items.indexOf(item) ?? index) + 1;
-        const adjusted = Math.abs(artifact.actual_start_ms - item.start_ms) > 100 || Math.abs(artifact.actual_end_ms - item.end_ms) > 100;
-        return <li key={artifact.id}><span className="file-icon"><Icon name="file" size={23} /></span><div className="file-description"><h3>{item.label || `${t('Фрагмент')} ${itemNumber}`}</h3><p>{artifact.filename}</p><span>{formatBytes(artifact.size_bytes, locale)}<span className="meta-separator"> / </span>{formatTimecode(artifact.actual_start_ms, true)} — {formatTimecode(artifact.actual_end_ms, true)}</span>{adjusted && <p className="adjusted-note">{t("Фактические границы отличаются от выбранных.")}</p>}</div><a className="button secondary download-button" href={artifact.download_url} download={artifact.filename}><Icon name="download" size={17} />{t("Скачать")}</a></li>;
-      })}</ul></section>}
+      {!source && resultsPanel}
 
       </div>}
       <footer className="page-footer"><span>cutmyvideo <span className="footer-dot">·</span> {t('YouTube и MP4')}</span><a href="https://github.com/Kay0k1/cutmyvideo-core" target="_blank" rel="noreferrer">{t('Открытое ядро на GitHub')}</a></footer>

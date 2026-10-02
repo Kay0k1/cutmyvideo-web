@@ -366,3 +366,144 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
   *, *::before, *::after { transition-duration: 0s !important; scroll-behavior: auto !important; }
   .spinner { animation: none; }
 }
+
+/* The editing workspace uses the viewport width before asking for more height. */
+.editing-grid { display: flex; flex-direction: column; }
+.ranges-panel { padding: 0 28px 26px; }
+.ranges-panel .ranges-heading { margin-top: 0; }
+.output-overview { min-width: 0; }
+.output-overview .results-panel { margin-top: 20px; }
+
+@media (min-width: 960px) {
+  .header-inner { min-height: 60px; max-width: 1280px; }
+  main { max-width: 1240px; padding-top: 12px; }
+  .stage-1 { max-width: 732px; }
+  .steps-nav { margin-bottom: 3px; }
+  .page-heading { margin-bottom: 12px; }
+  .page-heading h1 { font-size: 25px; letter-spacing: -.6px; }
+  .page-heading h1 + p { margin-top: 4px; font-size: 12px; line-height: 1.6; }
+  .step-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0; }
+  .stage-1 .page-heading { margin: 13px 0 20px; }
+  .editing-panel { border-radius: 16px; }
+  .media-heading { padding: 9px 16px; min-height: 36px; }
+  .source-title { font-size: 12px; }
+  .editing-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .editing-grid > .player-frame { grid-column: 1; grid-row: 1; height: clamp(180px, calc(100dvh - 570px), 280px); }
+  .editing-grid .player-frame video { height: 100%; aspect-ratio: auto; max-height: none; object-fit: contain; }
+  .editing-grid .youtube-player { height: 100%; aspect-ratio: auto; max-height: none; }
+  .editing-grid .player-unavailable { min-height: 0; height: 100%; }
+  .editing-grid > .selection-editor { grid-column: 2; grid-row: 1 / span 2; border-left: 1px solid var(--line); padding: 12px 18px; }
+  .editing-grid > .ranges-panel { grid-column: 1; grid-row: 2; min-width: 0; padding: 10px 16px 14px; }
+  .timeline-toolbar { margin-bottom: 5px; gap: 8px; }
+  .timeline-toolbar h2 { font-size: 13px; }
+  .zoom-controls { gap: 1px; }
+  .zoom-controls select { font-size: 11px; padding: 8px; }
+  .overview-label { font-size: 10px; }
+  .overview-track { height: 28px; margin-bottom: 5px; }
+  .overview-track input { min-height: 28px; }
+  .overview-selections { inset: 12px 0; }
+  .trim-track { height: 36px; }
+  .trim-handle { top: -5px; bottom: -5px; }
+  .tick-labels { margin-top: 7px; margin-bottom: 13px; }
+  .time-fields { grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr) minmax(65px, .65fr); gap: 9px; }
+  .time-fields label { font-size: 11px; margin-bottom: 5px; }
+  .time-input { min-height: 40px; height: 40px; font-size: 15px; padding: 8px; }
+  .range-dash { padding-top: 32px; }
+  .marker-button { min-height: 28px; font-size: 10px; padding: 4px 0; }
+  .marker-button kbd { min-height: 20px; min-width: 20px; }
+  .selection-duration { padding-left: 4px; }
+  .selection-duration > span { font-size: 10px; margin-bottom: 15px; }
+  .selection-duration strong { font-size: 17px; }
+  #time-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0; }
+  .selection-actions { padding: 7px 0 0; gap: 4px 12px; border-bottom: 0; }
+  .selection-actions .button { min-height: 44px; padding: 9px 12px; font-size: 11px; }
+  .selection-actions .text-button { font-size: 10px; }
+  .ranges-heading { margin-bottom: 5px; gap: 8px; }
+  .ranges-heading h2 { font-size: 13px; }
+  .ranges-heading .text-button { font-size: 11px; }
+  .range-list { max-height: clamp(74px, calc(100dvh - 690px), 170px); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+  .range-list li { margin-bottom: 6px; }
+  .range-select { padding: 9px 10px; gap: 8px; min-height: 58px; }
+  .range-description { gap: 4px; }
+  .range-description strong { font-size: 11px; }
+  .range-description > span { font-size: 10px; }
+  .range-length { font-size: 10px; }
+  .clip-name-label { margin-top: 8px; font-size: 11px; }
+  .clip-name-label span { font-size: 10px; }
+  .clip-name { margin-top: 6px; min-height: 40px; height: 40px; font-size: 12px; }
+  .stage-actions { margin-top: 8px; }
+  .stage-actions .button { min-height: 44px; padding: 9px 15px; font-size: 12px; }
+  .page-footer { margin-top: 0; padding: 13px 0; }
+  .output-grid { gap: 20px; }
+  .output-selection, .export-panel, .results-panel { padding: 18px; border-radius: 16px; }
+  .output-source { padding-bottom: 12px; margin-bottom: 13px; }
+  .output-selection ol { max-height: 140px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; margin: 8px 0; }
+  .output-selection li { padding: 10px 0; }
+  .output-selection h2 { font-size: 14px; }
+  .output-overview .results-panel { margin-top: 14px; }
+  .export-heading { margin-bottom: 12px; }
+  .export-heading h2 { font-size: 15px; }
+  .export-panel fieldset { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 13px; }
+  .format-picker { grid-column: 1 / -1; }
+  .format-picker button { min-height: 44px; }
+  .export-field { margin-top: 0; }
+  .export-field label { font-size: 11px; margin-bottom: 6px; }
+  .export-field select { font-size: 12px; min-height: 44px; padding: 8px; }
+  .export-field .field-hint, .mode-hint { font-size: 11px; line-height: 1.6; margin-top: 6px; }
+  .export-summary { padding-top: 12px; margin-top: 12px; }
+  .export-submit { margin-top: 12px; min-height: 44px; }
+  .export-empty-hint { margin-top: 6px; }
+  .job-status { margin-top: 14px; padding-top: 14px; }
+  .job-status > p { margin-top: 6px; font-size: 11px; line-height: 1.6; }
+  .job-status-heading h3 { font-size: 13px; }
+  .cancel-button { margin-top: 10px; }
+  .results-heading { padding-bottom: 12px; }
+  .results-heading h2 { font-size: 16px; }
+  .results-heading p { margin-top: 4px; font-size: 11px; }
+  .file-list { max-height: 250px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+  .file-list li { gap: 12px; padding: 15px 0; }
+  .file-icon { width: 36px; height: 44px; }
+  .file-description h3 { font-size: 12px; }
+  .file-description p, .file-description > span { font-size: 10px; margin-top: 4px; }
+  .download-button { min-height: 44px; padding: 9px 12px; font-size: 11px; }
+}
+@media (max-width: 680px) {
+  .ranges-panel { padding: 0 18px 22px; }
+  .output-overview .results-panel { margin-top: 16px; }
+}
+@media (max-width: 420px) {
+  .ranges-panel { padding: 0 15px 20px; }
+}
+@media (pointer: coarse) {
+  .language-switch button { min-width: 44px; }
+  .steps-nav button { min-width: 44px; }
+  .theme-toggle { min-width: 44px; }
+  .brand { min-height: 44px; }
+  .page-footer a, .sample-source { display: inline-flex; align-items: center; min-height: 44px; }
+  .time-input, .clip-name, .marker-button { min-height: 44px; }
+  .overview-track, .overview-track input { min-height: 44px; }
+}
+@media (max-width: 680px) {
+  .header-inner { padding-top: 6px; padding-bottom: 6px; row-gap: 0; }
+  main { padding-top: 14px; }
+  .steps-nav { margin-bottom: 10px; }
+  .page-heading { margin-bottom: 18px; }
+  .stage-1 .step-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0; }
+  .stage-1 .page-heading { margin-bottom: 16px; }
+  .stage-1 h1 { font-size: 25px; }
+  .stage-1 .page-heading h1 + p { margin-top: 6px; line-height: 1.6; }
+  .source-chooser { padding: 16px; }
+  .source-choice { margin-bottom: 15px; }
+  .source-choice button { min-height: 44px; }
+  .source-form label { margin-bottom: 7px; }
+  .source-input-wrap input { height: 48px; }
+  .source-input-wrap > svg { top: 14px; }
+  .source-form .field-hint { font-size: 11px; line-height: 1.6; margin-top: 7px; }
+  .source-open { min-height: 44px; margin-top: 15px; }
+  .file-dropzone { padding: 18px 12px; }
+  .upload-symbol { width: 44px; height: 44px; margin-bottom: 12px; }
+  .drop-label { font-size: 15px; }
+  .file-dropzone .field-hint { font-size: 11px; line-height: 1.6; margin-top: 8px; margin-bottom: 14px; }
+  .upload-button { min-height: 44px; }
+  .page-footer { margin-top: 0; padding: 12px 0; }
+}
