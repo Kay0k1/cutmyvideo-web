@@ -1,3 +1,4 @@
+import { useLanguage } from './Language';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Source } from './types';
 import { Icon } from './Icons';
@@ -57,6 +58,7 @@ export const Player = forwardRef<PlayerControls, {
   onTime(ms: number): void;
   onAvailable(available: boolean): void;
 }>(({ source, onTime, onAvailable }, ref) => {
+  const { t } = useLanguage();
   const video = useRef<HTMLVideoElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const youtube = useRef<YTPlayer | null>(null);
@@ -103,8 +105,8 @@ export const Player = forwardRef<PlayerControls, {
 
   if (!source) return <div className="player-empty">
     <div className="empty-cut"><Icon name="cut" size={36} /></div>
-    <h2>Здесь будет ваше видео</h2>
-    <p>Вставьте ссылку или загрузите файл.<br />Затем отметьте начало и конец фрагмента.</p>
+    <h2>{t("Здесь будет ваше видео")}</h2>
+    <p>{t("Вставьте ссылку или загрузите файл.")}<br />{t("Затем отметьте начало и конец фрагмента.")}</p>
     <div className="empty-rail" aria-hidden="true"><span /><i /><span /></div>
   </div>;
 
@@ -114,7 +116,7 @@ export const Player = forwardRef<PlayerControls, {
       onTimeUpdate={() => callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000))}
       onError={() => { setError(true); callbacks.current.onAvailable(false); }} />
       : embedId(source.embed_url) ? <div ref={host} className="youtube-player" />
-      : <div className="player-unavailable"><Icon name="file" size={30} /><h2>Предпросмотр недоступен</h2><p>Выберите фрагмент по таймкодам.<br />Экспорт остаётся доступным.</p></div>}
-    {error && <div className="player-error" role="status">Не удалось открыть плеер. Вы можете задать границы по таймкодам и вырезать фрагмент.</div>}
+      : <div className="player-unavailable"><Icon name="file" size={30} /><h2>{t("Предпросмотр недоступен")}</h2><p>{t("Выберите фрагмент по таймкодам.")}<br />{t("Экспорт остаётся доступным.")}</p></div>}
+    {error && <div className="player-error" role="status">{t("Не удалось открыть плеер. Вы можете задать границы по таймкодам и вырезать фрагмент.")}</div>}
   </div>;
 });

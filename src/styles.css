@@ -19,7 +19,51 @@ svg { flex-shrink: 0; }
 .skip-link { position: fixed; z-index: 100; top: 8px; left: 12px; padding: 12px; background: #fff; clip-path: inset(50%); }
 .skip-link:focus { clip-path: none; }
 .site-header { background: #fff; border-bottom: 1px solid var(--line); }
-.header-inner { max-width: 1280px; min-height: 72px; padding: 0 32px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+.header-inner { max-width: 1280px; min-height: 72px; padding: 0 32px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.header-actions { display: flex; align-items: center; gap: 16px; }
+.workspace-nav { display: flex; align-items: center; gap: 3px; margin-left: auto; }
+.workspace-nav button { border: 0; background: transparent; color: #617287; font-size: 11px; padding: 8px 11px; border-radius: 5px; min-height: 34px; }
+.workspace-nav button:hover { background: #f0f4fa; color: var(--ink); }
+.workspace-nav button[aria-current=page], .workspace-nav button[aria-expanded=true] { color: var(--blue); background: #edf2ff; }
+.language-switch { display: flex; border: 1px solid #d2dbe6; border-radius: 5px; padding: 2px; gap: 1px; }
+.language-switch button { min-width: 28px; min-height: 26px; font-size: 10px; border: 0; border-radius: 3px; background: none; color: #617287; padding: 3px 5px; }
+.language-switch button[aria-pressed=true] { color: var(--ink); background: #eaf0f7; font-weight: 500; }
+.workspace-dialog { padding: 0; width: min(650px, calc(100% - 32px)); max-height: min(88vh, 900px); border: 1px solid #cbd5e2; border-radius: 12px; background: #fff; color: var(--ink); box-shadow: 0 16px 70px #182d4b30; overflow: auto; }
+.workspace-dialog::backdrop { background: #132c4b66; }
+.dialog-header { display: flex; justify-content: space-between; align-items: center; padding: 22px 25px 19px; border-bottom: 1px solid var(--line); gap: 12px; }
+.dialog-header h2 { font-size: 20px; font-weight: 500; letter-spacing: -.5px; }
+.dialog-header .icon-button { flex-shrink: 0; }
+.dialog-body { padding: 23px 25px 27px; }
+.dialog-intro, .help-section p, .sample-info p, .donation-help { font-size: 12px; line-height: 1.8; color: var(--muted); }
+.dialog-intro { margin-bottom: 16px; }
+.sample-section { border: 1px solid #d6e1f7; background: #f3f6fe; border-radius: 7px; padding: 18px; }
+.sample-section h3, .help-section h3 { font-size: 13px; font-weight: 500; margin-bottom: 12px; }
+.sample-info { display: flex; align-items: start; gap: 13px; }
+.sample-info svg { color: #6687bc; margin-top: 1px; }
+.sample-info strong { display: block; font-size: 12px; font-weight: 500; margin-bottom: 5px; }
+.sample-info p { font-size: 11px; }
+.sample-section .button { margin-top: 14px; min-height: 36px; }
+.sample-source { font-size: 10px; display: inline-block; margin-left: 12px; }
+.help-section { margin-top: 25px; }
+.help-section ol { font-size: 12px; color: var(--muted); line-height: 1.9; margin: 0; padding-left: 20px; }
+.help-section li { padding-left: 5px; margin-bottom: 6px; }
+.timecode-examples { padding: 0; margin: 0; }
+.timecode-examples div { display: grid; grid-template-columns: 135px 1fr; padding: 9px 0; border-bottom: 1px solid #e6ebf1; gap: 12px; }
+.timecode-examples dt { font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 500; }
+.timecode-examples dd { font-size: 11px; color: var(--muted); margin: 0; }
+.preferences-form label { display: block; font-size: 12px; font-weight: 500; margin: 18px 0 8px; }
+.preferences-form select { width: 100%; font-size: 12px; }
+.preferences-actions { display: flex; align-items: center; gap: 16px; margin-top: 20px; }
+.settings-notice { font-size: 12px; color: #267044; min-height: 18px; margin-top: 12px; }
+.donation-help { font-size: 11px; margin-bottom: 20px; }
+.wallet-list { list-style: none; padding: 0; margin: 0; }
+.wallet-list li { border: 1px solid #dce3ec; border-radius: 7px; margin-bottom: 12px; padding: 15px; }
+.wallet-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.wallet-heading h3 { font-size: 13px; font-weight: 500; }
+.wallet-heading .button { min-height: 30px; padding: 5px 9px; font-size: 10px; gap: 6px; }
+.wallet-list code { display: block; font-size: 11px; line-height: 1.8; overflow-wrap: anywhere; user-select: all; font-family: ui-monospace, monospace; color: #48607f; padding: 9px 10px; background: #f1f5f9; border-radius: 4px; }
+.copy-notice { font-size: 11px; color: #267044; min-height: 20px; line-height: 1.8; margin-top: 12px; }
+.support-thanks { font-size: 11px; color: #64758b; margin-top: 8px; }
 .brand { display: flex; align-items: center; gap: 10px; font-size: 23px; font-weight: 600; letter-spacing: -.9px; text-decoration: none; color: var(--ink); }
 .brand-symbol { width: 32px; height: 32px; background: var(--blue); color: #fff; display: grid; place-items: center; border-radius: 8px; }
 .brand-suffix { color: #7a8798; font-weight: 400; }
@@ -190,6 +234,11 @@ h1 { font-size: 27px; line-height: 1.3; letter-spacing: -.8px; font-weight: 600;
   .export-panel { padding: 22px; }
 }
 @media (max-width: 960px) {
+  .header-inner { gap: 12px; }
+  .header-actions { gap: 6px; }
+  .workspace-nav button { padding: 8px 7px; font-size: 10px; }
+  .shortcut-text { display: none; }
+  .shortcut-toggle { padding-left: 3px; }
   .header-inner { padding: 0 24px; }
   main { padding: 26px 24px 0; }
   .workbench { grid-template-columns: minmax(0, 1fr) 254px; gap: 16px; }
@@ -209,7 +258,10 @@ h1 { font-size: 27px; line-height: 1.3; letter-spacing: -.8px; font-weight: 600;
   .player-empty { min-height: 298px; }
 }
 @media (max-width: 760px) {
-  .header-inner { min-height: 61px; padding: 0 20px; }
+  .header-inner { min-height: 99px; padding: 14px 20px 8px; flex-wrap: wrap; gap: 9px; }
+  .header-actions { margin-left: auto; order: 1; }
+  .workspace-nav { order: 2; width: 100%; margin: 0; justify-content: space-between; }
+  .workspace-nav button { flex: 1; font-size: 11px; padding: 7px; min-height: 31px; }
   .brand { font-size: 21px; }
   .brand-symbol { width: 29px; height: 29px; }
   main { padding: 23px 20px 0; }
@@ -240,6 +292,17 @@ h1 { font-size: 27px; line-height: 1.3; letter-spacing: -.8px; font-weight: 600;
   .selection-editor { padding: 20px; }
 }
 @media (max-width: 480px) {
+  .dialog-header { padding: 18px; }
+  .dialog-header h2 { font-size: 18px; }
+  .dialog-body { padding: 18px; }
+  .workspace-dialog { width: calc(100% - 24px); max-height: 90vh; }
+  .wallet-list li { padding: 12px; }
+  .wallet-heading .button { font-size: 9px; }
+  .wallet-list code { font-size: 10px; }
+  .timecode-examples div { grid-template-columns: 113px 1fr; gap: 8px; }
+  .timecode-examples dt { font-size: 11px; }
+  .preferences-actions { align-items: stretch; flex-direction: column; gap: 5px; }
+  .preferences-actions .text-button { justify-content: center; }
   .header-inner { padding: 0 16px; }
   .shortcut-toggle { font-size: 0; }
   .shortcut-toggle .keycap { font-size: 11px; }

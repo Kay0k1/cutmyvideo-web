@@ -1,3 +1,5 @@
+import type { Locale } from './locales';
+
 /** Parse seconds, MM:SS, or HH:MM:SS with up to millisecond precision. */
 export function parseTimecode(value: string): number | null {
   const text = value.trim().replace(',', '.');
@@ -24,10 +26,11 @@ export function formatTimecode(ms: number, precise = false): string {
   return precise ? `${base}.${String(safe % 1000).padStart(3, '0')}` : base;
 }
 
-export function durationLabel(ms: number): string {
+export function durationLabel(ms: number, locale: Locale = 'ru'): string {
   const seconds = Math.max(0, ms / 1000);
-  if (seconds < 60) return `${Number(seconds.toFixed(3))} с`;
-  return `${Math.floor(seconds / 60)} мин ${Number((seconds % 60).toFixed(1))} с`;
+  const unit = locale === 'en' ? 's' : 'с';
+  if (seconds < 60) return `${Number(seconds.toFixed(3))} ${unit}`;
+  return `${Math.floor(seconds / 60)} ${locale === 'en' ? 'min' : 'мин'} ${Number((seconds % 60).toFixed(1))} ${unit}`;
 }
 
 export function displayTimecode(ms: number): string {
@@ -48,7 +51,7 @@ export function zoomWindow(duration: number, center: number, span: number): [num
   return [start, start + width];
 }
 
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
+export function formatBytes(bytes: number, locale: Locale = 'ru'): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} ${locale === 'en' ? 'KB' : 'КБ'}`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} ${locale === 'en' ? 'MB' : 'МБ'}`;
 }

@@ -1,3 +1,4 @@
+import { useLanguage } from './Language';
 import { useRef } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import type { ClipRange } from './types';
@@ -12,6 +13,7 @@ export function Timeline({ duration, current, ranges, selected, view, onSeek, on
   onSeek(ms: number): void;
   onRange(start: number, end: number): void;
 }) {
+  const { t } = useLanguage();
   const track = useRef<HTMLDivElement>(null);
   const drag = useRef<'start' | 'end' | null>(null);
   const span = view[1] - view[0];
@@ -45,7 +47,7 @@ export function Timeline({ duration, current, ranges, selected, view, onSeek, on
     const value = which === 'start' ? selected.start_ms : selected.end_ms;
     const visible = value >= view[0] && value <= view[1];
     return <button type="button" className={`trim-handle ${which}${!visible ? ' offscreen' : ''}`}
-      style={{ left: `${pct(value)}%` }} role="slider" aria-label={which === 'start' ? 'Начало фрагмента на шкале' : 'Конец фрагмента на шкале'}
+      style={{ left: `${pct(value)}%` }} role="slider" aria-label={which === 'start' ? t("Начало фрагмента на шкале") : t("Конец фрагмента на шкале")}
       aria-valuemin={which === 'start' ? 0 : selected.start_ms + 100}
       aria-valuemax={which === 'start' ? selected.end_ms - 100 : duration}
       aria-valuenow={value} aria-valuetext={formatTimecode(value, true)} aria-orientation="horizontal"
@@ -57,7 +59,7 @@ export function Timeline({ duration, current, ranges, selected, view, onSeek, on
   };
 
   return <div className="timeline">
-    <div className="overview-label"><label htmlFor="overview">Всё видео</label><span>{formatTimecode(current)} / {formatTimecode(duration)}</span></div>
+    <div className="overview-label"><label htmlFor="overview">{t("Всё видео")}</label><span>{formatTimecode(current)} / {formatTimecode(duration)}</span></div>
     <div className="overview-track">
       <div className="overview-selections" aria-hidden="true">{ranges.map(range => <span key={range.id} style={{ left: `${range.start_ms / duration * 100}%`, width: `${Math.max(.3, (range.end_ms - range.start_ms) / duration * 100)}%` }} />)}</div>
       <input id="overview" type="range" min={0} max={duration} step={100} value={current} aria-valuetext={formatTimecode(current, true)} onChange={event => onSeek(Number(event.target.value))} />
