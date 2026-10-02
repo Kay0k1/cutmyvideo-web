@@ -5,9 +5,10 @@ import { Icon } from './Icons';
 import { defaultPreferences } from './preferences';
 import type { Preferences } from './preferences';
 import type { OutputSettings } from './types';
+import { useTheme } from './Theme';
 
 type Panel = 'examples' | 'settings' | 'support';
-const sampleUrl = 'https://media.w3.org/2010/05/sintel/trailer.mp4';
+const sampleUrl = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ';
 const wallets = [
   { network: 'TRON', address: 'TEaL7LYGWKLGMALr8QZKV412xAjC6x4MdE' },
   { network: 'Solana', address: 'AfFgZ9Se53R9xKzoEpHrZnULmVKpm6iSE3aBx9DtBMdj' },
@@ -30,6 +31,7 @@ export function WorkspaceNav({ preferences, onSave, onExample, busy }: {
   busy: boolean;
 }) {
   const { t } = useLanguage();
+  const { preference: themePreference, setPreference: setThemePreference } = useTheme();
   const [panel, setPanel] = useState<Panel | null>(() => {
     const requested = new URLSearchParams(window.location.search).get('panel');
     return requested === 'examples' || requested === 'settings' || requested === 'support' ? requested : null;
@@ -108,14 +110,15 @@ export function WorkspaceNav({ preferences, onSave, onExample, busy }: {
       <div className="dialog-header"><h2 id="dialog-title">{t(title)}</h2><button type="button" className="icon-button" aria-label={t('Закрыть')} onClick={close}><Icon name="close" size={22} /></button></div>
       <div className="dialog-body">
       {panel === 'examples' && <>
-        <section className="sample-section"><h3>{t('Попробуйте на коротком видео')}</h3><div className="sample-info"><Icon name="play" size={25} /><div><strong>{t('Трейлер Sintel')}</strong><p>{t('Открытый пример с сервера W3C. Загрузка заменит текущее видео и выбранные фрагменты.')}</p></div></div><button type="button" className="button primary" disabled={busy} onClick={() => { close(); onExample(sampleUrl); }}>{t('Открыть пример')}</button><a className="sample-source" href={sampleUrl} target="_blank" rel="noreferrer">media.w3.org</a></section>
-        <section className="help-section"><h3>{t('Как вырезать момент')}</h3><ol><li>{t('Вставьте публичную HTTPS-ссылку или загрузите файл.')}</li><li>{t('Отметьте начало и конец на шкале. Для точности введите время в полях.')}</li><li>{t('Добавьте другие фрагменты, выберите формат и нажмите «Вырезать».')}</li><li>{t('Дождитесь обработки и скачайте готовые файлы.')}</li></ol></section>
+        <section className="sample-section"><h3>{t('Попробуйте на примере')}</h3><div className="sample-info"><Icon name="play" size={25} /><div><strong>Big Buck Bunny</strong><p>{t('Фильм Blender на YouTube. Открытие заменит текущее видео и выбранные моменты.')}</p></div></div><button type="button" className="button primary" disabled={busy} onClick={() => { close(); onExample(sampleUrl); }}>{t('Открыть пример')}</button><a className="sample-source" href={sampleUrl} target="_blank" rel="noreferrer">YouTube</a></section>
+        <section className="help-section"><h3>{t('Как вырезать момент')}</h3><ol><li>{t('Откройте ссылку на YouTube или загрузите MP4.')}</li><li>{t('Отметьте начало и конец. Можно двигать ручки или ввести время.')}</li><li>{t('Добавьте другие моменты и перейдите к экспорту.')}</li><li>{t('Выберите MP4 или MP3, вырежьте фрагменты и скачайте файлы.')}</li></ol></section>
         <section className="help-section"><h3>{t('Примеры таймкодов')}</h3><dl className="timecode-examples"><div><dt>15</dt><dd>{t('15 секунд от начала')}</dd></div><div><dt>83:10</dt><dd>{t('83 минуты 10 секунд')}</dd></div><div><dt>01:23:10.250</dt><dd>{t('1 час 23 минуты 10,250 секунды')}</dd></div></dl></section>
         <section className="help-section"><h3>{t('Точные границы или сохранение качества?')}</h3><p>{t('Точные границы перекодируют файл. Сохранение потоков избегает перекодирования, но начало и конец могут отличаться. Фактические границы указаны рядом с готовым файлом.')}</p></section>
         <section className="help-section"><h3>{t('Ограничения источников')}</h3><p>{t('Некоторые платформы требуют входа или ограничивают серверные запросы. В таком случае загрузите файл. Предпросмотр доступен не для всех кодеков; таймкоды и экспорт остаются доступны.')}</p></section>
       </>}
       {panel === 'settings' && <form className="preferences-form" onSubmit={event => { event.preventDefault(); onSave(draft); setSettingsNotice('Настройки сохранены.'); }}>
         <p className="dialog-intro">{t('Применяются к текущему и новым источникам. Выбранные интервалы сохраняются.')}</p>
+        <label htmlFor="theme-preference">{t('Тема оформления')}</label><select id="theme-preference" value={themePreference} onChange={event => setThemePreference(event.target.value as 'light' | 'dark' | 'system')}><option value="system">{t('Как в системе')}</option><option value="light">{t('Светлая')}</option><option value="dark">{t('Тёмная')}</option></select>
         <label htmlFor="default-format">{t('Формат по умолчанию')}</label><select id="default-format" value={draft.output.format} onChange={event => updateOutput({ format: event.target.value as OutputSettings['format'] })}><option value="mp4">MP4 — {t('Видео')}</option><option value="mp3">MP3 — {t('Аудио')}</option></select>
         <label htmlFor="default-quality">{t('Качество видео')}</label><select id="default-quality" value={draft.output.quality} disabled={draft.output.format === 'mp3'} onChange={event => updateOutput({ quality: event.target.value as OutputSettings['quality'] })}><option value="1080p">{t('До 1080p')}</option><option value="720p">{t('До 720p')}</option><option value="best">{t('Лучшее доступное')}</option></select>
         <label htmlFor="default-cut">{t('Границы и качество')}</label><select id="default-cut" value={draft.output.cut_mode} disabled={draft.output.format === 'mp3'} onChange={event => updateOutput({ cut_mode: event.target.value as OutputSettings['cut_mode'] })}><option value="accurate">{t('Точные границы')}</option><option value="copy">{t('Сохранить потоки')}</option></select>

@@ -10,6 +10,9 @@ import { displayTimecode, durationLabel, formatBytes, formatTimecode, parseTimec
 import type { ClipRange, Job, OutputSettings, Source } from './types';
 import { countLabel } from './locales';
 import { LanguageSwitch, WorkspaceNav } from './WorkspaceNav';
+import { SourceChooser } from './SourceChooser';
+import { ThemeToggle } from './Theme';
+import { canonicalYouTubeUrl, validateMP4 } from './sourceInput';
 import { readPreferences, savePreferences } from './preferences';
 import type { Preferences } from './preferences';
 
@@ -39,7 +42,7 @@ function newRange(duration: number, start = 0): ClipRange {
   return { id: crypto.randomUUID(), label: '', start_ms: begin, end_ms: Math.min(duration, begin + 30000) };
 }
 
-function rememberedDraft(): { source_id?: string; ranges?: ClipRange[]; selected_id?: string; output?: OutputSettings; job_id?: string } {
+function rememberedDraft(): { source_id?: string; ranges?: ClipRange[]; selected_id?: string; output?: OutputSettings; job_id?: string; step?: number; current_ms?: number } {
   try {
     const value = JSON.parse(localStorage.getItem(storageKey) ?? '{}');
     if (typeof value !== 'object' || value === null) return {};
@@ -50,6 +53,7 @@ function rememberedDraft(): { source_id?: string; ranges?: ClipRange[]; selected
 export default function App() {
   const { locale, t } = useLanguage();
   const [preferences, setPreferences] = useState<Preferences>(readPreferences);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [source, setSource] = useState<Source | null>(null);
   const [url, setUrl] = useState('');
   const [sourceBusy, setSourceBusy] = useState(false);
@@ -78,9 +82,10 @@ export default function App() {
   const sourceController = useRef<AbortController | null>(null);
   const startField = useRef<HTMLInputElement>(null);
   const endField = useRef<HTMLInputElement>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
   const restored = useRef(false);
-  const sourceInput = useRef<HTMLInputElement>(null);
+  const stageHeading = useRef<HTMLHeadingElement>(null);
+  const previousStep = useRef(step);
+  const restoredPosition = useRef<number | null>(null);
   const selected = ranges.find(range => range.id === selectedId) ?? ranges[0];
   const busy = activeJob(job) || submitting;
   const duration = source?.duration_ms ?? 0;
@@ -112,13 +117,16 @@ export default function App() {
               const restoredRanges = valid.length ? valid : [newRange(original.duration_ms)];
               const active = restoredRanges.find(range => range.id === saved.selected_id) ?? restoredRanges[0];
               setSource(original); setRanges(restoredRanges); setSelectedId(active.id); setFields(active);
+              setStep(saved.step === 1 || saved.step === 3 ? saved.step : 2);
+              const position = typeof saved.current_ms === 'number' && Number.isFinite(saved.current_ms) ? Math.max(0, Math.min(original.duration_ms, saved.current_ms)) : 0;
+              restoredPosition.current = position; setCurrent(position);
               setViewCenter((active.start_ms + active.end_ms) / 2);
               setSpan(Math.min(original.duration_ms, preferences.timeline_span));
               if (saved.output && ['mp4', 'mp3'].includes(saved.output.format) && ['best', '1080p', '720p'].includes(saved.output.quality) && ['copy', 'accurate'].includes(saved.output.cut_mode)) setOutput(saved.output);
             } catch { if (!disposed) setSourceError('Предыдущий источник больше недоступен. Откройте его заново.'); }
           }
           if (typeof saved.job_id === 'string') {
-            try { const previous = await api.job(saved.job_id); if (!disposed) setJob(previous); } catch { /* Old job may have expired. */ }
+            try { const previous = await api.job(saved.job_id); if (!disposed) { setJob(previous); setStep(3); } } catch { /* Old job may have expired. */ }
           }
           restored.current = true;
         }
@@ -130,9 +138,9 @@ export default function App() {
 
   useEffect(() => {
     if (!sessionReady || !source) return;
-    try { localStorage.setItem(storageKey, JSON.stringify({ source_id: source.id, ranges, selected_id: selectedId, output, job_id: job?.id })); }
+    try { localStorage.setItem(storageKey, JSON.stringify({ source_id: source.id, ranges, selected_id: selectedId, output, job_id: job?.id, step, current_ms: current })); }
     catch { /* Editing remains available without browser storage. */ }
-  }, [source, ranges, selectedId, output, job?.id, sessionReady]);
+  }, [source, ranges, selectedId, output, job?.id, sessionReady, step, current]);
 
   useEffect(() => {
     if (!job || !activeJob(job)) return;
@@ -153,6 +161,24 @@ export default function App() {
   }, [job?.id, job?.status]);
 
   useEffect(() => () => sourceController.current?.abort(), []);
+
+  useEffect(() => { document.title = `${t('Шаг {current} из 3', { current: step })} · ${t(['Откройте видео', 'Выберите моменты', 'Сохраните фрагменты'][step - 1])} · cutmyvideo`; }, [step, locale]);
+
+  useEffect(() => {
+    if (step !== 2) { player.current?.pause(); previewEnd.current = null; setPreviewing(false); }
+    if (previousStep.current !== step) { stageHeading.current?.focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' }); }
+    previousStep.current = step;
+  }, [step]);
+
+  function goToStep(next: 1 | 2 | 3) {
+    if (next > 1 && !source) return;
+    if (step === 2 && next === 3) {
+      const range = validateFields(true);
+      if (!range) return;
+      setRanges(previous => previous.map(item => item.id === range.id ? range : item));
+    }
+    setStep(next);
+  }
 
   function changeBounds(start: number, end: number) {
     if (!selected) return;
@@ -198,7 +224,7 @@ export default function App() {
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (event.ctrlKey || event.metaKey || event.altKey || (event.target as HTMLElement).closest('input, textarea, select, button, a, [contenteditable]')) return;
-      if (!source || !selected) return;
+      if (step !== 2 || !source || !selected) return;
       if (event.code === 'KeyI') { event.preventDefault(); marker('start'); }
       if (event.code === 'KeyO') { event.preventDefault(); marker('end'); }
       if (event.code === 'Space' && playerAvailable) { event.preventDefault(); player.current?.toggle(); }
@@ -209,24 +235,29 @@ export default function App() {
 
   async function openSource(file?: File, providedUrl?: string) {
     if (!sessionReady || sourceBusy || busy) return;
-    const candidateUrl = providedUrl ?? url;
-    if (!file) {
-      try {
-        const parsed = new URL(candidateUrl.trim());
-        if (parsed.protocol !== 'https:') throw new Error();
-      } catch { setSourceError('Вставьте полную публичную ссылку, которая начинается с https://.'); sourceInput.current?.focus(); return; }
+    const candidateUrl = canonicalYouTubeUrl(providedUrl ?? url);
+    if (!file && !candidateUrl) {
+      setStep(1); setSourceError('Вставьте ссылку на видео YouTube. Ссылки на другие сайты пока не поддерживаются.');
+      document.getElementById('source-url')?.focus(); return;
     }
     sourceController.current?.abort();
     const controller = new AbortController(); sourceController.current = controller;
     setSourceBusy(true); setSourceError(''); setNotice('');
     try {
-      const opened = file ? await api.upload(file, controller.signal) : await api.open(candidateUrl.trim(), controller.signal);
+      if (file) {
+        const fileError = await validateMP4(file);
+        if (controller.signal.aborted) return;
+        if (fileError) { setSourceError(fileError); setStep(1); return; }
+      }
+      const opened = file ? await api.upload(file, controller.signal) : await api.open(candidateUrl!, controller.signal);
       if (controller.signal.aborted) return;
+      if (file && (!opened.width || !opened.height)) { setSourceError('В MP4 не найдено видео. Выберите файл с видеодорожкой.'); setStep(1); return; }
       const range = newRange(opened.duration_ms);
-      player.current?.pause(); previewEnd.current = null;
+      player.current?.pause(); previewEnd.current = null; restoredPosition.current = null;
       setSource(opened); setRanges([range]); setSelectedId(range.id); setFields(range);
       setCurrent(0); setViewCenter((range.start_ms + range.end_ms) / 2); setSpan(Math.min(opened.duration_ms, preferences.timeline_span)); setOutput(preferences.output);
-      setJob(null); setJobError(''); setPreviewing(false); setPlayerAvailable(false);
+      setJob(null); setJobError(''); setPreviewing(false); setPlayerAvailable(false); setStep(2);
+      if (!file) setUrl(candidateUrl!);
       setNotice('Источник открыт. Укажите границы фрагмента.');
     } catch (error) {
       if (!controller.signal.aborted) setSourceError(errorMessage(error));
@@ -300,39 +331,28 @@ export default function App() {
   const files = job?.items.filter(item => item.artifact) ?? [];
   const qualityLabel = source?.width && source?.height ? `${source.width} × ${source.height}` : null;
 
+  const stageTitles = ['Откройте видео', 'Выберите моменты', 'Сохраните фрагменты'];
+  const stageDescriptions = ['Ссылка на YouTube или MP4 с вашего устройства.', 'Отметьте начало и конец. Каждый момент станет отдельным файлом.', 'Выберите видео или аудио и скачайте результат.'];
+
   return <>
-    <a className="skip-link" href="#editor">{t("К выбору фрагмента")}</a>
+    <a className="skip-link" href="#editor">{t('К выбору фрагмента')}</a>
     <header className="site-header"><div className="header-inner">
-      <a className="brand" href="/" aria-label={t("cutmyvideo — главная")}><span className="brand-symbol"><Icon name="cut" size={21} /></span><span>cutmy<span className="brand-suffix">video</span></span></a>
-      <WorkspaceNav preferences={preferences} onSave={applyPreferences} busy={!sessionReady || sourceBusy || busy} onExample={value => { setUrl(value); void openSource(undefined, value); }} />
-      <div className="header-actions"><LanguageSwitch /><button className="shortcut-toggle" type="button" onClick={() => setShowShortcuts(!showShortcuts)} aria-expanded={showShortcuts} aria-label={t('Горячие клавиши')}><span className="keycap">?</span><span className="shortcut-text">{t("Горячие клавиши")}</span></button></div>
+      <a className="brand" href="/" aria-label={t('cutmyvideo — главная')}><span className="brand-symbol"><Icon name="cut" size={20} /></span><span>cutmy<span className="brand-suffix">video</span></span></a>
+      <WorkspaceNav preferences={preferences} onSave={applyPreferences} busy={!sessionReady || sourceBusy || busy} onExample={value => { setUrl(value); setStep(1); void openSource(undefined, value); }} />
+      <div className="header-actions"><LanguageSwitch /><ThemeToggle /></div>
     </div></header>
-    <main>
-      <div className="page-heading"><div><h1>{t("Вырезать фрагмент")}</h1><p>{t("Выберите моменты. Скачайте видео или аудио.")}</p></div><span className="version-tag">{t("Ранняя версия")}</span></div>
-      {showShortcuts && <div className="shortcut-guide"><span><kbd>I</kbd>{t("начало по позиции плеера")}</span><span><kbd>O</kbd>{t("конец")}</span><span><kbd>{t("Пробел")}</kbd>{t("пауза / воспроизведение")}</span><span><kbd>←</kbd><kbd>→</kbd>{t("на ручке: 0,1 с;")}<kbd>Shift</kbd>{t(": 1 с")}</span><p>{t("Клавиши I, O и пробел работают вне полей ввода. В плеере действуют его собственные клавиши.")}</p></div>}
-
-      <section className="source-panel" aria-labelledby="source-heading">
-        <h2 id="source-heading" className="sr-only">{t("Открыть источник")}</h2>
-        <form className="source-form" noValidate onSubmit={event => { event.preventDefault(); void openSource(); }}>
-          <div className="source-field"><label htmlFor="source-url">{t("Ссылка на видео")}</label><div className="source-input-wrap"><Icon name="link" size={19} /><input ref={sourceInput} id="source-url" type="url" placeholder="https://…" value={url} onChange={event => { setUrl(event.target.value); setSourceError(''); }} disabled={sourceBusy || busy} aria-invalid={!!sourceError} aria-describedby={sourceError ? 'source-error' : 'source-hint'} autoComplete="off" spellCheck={false} /></div></div>
-          <button className="button primary source-open" type="submit" disabled={!sessionReady || sourceBusy || busy}>{sourceBusy ? <><span className="spinner" />{t("Открываем…")}</> : t("Открыть видео")}</button>
-          <span className="source-or">{t("или")}</span>
-          <input ref={fileInput} type="file" id="source-file" hidden tabIndex={-1} aria-label={t('Загрузить файл')} accept="video/*,audio/*,.mkv,.mov,.webm,.mp4,.mp3,.m4a" disabled={!sessionReady || sourceBusy || busy} onChange={event => { const file = event.target.files?.[0]; if (file) void openSource(file); event.target.value = ''; }} />
-          <button type="button" className="button secondary upload-button" disabled={!sessionReady || sourceBusy || busy} onClick={() => fileInput.current?.click()}><Icon name="upload" size={18} />{t("Загрузить файл")}</button>
-        </form>
-        <div className="source-hints"><p id="source-hint">{t("YouTube, прямая ссылка на видео или файл с устройства.")}</p>{sourceBusy && <button type="button" className="text-button" onClick={() => { sourceController.current?.abort(); setSourceBusy(false); }}>{t("Отменить открытие")}</button>}{busy && <span>{t("Дождитесь экспорта или отмените его перед сменой видео.")}</span>}</div>
-        {sourceError && <div id="source-error" className="error-message" role="alert">{t(sourceError)}{!sessionReady && <button type="button" className="text-button" onClick={() => { setSourceError(''); setSessionAttempt(n => n + 1); }}>{t("Повторить подключение")}</button>}</div>}
-      </section>
-
-      <div className="workbench" id="editor">
-        <section className="editing-panel" aria-label={t("Выбор фрагментов")}>
-          <div className="media-heading"><div className="source-title"><Icon name="file" size={18} /><span>{source?.title ?? t("Видео не выбрано")}</span></div>{source && <span className="source-meta">{qualityLabel && <>{qualityLabel}<span className="meta-separator"> / </span></>}{formatTimecode(duration)}</span>}</div>
-          <Player ref={player} source={source} onAvailable={setPlayerAvailable} onTime={ms => {
+    <main id="editor" className={`stage-page stage-${step}`}>
+      <nav className="steps-nav" aria-label={t('Шаги работы')}><ol>{(['Видео', 'Моменты', 'Экспорт'] as const).map((label, index) => <li key={label}><button type="button" disabled={index > 0 && !source} aria-current={step === index + 1 ? 'step' : undefined} onClick={() => goToStep((index + 1) as 1 | 2 | 3)}><span className="step-number">{index + 1}</span><span>{t(label)}</span></button>{index < 2 && <span className="step-connector" aria-hidden="true" />}</li>)}</ol></nav>
+      <div className="page-heading"><div><p className="step-caption">{t('Шаг {current} из 3', { current: step })}</p><h1 ref={stageHeading} tabIndex={-1}>{t(stageTitles[step - 1])}</h1><p>{t(stageDescriptions[step - 1])}</p></div>{step !== 1 && <button className="text-button change-source" type="button" onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button>}</div>
+      {step === 1 && <SourceChooser url={url} onUrl={value => { setUrl(value); setSourceError(''); }} onOpen={() => void openSource()} onFile={file => void openSource(file)} source={source} busy={sourceBusy} processing={busy} ready={sessionReady} error={sourceError} onCancel={() => { sourceController.current?.abort(); setSourceBusy(false); }} onReconnect={() => { setSourceError(''); setSessionAttempt(n => n + 1); }} onResume={() => goToStep(2)} />}
+      {source && <section className="moments-stage" hidden={step !== 2} aria-label={t('Выбор фрагментов')}>
+        <div className="editing-panel">
+          <div className="media-heading"><div className="source-title"><Icon name="file" size={18} /><span>{source.title}</span></div><span className="source-meta">{qualityLabel && <>{qualityLabel}<span className="meta-separator"> / </span></>}{formatTimecode(duration)}</span></div>
+          <Player ref={player} source={source} onAvailable={available => { setPlayerAvailable(available); if (available && restoredPosition.current !== null) { player.current?.seek(restoredPosition.current); restoredPosition.current = null; } }} onTime={ms => {
             setCurrent(Math.min(duration, ms));
             if (previewEnd.current !== null && ms >= previewEnd.current) { player.current?.pause(); previewEnd.current = null; setPreviewing(false); }
           }} />
-
-          {source && selected ? <div className="selection-editor">
+          {source && selected && <div className="selection-editor">
             <div className="timeline-toolbar"><h2>{t("Границы фрагмента")}</h2><div className="zoom-controls"><button type="button" className="icon-button" aria-label={t("Предыдущий участок шкалы")} disabled={view[0] <= 0} onClick={() => setViewCenter(Math.max(0, viewCenter - span / 2))}><Icon name="chevron" size={16} style={{ transform: 'rotate(180deg)' }} /></button><label htmlFor="zoom" className="sr-only">{t("Масштаб шкалы")}</label><select id="zoom" value={span} onChange={event => { setSpan(Number(event.target.value)); setViewCenter((selected.start_ms + selected.end_ms) / 2); }}>{zoomOptions.map(value => <option key={value} value={value}>{value === duration ? t("Всё видео") : value === 300000 ? t("5 минут") : value === 60000 ? t("1 минута") : t("10 секунд")}</option>)}</select><button type="button" className="icon-button" aria-label={t("Следующий участок шкалы")} disabled={view[1] >= duration} onClick={() => setViewCenter(Math.min(duration, viewCenter + span / 2))}><Icon name="chevron" size={16} /></button></div></div>
             <Timeline duration={duration} current={current} ranges={ranges} selected={selected} view={view} onSeek={seek} onRange={changeBounds} />
             <div className="time-fields">
@@ -347,10 +367,14 @@ export default function App() {
             <div className="ranges-heading"><h2>{t("Фрагменты")}<span className="count">{ranges.length}</span></h2><button className="text-button" type="button" onClick={addRange} disabled={ranges.length >= 10}><Icon name="plus" size={16} />{t("Добавить фрагмент")}</button></div>
             <ol className="range-list">{ranges.map((range, index) => <li key={range.id} className={range.id === selectedId ? 'selected' : ''}><button className="range-select" type="button" onClick={() => pickRange(range)} aria-pressed={range.id === selectedId}><span className="range-index">{index + 1}</span><span className="range-description"><strong>{range.label || `${t('Фрагмент')} ${index + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></span><span className="range-length">{durationLabel(range.end_ms - range.start_ms, locale)}</span></button><button className="icon-button delete-range" type="button" aria-label={`${t('Удалить фрагмент')} ${index + 1}`} onClick={() => removeRange(range.id)} disabled={ranges.length === 1}><Icon name="trash" size={17} /></button></li>)}</ol>
             <label className="clip-name-label" htmlFor="clip-name">{t("Название выбранного фрагмента")}<span>{t("необязательно")}</span></label><input id="clip-name" className="clip-name" type="text" maxLength={50} placeholder={`${t('Фрагмент')} ${ranges.findIndex(range => range.id === selected.id) + 1}`} value={selected.label} onChange={event => setRanges(previous => previous.map(range => range.id === selected.id ? { ...range, label: event.target.value } : range))} />
-          </div> : <div className="empty-selection"><span className="trim-example" aria-hidden="true">[&nbsp;&nbsp;]</span><div><h2>{t("Один момент или несколько")}</h2><p>{t("Выбирайте границы на шкале или вводите точное время.")}<br className="desktop-break" />{t("Каждый фрагмент сохранится отдельным файлом.")}</p></div></div>}
-        </section>
-
-        <aside className="export-panel" aria-labelledby="export-heading"><form onSubmit={exportClips}>
+          </div>}
+        </div>
+        <div className="stage-actions"><button className="text-button" type="button" onClick={() => setShowShortcuts(!showShortcuts)} aria-expanded={showShortcuts}><span className="keycap">?</span>{t('Горячие клавиши')}</button><button className="button primary" type="button" onClick={() => goToStep(3)} disabled={sourceBusy}>{t('К настройкам экспорта')}<Icon name="chevron" size={17} /></button></div>
+        {showShortcuts && <div className="shortcut-guide"><span><kbd>I</kbd>{t('начало по позиции плеера')}</span><span><kbd>O</kbd>{t('конец')}</span><span><kbd>{t('Пробел')}</kbd>{t('пауза / воспроизведение')}</span><span><kbd>←</kbd><kbd>→</kbd>{t('на ручке: 0,1 с;')}<kbd>Shift</kbd>{t(': 1 с')}</span><p>{t('Клавиши I, O и пробел работают вне полей ввода. В плеере действуют его собственные клавиши.')}</p></div>}
+      </section>}
+      {step === 3 && source && <div className="output-stage">
+        <div className="output-grid"><section className="output-selection" aria-labelledby="output-selection-heading"><div className="output-source"><Icon name="file" size={20} /><span>{source.title}</span></div><h2 id="output-selection-heading">{t('Выбранные моменты')}</h2><ol>{ranges.map((range, index) => <li key={range.id}><span className="range-index">{index + 1}</span><div><strong>{range.label || `${t('Фрагмент')} ${index + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></div><span>{durationLabel(range.end_ms - range.start_ms, locale)}</span></li>)}</ol><button className="text-button" type="button" onClick={() => goToStep(2)}><Icon name="chevron" size={17} style={{ transform: 'rotate(180deg)' }} />{t('К выбору моментов')}</button></section>
+        <section className="export-panel" aria-labelledby="export-heading"><form onSubmit={exportClips}>
           <div className="export-heading"><Icon name="download" size={20} /><h2 id="export-heading">{t("Экспорт")}</h2></div>
           <fieldset disabled={!source || submitting}><legend className="sr-only">{t("Настройки экспорта")}</legend>
             <div className="format-picker" role="group" aria-label={t("Формат файла")}><button type="button" className={output.format === 'mp4' ? 'active' : ''} onClick={() => setOutput(previous => ({ ...previous, format: 'mp4' }))} aria-pressed={output.format === 'mp4'}><strong>MP4</strong><span>{t("Видео")}</span></button><button type="button" className={output.format === 'mp3' ? 'active' : ''} onClick={() => setOutput(previous => ({ ...previous, format: 'mp3', cut_mode: 'accurate' }))} aria-pressed={output.format === 'mp3'}><strong>MP3</strong><span>{t("Аудио")}</span></button></div>
@@ -364,16 +388,17 @@ export default function App() {
         </form>
         {job && <section className={`job-status ${job.status}`} aria-label={t("Состояние экспорта")} aria-live="polite"><div className="job-status-heading">{activeJob(job) ? <span className="spinner" /> : <Icon name={job.status === 'succeeded' ? 'check' : 'file'} size={20} />}<h3>{t(stageNames[job.status === 'running' ? job.stage : job.status] ?? 'Обрабатываем фрагменты')}</h3></div><p>{jobDescription(job, t)}</p><p className="job-file-count">{t('Готово: {count} из {total}', { count: files.length, total: job.items.length })}</p>{job.items.some(item => item.status === 'failed') && <div className="failed-items"><p>{t("Не удалось создать:")}</p><ul>{job.items.filter(item => item.status === 'failed').map(item => <li key={item.id}>{item.label || `${t('Фрагмент')} ${job.items.indexOf(item) + 1}`}</li>)}</ul><p>{t("Попробуйте точные границы, другое качество или загрузите видео файлом.")}</p></div>}{activeJob(job) && <button type="button" className="button secondary cancel-button" disabled={cancelling} onClick={() => void cancelJob()}>{cancelling ? t("Отменяем…") : t("Отменить обработку")}</button>}</section>}
         {jobError && <p className="error-message" role="alert">{t(jobError)}</p>}
-        </aside>
-      </div>
-
+        </section>
+        </div>
       {files.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading">{t("Готовые файлы")}</h2><p>{t("Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(files.length, 'file', locale)}</span></div><ul className="file-list">{files.map((item, index) => {
         const artifact = item.artifact!;
         const itemNumber = (job?.items.indexOf(item) ?? index) + 1;
         const adjusted = Math.abs(artifact.actual_start_ms - item.start_ms) > 100 || Math.abs(artifact.actual_end_ms - item.end_ms) > 100;
         return <li key={artifact.id}><span className="file-icon"><Icon name="file" size={23} /></span><div className="file-description"><h3>{item.label || `${t('Фрагмент')} ${itemNumber}`}</h3><p>{artifact.filename}</p><span>{formatBytes(artifact.size_bytes, locale)}<span className="meta-separator"> / </span>{formatTimecode(artifact.actual_start_ms, true)} — {formatTimecode(artifact.actual_end_ms, true)}</span>{adjusted && <p className="adjusted-note">{t("Фактические границы отличаются от выбранных.")}</p>}</div><a className="button secondary download-button" href={artifact.download_url} download={artifact.filename}><Icon name="download" size={17} />{t("Скачать")}</a></li>;
       })}</ul></section>}
-      <footer className="page-footer"><span>cutmyvideo</span><a href="https://github.com/Kay0k1/cutmyvideo-core" target="_blank" rel="noreferrer">{t("Открытое ядро на GitHub")}</a></footer>
+
+      </div>}
+      <footer className="page-footer"><span>cutmyvideo <span className="footer-dot">·</span> {t('YouTube и MP4')}</span><a href="https://github.com/Kay0k1/cutmyvideo-core" target="_blank" rel="noreferrer">{t('Открытое ядро на GitHub')}</a></footer>
       <div className="sr-only" role="status" aria-live="polite">{t(notice)}</div>
     </main>
   </>;

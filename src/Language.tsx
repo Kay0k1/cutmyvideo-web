@@ -26,7 +26,6 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try { localStorage.setItem('cutmyvideo.language', locale); } catch { /* Optional persistence. */ }
     document.documentElement.lang = locale;
-    document.title = locale === 'ru' ? 'cutmyvideo — вырезать фрагмент' : 'cutmyvideo — cut a clip';
     document.querySelector('meta[name="description"]')?.setAttribute('content', locale === 'ru' ? 'Выберите моменты в видео и скачайте готовые фрагменты в MP4 или MP3.' : 'Select moments in a video and download your clips as MP4 or MP3.');
   }, [locale]);
   return <context.Provider value={{ locale, setLocale, t: (text, values) => translate(text, locale, values) }}>{children}</context.Provider>;
