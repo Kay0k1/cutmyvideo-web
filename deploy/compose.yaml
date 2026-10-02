@@ -1,0 +1,113 @@
+name: cutmy
+
+x-core: &core
+  image: cutmy-core:${RELEASE_TAG:-local}
+  build:
+    context: ${CORE_CONTEXT:-../../core}
+  restart: unless-stopped
+  init: true
+  environment: &core-env
+    DATABASE_URL: postgres://cutmy:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/cutmy?sslmode=disable
+    DATA_DIR: /data
+    LISTEN_ADDR: :8080
+    PUBLIC_ORIGIN: https://${DOMAIN:-cutmy.video}
+    COOKIE_SECURE: "true"
+    SOURCE_TTL: 24h
+    ARTIFACT_TTL: 24h
+  volumes:
+    - media:/data
+  security_opt:
+    - no-new-privileges:true
+  logging: &logs
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  postgres:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cutmy
+      POSTGRES_DB: cutmy
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U cutmy -d cutmy"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 768m
+    cpus: 1
+    logging: *logs
+
+  api:
+    <<: *core
+    command: [server]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, /usr/local/bin/cutmy, healthcheck]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+    mem_limit: 512m
+    cpus: 1
+
+  worker:
+    <<: *core
+    command: [worker]
+    depends_on:
+      api:
+        condition: service_healthy
+    mem_limit: 4g
+    cpus: 3
+    pids_limit: 256
+
+  web:
+    image: cutmy-web:${RELEASE_TAG:-local}
+    build:
+      context: ..
+    restart: unless-stopped
+    mem_limit: 128m
+    cpus: 0.5
+    security_opt:
+      - no-new-privileges:true
+    logging: *logs
+
+  edge:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-cutmy.video}
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_started
+    mem_limit: 256m
+    security_opt:
+      - no-new-privileges:true
+    logging: *logs
+
+volumes:
+  database:
+    name: cutmy-database
+  media:
+    name: cutmy-media
+  certificates:
+    name: cutmy-certificates
+  caddy_config:
+    name: cutmy-caddy-config
