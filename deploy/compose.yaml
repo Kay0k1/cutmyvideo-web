@@ -12,6 +12,8 @@ x-core: &core
     LISTEN_ADDR: :8080
     PUBLIC_ORIGIN: https://${DOMAIN:-cutmy.video}
     COOKIE_SECURE: "true"
+    TRUST_PROXY: "true"
+    MAX_STORAGE_BYTES: "10737418240"
     SOURCE_TTL: 24h
     ARTIFACT_TTL: 24h
   volumes:
