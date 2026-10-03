@@ -23,6 +23,68 @@ async function completedExport(page: Page) {
   return { source, job }
 }
 
+test('concurrent bootstrap effects share one real request and preserve the owner cookie on reload', async ({ page }) => {
+  let requests = 0
+  let received!: () => void
+  let release!: () => void
+  const intercepted = new Promise<void>(resolve => { received = resolve })
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const setCookieCounts: number[] = []
+  await page.route(`**${api}/session`, async route => {
+    requests++
+    const response = await route.fetch()
+    setCookieCounts.push(response.headersArray().filter(header => header.name.toLowerCase() === 'set-cookie').length)
+    received()
+    await gate
+    await route.fulfill({ response })
+  })
+  try {
+    await page.goto('/')
+    await intercepted
+    // Let React's mount effects run while the real response is still in flight.
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    expect(requests).toBe(1)
+  } finally {
+    release()
+  }
+  await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled()
+  const ownerCookies = (await page.context().cookies()).filter(cookie => cookie.name === 'cutmy_session')
+  expect(ownerCookies).toHaveLength(1)
+  expect(ownerCookies[0].httpOnly).toBe(true)
+  expect(ownerCookies[0].sameSite).toBe('Lax')
+  expect(setCookieCounts).toEqual([1])
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled()
+  expect(requests).toBe(2)
+  expect(setCookieCounts).toEqual([1, 0])
+  const reloadedCookies = (await page.context().cookies()).filter(cookie => cookie.name === 'cutmy_session')
+  expect(reloadedCookies).toHaveLength(1)
+  expect(reloadedCookies[0].value === ownerCookies[0].value).toBe(true)
+})
+
+test('reconnecting after a rate-limited bootstrap makes a fresh real session request', async ({ page }) => {
+  let requests = 0
+  let reject = true
+  await page.route(`**${api}/session`, async route => {
+    requests++
+    if (reject) await route.fulfill({ status: 429, json: { error: { code: 'rate_limit', message: 'Too many requests; wait a minute' } } })
+    else await route.continue()
+  })
+  await page.goto('/')
+  await expect(page.getByRole('alert')).toContainText('Слишком много запросов')
+  await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeDisabled()
+  expect(requests).toBe(1)
+  expect((await page.context().cookies()).filter(cookie => cookie.name === 'cutmy_session')).toHaveLength(0)
+  reject = false
+  const reconnected = page.waitForResponse(response => response.url().endsWith(`${api}/session`) && response.ok())
+  await page.getByRole('button', { name: 'Повторить подключение', exact: true }).click()
+  await reconnected
+  await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled()
+  await expect(page.getByRole('alert')).not.toBeVisible()
+  expect(requests).toBe(2)
+  expect((await page.context().cookies()).filter(cookie => cookie.name === 'cutmy_session')).toHaveLength(1)
+})
+
 test('theme follows the system, explicit choice survives reload and is applied before the first frame', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.addInitScript(() => {

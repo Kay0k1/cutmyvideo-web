@@ -183,6 +183,12 @@ The expired-source regression substitutes only the source metadata response with
 a 404. Its job and downloaded MP4 are created by the real backend. This exercises
 the browser recovery path without inventing media, durations or successful jobs.
 
+Session bootstrap checks hold a real response in flight while mount effects run,
+assert one server request and one HttpOnly owner cookie, and verify that reload
+keeps that cookie without issuing another one. A controlled rate-limit response
+also checks that the visible reconnect action makes a fresh real request instead
+of reusing a settled failure. Backend rate limits remain enabled.
+
 For a deployed server with stricter request limits, run focused scenarios rather
 than the full development suite in one burst. A useful first HTTPS check is:
 
@@ -236,3 +242,18 @@ runtime. The harness restores that browser override after captures; all 84 phone
 stage measurements in its final JSON retained the intended coarse pointer. No
 product playback workaround or assertion retry was introduced for the independent
 Linux WebKit behavior described above.
+
+## Recorded verification — 2026-10-03 session bootstrap
+
+The unchanged surviving-download regression passed ten consecutive runs against
+the fast local worker. An independent reproduction then confirmed that duplicate
+concurrent bootstrap requests could block restoration even with a correctly saved
+real completed job: the first session response succeeded, while a controlled 429
+on the second left Export disabled and prevented the job restore request. This
+reproduction did not substitute the export, job, cookie or downloaded media.
+
+After sharing the pending bootstrap request, four focused checks passed in one
+12-second invocation: one real request/cookie during mounting and reload, recovery
+from a rate-limited attempt, saved earlier-step restoration, and the unchanged
+expired-source case with a real completed MP4 download. Existing restoration
+assertions and backend limits were preserved.
