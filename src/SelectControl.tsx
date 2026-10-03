@@ -1,6 +1,7 @@
 import * as Select from '@radix-ui/react-select';
 import { useRef, useState } from 'react';
 import { Icon } from './Icons';
+import { useLanguage } from './Language';
 
 export interface SelectOption { value: string; label: string; description?: string; disabled?: boolean; }
 
@@ -13,9 +14,10 @@ export function SelectControl({ id, value, onChange, options, label, describedBy
   describedBy?: string;
   disabled?: boolean;
 }) {
+  const { locale } = useLanguage();
   const trigger = useRef<HTMLButtonElement>(null);
   const [container, setContainer] = useState<HTMLElement | undefined>();
-  return <Select.Root value={value} onValueChange={onChange} disabled={disabled}
+  return <Select.Root key={locale} value={value} onValueChange={onChange} disabled={disabled}
     onOpenChange={open => { if (open) setContainer(trigger.current?.closest('dialog') ?? undefined); }}>
     <Select.Trigger ref={trigger} id={id} className="select-control" aria-label={label} aria-describedby={describedBy}>
       <Select.Value /><Select.Icon className="select-chevron"><Icon name="chevron" size={15} style={{ transform: 'rotate(90deg)' }} /></Select.Icon>
