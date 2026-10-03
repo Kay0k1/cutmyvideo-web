@@ -251,7 +251,8 @@ export default function App() {
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey || (event.target as HTMLElement).closest('input, textarea, select, button, a, [contenteditable]')) return;
+      if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || document.querySelector('dialog[open]')) return;
+      if ((event.target as HTMLElement).closest('input, textarea, select, button, a, [contenteditable], [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"]')) return;
       if (step !== 2 || !source || !selected) return;
       if (event.code === 'KeyI') { event.preventDefault(); marker('start'); }
       if (event.code === 'KeyO') { event.preventDefault(); marker('end'); }
@@ -324,7 +325,8 @@ export default function App() {
     setSelectedRangeIds(previous => previous.filter(id => remaining.some(range => range.id === id)));
     if (!remaining.some(range => range.id === selectedId)) {
       const active = remaining[0]; setSelectedId(active?.id ?? ''); setRevealId(active?.id ?? '');
-      if (active) setFields(active); else { setStartText(''); setEndText(''); setRangeError(''); }
+      if (active) { setFields(active); setViewCenter((active.start_ms + active.end_ms) / 2); setSimpleView(simpleRangeView(duration, active)); }
+      else { setStartText(''); setEndText(''); setRangeError(''); }
     }
     setNotice(ids.length > 1 ? 'Выбранные фрагменты удалены.' : 'Фрагмент удалён.');
   }
