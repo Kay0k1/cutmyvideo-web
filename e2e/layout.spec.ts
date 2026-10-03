@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
 import { expect, test, type CDPSession, type Locator, type Page, type TestInfo } from '@playwright/test'
-import { api, assertFirstFrameMatchesSource, goToExport, goToMoments, goToSource, setTheme, uploadThroughUI, waitJob } from './helpers'
+import { addClip, api, assertFirstFrameMatchesSource, goToClips, goToExport, goToMoment, goToSource, saveClip, setTheme, showExactTimes, uploadThroughUI, waitJob } from './helpers'
 
 const desktopSizes = [
   { width: 1440, height: 900 }, { width: 1366, height: 768 },
@@ -19,6 +19,8 @@ const phoneSizes = [
 const labels = {
   preview: /^(Посмотреть фрагмент|Preview clip)$/,
   add: /^(Добавить фрагмент|Add a clip)$/,
+  save: /^(Сохранить фрагмент|Save clip)$/,
+  precision: /^(Точное время и шкала|Exact time and timeline)$/,
   next: /^(К настройкам экспорта|Export settings)$/,
   download: /^(Скачать|Download)$/,
   cut: /^(Вырезать фрагменты|Cut clips)$/,
@@ -48,13 +50,15 @@ async function collectLayout(page: Page, touch: boolean) {
   return page.evaluate(touch => {
     const controls = [...document.querySelectorAll<HTMLElement>('button, input:not([type=file]), select, a[href]')]
       .filter(element => {
-        const rect = element.getBoundingClientRect()
+        const target = element.matches('input[type="checkbox"]') ? element.closest('label') ?? element : element
+        const rect = target.getBoundingClientRect()
         const css = getComputedStyle(element)
         return rect.width > 1 && rect.height > 1 && css.visibility !== 'hidden' && !element.closest('[hidden]')
           && !element.classList.contains('skip-link') && !(element as HTMLButtonElement).disabled
       })
       .map(element => {
-        const rect = element.getBoundingClientRect()
+        const target = element.matches('input[type="checkbox"]') ? element.closest('label') ?? element : element
+        const rect = target.getBoundingClientRect()
         return {
           name: element.getAttribute('aria-label') || element.getAttribute('id') || element.textContent?.trim().slice(0, 80),
           x: rect.x, y: rect.y, width: rect.width, height: rect.height,
@@ -67,7 +71,7 @@ async function collectLayout(page: Page, touch: boolean) {
   }, touch)
 }
 
-async function checkLayout(page: Page, stage: 1 | 2 | 3, touch: boolean, description: string) {
+async function checkLayout(page: Page, stage: 1 | 2 | 3 | 4, touch: boolean, description: string) {
   await settle(page)
   await page.evaluate(() => scrollTo(0, 0))
   const result = await collectLayout(page, touch)
@@ -85,9 +89,12 @@ async function checkLayout(page: Page, stage: 1 | 2 | 3, touch: boolean, descrip
       ? [page.locator('.source-choice'), page.locator('.source-form input'), page.locator('.source-open')]
       : stage === 2
         ? [page.locator('video'), page.locator('.trim-handle.start'), page.locator('.trim-handle.end'),
-          page.locator('#range-start'), page.locator('#range-end'), page.getByRole('button', { name: labels.preview }),
-          page.getByRole('button', { name: labels.add }), page.locator('#clip-name'), page.getByRole('button', { name: labels.next })]
-        : [page.locator('.format-picker'), page.locator('#quality'), page.locator('#cut-mode'),
+          page.getByRole('button', { name: /^(Начало по позиции плеера|Set start at player position)$/ }),
+          page.getByRole('button', { name: /^(Конец по позиции плеера|Set end at player position)$/ }),
+          page.getByRole('button', { name: labels.preview }), page.getByRole('button', { name: labels.precision }), page.getByRole('button', { name: labels.save })]
+        : stage === 3
+          ? [page.getByRole('button', { name: labels.add }), page.locator('.clip-bulkbar'), page.locator('.range-list'), page.getByRole('button', { name: labels.next })]
+          : [page.locator('.format-picker'), page.locator('#quality'), page.locator('#cut-mode'),
           page.getByRole('button', { name: labels.cut }), ...await page.getByRole('link', { name: labels.download }).all()]
     for (let i = 0; i < controls.length; i++) await withinFirstViewport(controls[i], `${description}: primary control ${i + 1}`)
   }
@@ -109,6 +116,7 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
   await expect(page.locator('video')).toBeVisible()
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).duration)).toBeCloseTo(12, 1)
+  await showExactTimes(page)
   await page.locator('#range-start').fill('00:00:01.250')
   await page.locator('#range-start').press('Tab')
   await page.locator('#range-end').fill('00:00:03.750')
@@ -127,7 +135,8 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
   await startHandle.focus()
   await page.keyboard.press('ArrowLeft')
   await expect(startHandle).toHaveAttribute('aria-valuenow', '1250')
-  await page.getByRole('button', { name: labels.add }).click()
+  await addClip(page)
+  await showExactTimes(page)
   await page.locator('#range-start').fill('00:00:06.000')
   await page.locator('#range-start').press('Tab')
   await page.locator('#range-end').fill('00:00:08.500')
@@ -168,10 +177,20 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
         await target.getByRole('button', { name: locale === 'ru' ? 'Русский' : 'English', exact: true }).click()
         for (const theme of ['light', 'dark'] as const) {
           await setTheme(target, theme)
-          for (const stage of [1, 2, 3] as const) {
-            if (stage === 1) await goToSource(target)
-            if (stage === 2) await goToMoments(target)
-            if (stage === 3) await goToExport(target)
+          for (const stage of [1, 2, 3, 4] as const) {
+            if (stage === 1) {
+              await goToSource(target)
+              await target.getByRole('button', { name: /^(Ссылка|Link)$/ }).click()
+            }
+            if (stage === 2) {
+              await goToMoment(target)
+              const precision = target.getByRole('button', { name: labels.precision })
+              if (await precision.getAttribute('aria-expanded') === 'true') await precision.click()
+              await expect(precision).toHaveAttribute('aria-expanded', 'false')
+              await expect(target.getByLabel(/^(Начало|Start)$/, { exact: true })).not.toBeVisible()
+            }
+            if (stage === 3) await goToClips(target)
+            if (stage === 4) await goToExport(target)
             const key = `${browserName}-${size.width}x${size.height}-${locale}-${theme}-stage-${stage}`
             evidence.push({ key, stage, locale, theme, touch, ...await checkLayout(target, stage, touch, key) })
             if (stage === 1) {
@@ -185,7 +204,9 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
             }
             // JSON records every combination. Images cover every size on the
             // busiest step plus source/output at the shortest common sizes.
-            if ((stage === 2 && locale === 'ru') || (locale === 'en' && (size.width === 1280 && size.height === 720 || size.width === 360 || size.width === 320))) {
+            if ((stage === 2 && locale === 'ru')
+              || (stage === 3 && locale === 'ru' && (size.width === 1280 && size.height === 720 || size.width === 360 || size.width === 844))
+              || (locale === 'en' && (size.width === 1280 && size.height === 720 || size.width === 360 || size.width === 320))) {
               await screen(target, testInfo, key)
               // A tall full-page capture can clear Chromium's touch override.
               // Restore the intended context before measuring another stage.
@@ -209,7 +230,7 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
   try {
     await touchPage.goto('/')
     if (browserName === 'chromium') chromeTouch = await touchContext.newCDPSession(touchPage)
-    await goToMoments(touchPage)
+    await goToMoment(touchPage)
     await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
     // Native touch input reaches the timeline and seeks the actual media.
     await touchPage.locator('.trim-track').tap({ position: { x: 12, y: 30 } })
@@ -231,6 +252,7 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
       await expect.poll(async () => Number(await touchPage.locator('.trim-handle.start').getAttribute('aria-valuenow'))).toBeGreaterThan(6000)
       // This input session is released together with its touch context below.
+      await showExactTimes(touchPage)
       await touchPage.locator('#range-start').fill('00:00:06.000')
       await touchPage.locator('#range-start').press('Tab')
     }
@@ -246,23 +268,23 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
     await download.saveAs(testInfo.outputPath(`${browserName}-touch-download.mp4`))
   } finally { await touchContext.close() }
 
-  // Ten clips should use the list's own scroll area on a short laptop screen,
-  // rather than push the player, exact times or Continue below the viewport.
+  // A full collection uses its own scroll area and reveals the newest clip,
+  // leaving the collection actions and Continue on a short laptop viewport.
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await setTheme(page, 'light')
-  await goToMoments(page)
-  for (let i = 0; i < 8; i++) await page.getByRole('button', { name: labels.add }).click()
-  await expect(page.locator('.range-list li')).toHaveCount(10)
+  for (let i = 0; i < 10; i++) await addClip(page)
+  await saveClip(page)
+  await expect(page.locator('.range-list li')).toHaveCount(12)
   const list = page.locator('.range-list')
   await expect.poll(() => list.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(10)
-  const selected = list.locator('li.selected')
+  const selected = list.locator('li.editing')
   await expect.poll(() => selected.evaluate(element => {
     const rect = element.getBoundingClientRect(), parent = element.closest('.range-list')!.getBoundingClientRect()
     return rect.top >= parent.top - 1 && rect.bottom <= parent.bottom + 1
   })).toBe(true)
-  await checkLayout(page, 2, false, `${browserName}-ten-clips-short-laptop`)
-  await screen(page, testInfo, `${browserName}-ten-clips-short-laptop`)
+  await checkLayout(page, 3, false, `${browserName}-twelve-clips-short-laptop`)
+  await screen(page, testInfo, `${browserName}-twelve-clips-short-laptop`)
   expect(errors, 'uncaught browser errors').toEqual([])
   const matrixPath = testInfo.outputPath('viewport-matrix.json')
   await writeFile(matrixPath, JSON.stringify(evidence, null, 2))

@@ -51,6 +51,24 @@ test('the API rejects ambiguous YouTube links and lookalike hosts before fetchin
   }
 })
 
+test('the API distinguishes live-channel links from unsupported video collections', async ({ request }) => {
+  expect((await request.get(`${api}/session`)).ok()).toBeTruthy()
+  const sources = [
+    ['https://www.twitch.tv/riotgames', 422, 'live_not_supported'],
+    ['https://player.twitch.tv/?channel=riotgames', 422, 'live_not_supported'],
+    ['https://www.tiktok.com/@creator/live', 422, 'live_not_supported'],
+    ['https://www.instagram.com/instagram/', 400, 'unsupported_collection'],
+    ['https://www.twitch.tv/riotgames/videos', 400, 'unsupported_collection'],
+  ] as const
+  for (const [url, status, code] of sources) {
+    const response = await request.post(`${api}/sources`, { data: { url } })
+    expect(response.status(), url).toBe(status)
+    const body = await response.json()
+    expect(body.error.code, url).toBe(code)
+    expect(body.id, url).toBeUndefined()
+  }
+})
+
 test('source, job and finished files are isolated between sessions', async ({ playwright, baseURL }) => {
   const owner = await playwright.request.newContext({ baseURL })
   const stranger = await playwright.request.newContext({ baseURL })

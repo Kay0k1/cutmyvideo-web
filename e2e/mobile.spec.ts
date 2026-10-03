@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { api, goToExport, setTheme, uploadThroughUI, waitJob } from './helpers'
+import { api, goToClips, goToExport, setTheme, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
 
 test('mobile source and range controls remain usable at 360 and 390 px', async ({ page }, testInfo) => {
   await page.goto('/')
@@ -10,13 +10,17 @@ test('mobile source and range controls remain usable at 360 and 390 px', async (
   await page.screenshot({ path: testInfo.outputPath('mobile-empty.png'), fullPage: true })
   await testInfo.attach('Mobile empty state', { path: testInfo.outputPath('mobile-empty.png'), contentType: 'image/png' })
   await uploadThroughUI(page)
+  await showExactTimes(page)
   await expect(page.locator('video')).toBeVisible()
   const start = page.getByLabel('Начало', { exact: true })
   await start.fill('00:00:01.500')
   await start.press('Tab')
   await page.getByLabel('Конец', { exact: true }).fill('00:00:04.000')
   await page.getByLabel('Конец', { exact: true }).press('Tab')
+  await goToClips(page)
   await page.getByRole('button', { name: 'Добавить фрагмент', exact: true }).tap()
+  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await showExactTimes(page)
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
   await page.getByRole('button', { name: 'Посмотреть фрагмент', exact: true }).tap()
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(0.2)
@@ -73,4 +77,41 @@ test('mobile English navigation and donation dialog fit the screen', async ({ pa
     await dialog.getByRole('button', { name: 'Close', exact: true }).tap()
     await expect(dialog).not.toBeVisible()
   }
+})
+
+test('touch selectors and clip selection remain usable without native select popups', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 640 })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'English', exact: true }).tap()
+  await uploadThroughUI(page)
+  await goToClips(page)
+  const first = page.getByRole('checkbox', { name: 'Select clip 1', exact: true })
+  await first.tap()
+  await expect(first).not.toBeChecked()
+  await expect(page.getByRole('button', { name: 'Export settings', exact: true })).toBeDisabled()
+  await first.tap()
+  await expect(first).toBeChecked()
+  await goToExport(page)
+  const quality = page.getByRole('combobox', { name: 'Video quality', exact: true })
+  await quality.tap()
+  const popup = page.getByRole('listbox')
+  await expect(popup).toBeVisible()
+  const bounds = await popup.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: innerWidth, height: innerHeight }
+  })
+  expect(bounds.left).toBeGreaterThanOrEqual(-1)
+  expect(bounds.right).toBeLessThanOrEqual(bounds.width + 1)
+  expect(bounds.top).toBeGreaterThanOrEqual(-1)
+  expect(bounds.bottom).toBeLessThanOrEqual(bounds.height + 1)
+  for (const option of await popup.getByRole('option').all()) {
+    const rect = await option.boundingBox()
+    expect(rect).not.toBeNull()
+    expect(rect!.height).toBeGreaterThanOrEqual(43.5)
+    expect(rect!.width).toBeGreaterThanOrEqual(43.5)
+  }
+  await popup.getByRole('option', { name: 'Up to 720p', exact: true }).tap()
+  await expect(quality).toContainText('720p')
+  await expect(popup).not.toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1)
 })
