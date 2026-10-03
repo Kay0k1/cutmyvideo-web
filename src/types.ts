@@ -6,6 +6,10 @@ export interface Source {
   preview_url: string | null;
   embed_url: string | null;
   thumbnail_url: string | null;
+  provider?: string;
+  provider_video_id?: string | null;
+  source_url?: string | null;
+  preview_kind?: 'native' | 'youtube' | 'none';
   width?: number;
   height?: number;
 }

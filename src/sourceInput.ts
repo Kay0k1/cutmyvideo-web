@@ -1,4 +1,64 @@
-/** The website accepts video links from genuine YouTube hosts only. */
+export const videoProviders = [
+  { id: 'youtube', name: 'YouTube', hosts: ['youtube.com', 'youtu.be', 'youtube-nocookie.com'] },
+  { id: 'twitch', name: 'Twitch', hosts: ['twitch.tv'] },
+  { id: 'rutube', name: 'Rutube', hosts: ['rutube.ru'] },
+  { id: 'tiktok', name: 'TikTok', hosts: ['tiktok.com'] },
+  { id: 'instagram', name: 'Instagram', hosts: ['instagram.com'] },
+  { id: 'vimeo', name: 'Vimeo', hosts: ['vimeo.com'] },
+  { id: 'dailymotion', name: 'Dailymotion', hosts: ['dailymotion.com', 'dai.ly'] },
+  { id: 'vk', name: 'VK Видео', hosts: ['vk.com', 'vk.ru', 'vkvideo.ru', 'vkvideo.com'] },
+  { id: 'facebook', name: 'Facebook', hosts: ['facebook.com', 'fb.watch'] },
+  { id: 'x', name: 'X / Twitter', hosts: ['x.com', 'twitter.com', 't.co'] },
+  { id: 'reddit', name: 'Reddit', hosts: ['reddit.com', 'redd.it'] },
+  { id: 'ok', name: 'Одноклассники', hosts: ['ok.ru'] },
+  { id: 'bilibili', name: 'Bilibili', hosts: ['bilibili.com', 'b23.tv'] },
+  { id: 'streamable', name: 'Streamable', hosts: ['streamable.com'] },
+  { id: 'rumble', name: 'Rumble', hosts: ['rumble.com'] },
+] as const;
+
+export type VideoProvider = typeof videoProviders[number];
+
+function pastedURL(value: string): URL | null {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 8192 || /[\u0000-\u001f\u007f]/.test(trimmed)) return null;
+  const candidate = trimmed.startsWith('//') ? `https:${trimmed}` : trimmed.includes('://') ? trimmed : `https://${trimmed}`;
+  if (candidate.split('://')[1]?.split(/[/?#]/)[0].includes('@')) return null;
+  try {
+    const parsed = new URL(candidate);
+    if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.port) return null;
+    return parsed;
+  } catch { return null; }
+}
+
+function providerForHost(hostname: string): VideoProvider | null {
+  const host = hostname.toLowerCase().replace(/\.$/, '');
+  return videoProviders.find(provider => provider.hosts.some(domain => host === domain || host.endsWith(`.${domain}`))) ?? null;
+}
+
+/** Recognition is a display hint. The core validates and resolves the real video. */
+export function videoProvider(value: string): VideoProvider | null {
+  const parsed = pastedURL(value);
+  return parsed ? providerForHost(parsed.hostname) : null;
+}
+
+export function providerName(id: string | undefined): string | null {
+  return videoProviders.find(provider => provider.id === id)?.name ?? null;
+}
+
+/** Keep unknown HTTPS links intact: CDN signatures and generic extractors need their query. */
+export function canonicalSourceUrl(value: string): string | null {
+  const parsed = pastedURL(value);
+  if (!parsed) return null;
+  const provider = providerForHost(parsed.hostname);
+  if (provider?.id === 'youtube') return canonicalYouTubeUrl(value);
+  if (parsed.protocol === 'http:' && !provider) return null;
+  parsed.protocol = 'https:';
+  parsed.hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
+  parsed.hash = '';
+  return parsed.href;
+}
+
+/** Canonical video links from genuine YouTube hosts only. */
 export function canonicalYouTubeUrl(value: string): string | null {
   let parsed: URL;
   const trimmed = value.trim();

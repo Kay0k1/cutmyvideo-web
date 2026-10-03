@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalYouTubeUrl, validateMP4 } from './sourceInput';
+import { canonicalSourceUrl, canonicalYouTubeUrl, validateMP4, videoProvider, videoProviders } from './sourceInput';
 
 describe('website source boundaries', () => {
   it('normalizes common YouTube sharing links without carrying playlist or tracking data', () => {
@@ -16,5 +16,48 @@ describe('website source boundaries', () => {
     const box = new Uint8Array([0, 0, 0, 20, 102, 116, 121, 112, 105, 115, 111, 109, 0, 0, 0, 0, 105, 115, 111, 109]);
     expect(await validateMP4(new File([box], 'video.mp4', { type: 'video/mp4' }))).toBeNull();
     expect(await validateMP4(new File([box], 'video.webm', { type: 'video/webm' }))).not.toBeNull();
+  });
+
+  it('recognizes fifteen services and normalizes copied platform links', () => {
+    const links: Record<string, string> = {
+      youtube: 'm.youtube.com/shorts/aqz-KE-bpKQ?si=tracking',
+      twitch: 'www.twitch.tv/videos/12345678',
+      rutube: 'rutube.ru/video/abcdef0123456789abcdef0123456789/',
+      tiktok: 'vm.tiktok.com/abc123/',
+      instagram: 'www.instagram.com/reel/AbCdEf12345/',
+      vimeo: 'player.vimeo.com/video/12345678',
+      dailymotion: 'dai.ly/x123abc',
+      vk: 'vkvideo.ru/video-123_456',
+      facebook: 'fb.watch/abc123/',
+      x: 'x.com/example/status/12345678',
+      reddit: 'www.reddit.com/r/example/comments/abc123/video/',
+      ok: 'ok.ru/video/12345678',
+      bilibili: 'b23.tv/abc123',
+      streamable: 'streamable.com/abc123',
+      rumble: 'rumble.com/v123abc-example.html',
+    };
+    expect(videoProviders).toHaveLength(15);
+    for (const [id, value] of Object.entries(links)) {
+      expect(videoProvider(value)?.id).toBe(id);
+      expect(canonicalSourceUrl(value)).toMatch(/^https:\/\//);
+    }
+    expect(canonicalSourceUrl('http://m.twitch.tv/videos/12345678#t=1h')).toBe('https://m.twitch.tv/videos/12345678');
+    expect(canonicalSourceUrl(links.youtube)).toBe('https://www.youtube.com/watch?v=aqz-KE-bpKQ');
+  });
+
+  it('preserves signed generic media URLs and does not mislabel unrelated hosts', () => {
+    const url = 'https://cdn.example.com/interview.mp4?token=abc%2Fdef&expires=123&part=2';
+    expect(canonicalSourceUrl(url + '#position')).toBe(url);
+    expect(videoProvider(url)).toBeNull();
+    for (const host of ['twitch.tv.evil.test', 'notinstagram.com', 'youtube.com.evil.test', 'rutube.ru.evil.test']) {
+      expect(videoProvider(`https://${host}/video`)).toBeNull();
+    }
+    expect(videoProvider('https://CLIPS.TWITCH.TV./SomeClip')?.id).toBe('twitch');
+  });
+
+  it('does not send malformed or credential-bearing links to the core', () => {
+    for (const value of ['', 'not a url', 'ftp://example.com/video', 'javascript:alert(1)', 'https://user:pass@twitch.tv/videos/1', 'https://@rutube.ru/video/1', 'https://twitch.tv:8080/videos/1', 'http://cdn.example.com/video.mp4', 'https://twit\nch.tv/videos/1', 'https://youtube.com/playlist?list=1', 'https://youtu.be/invalid', 'https://example.com/' + 'a'.repeat(8192)]) {
+      expect(canonicalSourceUrl(value)).toBeNull();
+    }
   });
 });
