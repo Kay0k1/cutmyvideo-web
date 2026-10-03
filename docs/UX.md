@@ -1,75 +1,64 @@
 # Editing flow
 
-The website helps someone take a few moments out of a long video. The current website accepts a YouTube video link or an uploaded MP4 containing video, up to the production upload limit of 1 GiB. The reusable public engine supports broader media operations; those capabilities are not presented as website inputs.
+cutmyvideo helps someone take a few moments out of a long video. Inputs are public video links and uploaded MP4 files containing video, up to the production limit of 1 GiB. The interface recognizes fifteen video services and accepts public HTTPS links for the core's generic extraction. It identifies the provider before submission and displays the real title, duration and available preview after import.
 
-## Plan → critique → build
+## Plan, critique and structure
 
-The earlier all-at-once workbench exposed a source form, empty player, timeline, clip list, and export controls before a video existed. Although functional, it asked a new visitor to understand too many controls. Simply rounding the existing layout would leave that problem in place.
+The compact three-stage workbench still mixed watching a video, editing exact boundaries, managing a list and naming clips. This update gives each screen one primary task: **Video → Moment → Clips → Export**. The first screen offers a link or an MP4 file, with the provider catalog behind an explicit disclosure. The Moment screen holds the player, the trim rail and preview. Precision fields, keyboard hints and zoom are disclosed only when requested; sources without a controllable preview expose manual timing directly. The Clips screen manages labels and export selection. Export holds format, quality, cut mode and actual files.
 
-The chosen design uses three actual stages: **Video → Moments → Export**. The first screen offers one source choice and one action. A loaded source moves to the editing stage. Export has its own summary and settings. Numbered progress, a stage heading, and a stage-aware document title explain where the user is. Backward navigation preserves the source, selected intervals, playhead, and completed downloads. Replacing the video is explicit and only replaces the old draft after validation succeeds.
-
-Critique of the proposed design ruled out decorative hero copy, media thumbnails without a source, waveform imitations, statistics, and a separate card for every field. The visual direction stays quiet: generous spacing around the first action, a single workspace for editing, and borders only where they explain real groups. The final implementation was inspected using actual uploaded media in both themes and at phone widths.
-
-## Compact layout review
-
-The staged workflow still stacked a large player, the whole timeline, time fields, and the clip list vertically. The resulting desktop page was approximately 1,768 pixels tall. The current layout uses the available width before adding height:
+The critique rejected moving every old control to a new full-height card. Adding one step is useful only if the Moment screen actually removes the list, clip-name field and export settings. It also rejected decorative controls that mimic a waveform or unavailable player. The defining visual remains the trim rail: amber boundary handles clearly differ from green playback controls, while surrounding controls stay quiet and use the existing soft theme.
 
 ```text
-Source title and duration
-┌───────────────────────┬─────────────────────────┐
-│ Player                │ Overview and trim range │
-│ Clip list             │ Exact start / end       │
-│ Selected clip name    │ Preview and fit range   │
-└───────────────────────┴─────────────────────────┘
-Keyboard help                              Continue
+Video        Moment               Clips                 Export
+Link / MP4 → Player + trim rail  → Checked clip list    → Format + quality
+             Preview              Edit / add / rename   Actual job status
+             Precision disclosure Bulk actions          Download each file
 ```
 
-The plan preserves the existing soft palette, Geologica, themes, copy, and three stages. Its critique rejected a fixed-height page with hidden overflow: that could cut off validation, keyboard focus, or zoomed text. Instead, the page keeps natural height, the desktop player scales within sensible limits, and only potentially long clip/result lists have bounded overflow. Selecting or adding a clip adjusts that list's scroll position; resizing keeps the selected row visible without scrolling the whole document.
+The tokens remain intentional and consistent: light page #f4f6f5, white surface #ffffff, ink #203431, muted text #5c7067, action #35645b and amber trim #eac389. Dark appearance uses page #18201f, surface #222c29, ink #e7eeea, muted text #a4b7ac and action #a8cbb9. Self-hosted Geologica Variable covers Cyrillic and Latin; restrained weights explain hierarchy, and timecodes use tabular numerals. No new typeface, decorative hero or unrelated illustration is introduced.
 
-The header, progress, headings, and unnecessary gaps are smaller on desktop. Primary editing controls fit the tested standard desktop viewports, including 1280×720 and 1366×768. Export puts the selected moments and ready downloads beside its settings. Short files or clips are actual data; no display-only filler is introduced to occupy spare space.
+## Selection and state
 
-Phones keep the logical player → boundaries → moments flow with natural vertical scrolling. On short landscape phone screens, the preview canvas stays between 180 and 240 pixels high with the video contained at its original proportions; portrait preview sizing is unchanged. Both initial source choices fit a 360×640 screen. All enabled touch controls, including language/theme actions and header/footer links, retain at least 44×44 CSS-pixel hit areas. Browser zoom and validation can increase page height; controls remain in normal flow.
+A checkbox means that a clip is included in export. Editing a clip is a separate action and does not silently change which clips will be exported. Select all reflects the actual checked subset; duplicate and delete act on that subset. Added and duplicated clips receive new IDs and respect the server's twelve-range limit. An empty list offers Add clip and prevents export with a clear reason.
 
-See [QA.md](QA.md) for the viewport, browser-engine, locale, and theme matrix. Browser emulation checks logical screen sizes and touch interaction rather than claiming tests on particular physical phone or Mac hardware.
+Backward navigation retains the source, ranges, checked IDs, playhead and completed downloads. The draft records its schema version so the previous three-stage Export screen restores as the fourth stage rather than becoming Clips. Saved IDs are intersected with valid ranges; an old draft without explicit selection includes all its ranges. A replacement source is committed only after it opens successfully, preserving the old draft on rejected files or links.
 
-## Typography and themes
+Files from the previous job are labelled as the last export, so changing checkboxes cannot make those files appear to correspond to a new selection. Submission sends only checked clips in their displayed order. Cancellation, refresh and partial failure retain the available downloads. Feedback uses actual server stages without fabricated percentages.
 
-- Self-hosted **Geologica Variable**, including Cyrillic and Latin, uses one family with restrained weight differences. Timecodes use tabular numerals. The pinned Fontsource package provides the font; its unmodified SIL Open Font License and copyright are distributed at `/licenses/geologica.txt`.
-- Light: page `#f4f6f5`, surface `#ffffff`, ink `#203431`, secondary text `#5c7067`, action `#35645b`, selected range `#e3efe8`.
-- Dark: page `#18201f`, surface `#222c29`, ink `#e7eeea`, secondary text `#a4b7ac`, action `#a8cbb9`, selected range `#344d40`.
-- Amber trim handles distinguish editable boundaries from the green playback/selection controls. Handles and primary touch actions provide at least 44 CSS pixels of target area.
-- The header switches directly between light and dark. System appearance is a named option in Settings and responds to system changes. The preference survives reloads.
-- An early external same-origin script sets appearance before first paint, compatible with the production CSP that prohibits inline scripts. Native inputs, selects, dialogs, focus outlines, and media surrounds follow the same theme tokens.
-- Reduced motion removes transitions and the spinner animation. Focus remains visible in both themes. Muted text on the page was darkened after contrast review.
+## Controls and accessibility
 
-## Interaction and accessibility
+Menus use Radix Select for managed keyboard focus, arrow/Home/End navigation, typeahead, Escape and dismissal. Styling belongs to cutmyvideo: the same surface, selection, border and focus tokens appear in both themes. Menu content is constrained to the available viewport and rendered inside a native dialog when opened from Settings, so it remains in the dialog's top layer and focus scope.
 
-Range handles have stable tab order, dynamic opposite-boundary limits, arrow/Home/End/Page key support, and accessible time values. Exact text fields provide a touch and assistive-technology alternative. The overview plus a zoomed timeline lets someone find a 15-second selection inside a multi-hour video. Invalid fields keep their entered text, show a localized explanation, and receive focus when advancing to export.
+Trim handles keep a stable tab sequence, enforce opposite-boundary limits and expose meaningful time values. Pointer capture supports dragging beyond a handle's starting area. Exact text fields provide a touch and assistive-technology alternative, accept millisecond precision, and preserve invalid input while explaining the correction. The overview and zoomed timeline remain useful for finding short moments inside long recordings.
 
-The player stays mounted when its stage is hidden, leaves the accessibility and tab order through the native `hidden` attribute, and pauses when leaving Moments. Returning preserves playback position; reload restores the saved position after the player becomes ready. If a source cannot be previewed, timecode editing and export remain available.
+The player stays mounted while its stage is hidden, leaves the accessibility and tab order through the native hidden attribute, and pauses when leaving Moment. Returning preserves position. Reload restores the saved position after player readiness. YouTube has a controllable embed; compatible files use native media controls. Other sources show their genuine metadata, owner-protected thumbnail where available, an original-page link and manual timing when there is no controllable preview.
 
-YouTube sharing, Shorts, live, and embed URLs normalize to a genuine YouTube video identity. Ambiguous paths, duplicate video IDs, lookalike hosts, credentials, and custom ports are rejected. MP4 validation checks extension, MIME, a structurally valid container header, and server-probed video dimensions. Changing a filename cannot turn another container or an audio-only file into a supported video. Rejected replacements preserve the old source and intervals.
+Primary phone controls retain at least 44×44 CSS-pixel hit areas. Desktop layouts use width before adding height; long clip and result lists scroll within bounded areas. Phone editing keeps natural vertical flow and short landscape previews remain capped. The page never hides global overflow to conceal a layout defect. Validation, large text and browser zoom can add height without clipping controls. Reduced motion removes nonessential transitions; keyboard focus remains visible.
 
-The copy mode is named **Original quality** in the interface. The explanation states that it avoids re-encoding, may shift start/end boundaries, and needs compatible codecs. Exact boundaries re-encode the video. The UI never promises a higher quality than the source.
+## Source boundaries
 
-Job feedback uses actual server stages rather than invented percentages. Successful files remain downloadable when another interval fails. Cancellation and reload retain the current job. Downloads use same-origin session authorization and do not load whole files into browser memory.
+YouTube share, Shorts and recorded-stream links normalize to a genuine video identity. Other recognized platforms keep the identifiers and query data needed to resolve their video. Generic HTTPS URLs preserve signed query strings. Frontend recognition is a display hint, while the core remains responsible for actual media inspection, redirect and network validation, storage limits and safe errors. A recognized domain never guarantees access to every video.
+
+Twitch inputs are stream recordings and clips. Ongoing live streams, channels, playlists, login-only videos and DRM are outside this workflow. Website changes, geographic restrictions and anti-bot checks can prevent access; errors explain the next action rather than exposing private extractor output. MP4 validation checks extension, MIME, container structure and server-probed video streams. Renaming a file does not change its format.
+
+Original quality avoids re-encoding but may shift boundaries and requires compatible codecs. Exact boundaries re-encode media. Actual exported boundaries are shown beside each file; the interface never promises quality above the source.
 
 ## Navigation and language
 
-Examples/help, defaults, and support use native dialogs with an explicit focus loop, Escape dismissal, and focus returned to the trigger. Dialogs preserve the editing stage and draft. Mobile navigation uses two compact rows and long wallet addresses wrap within a scrollable dialog.
+Progress, headings and document titles identify all four stages. Examples, defaults and support preserve the editing draft. Native dialogs provide Escape dismissal, a focus loop and focus returned to the trigger. Long wallet addresses wrap within the support dialog. The four supplied network addresses remain unchanged; copy is local and no transfer is initiated.
 
-Russian is primary. One catalog covers the full English workflow, source validation, statuses, accessible names, keyboard hints, examples, settings, and support. Switching language does not recreate the player, source, or job. User titles and filenames remain unchanged. Preferences, language, and theme are browser-local; credentials are not placed in local storage.
-
-Support displays exactly the supplied TRON, Solana, Ethereum, and Bitcoin addresses and copies them locally. Network names are explicit; no transfer or external payment request is initiated.
+Russian is primary. English covers visible copy, errors, accessible names, provider labels and help. Changing language or theme does not recreate the source or job. User titles and filenames stay unchanged. Preferences, language and appearance are browser-local; server credentials are not stored there. Appearance initializes before first paint using a same-origin script compatible with the production CSP.
 
 ## Primary references
 
-- [W3C multi-page forms](https://www.w3.org/WAI/tutorials/forms/multi-page/): logical stages, progress, meaningful titles, and preserving data when returning.
-- [W3C multi-thumb slider pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider-multithumb/): stable tab sequence and dynamic bounds.
-- [W3C slider pattern](https://www.w3.org/WAI/ARIA/apg/patterns/slider/): keyboard movement and meaningful values.
-- [W3C target size guidance](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html): 44-pixel touch targets.
-- [W3C switch pattern](https://www.w3.org/WAI/ARIA/apg/patterns/switch/): a binary theme action must have a clear meaning. The header uses an action button with the next appearance in its accessible name; System is a separate preference.
-- [GOV.UK error summary](https://design-system.service.gov.uk/components/error-summary/): visible field errors and recovery actions.
-- [YouTube iframe API](https://developers.google.com/youtube/iframe_api_reference): current time, seek, and playback control for embedded sources.
+- [W3C multi-page forms](https://www.w3.org/WAI/tutorials/forms/multi-page/): meaningful stages, progress and preservation on return.
+- [W3C multi-thumb slider](https://www.w3.org/WAI/ARIA/apg/patterns/slider-multithumb/): stable tab order and dynamic bounds.
+- [W3C slider](https://www.w3.org/WAI/ARIA/apg/patterns/slider/): keyboard movement and accessible values.
+- [W3C checkbox](https://www.w3.org/WAI/ARIA/apg/patterns/checkbox/): independent selection and a mixed select-all state.
+- [Radix Select](https://www.radix-ui.com/primitives/docs/components/select): focus, keyboard navigation, typeahead and viewport constraints.
+- [W3C target size](https://www.w3.org/WAI/WCAG22/Understanding/target-size-enhanced.html): comfortable 44-pixel targets.
+- [GOV.UK error summary](https://design-system.service.gov.uk/components/error-summary/): visible errors with corrective actions.
+- [YouTube iframe API](https://developers.google.com/youtube/iframe_api_reference): actual seek and playback control.
+- [yt-dlp supported sites](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md): extractor availability is distinct from verified runtime access.
 
-Browser QA uses the real engine and covers uploads, precise multiple exports, long sources, stage navigation, playback preservation, rejected replacements, keyboard controls, reload, cancellation, themes, complete localization, clipboard addresses, and narrow screens. See [QA.md](QA.md) for executed checks and results.
+Executed browser checks and physical-device limitations are recorded in [QA.md](QA.md). Emulation checks browser behavior, viewport sizes and touch input; it does not claim access to physical Mac or phone hardware.

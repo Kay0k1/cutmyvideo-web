@@ -5,7 +5,11 @@ Notable product changes are recorded here.
 ## Unreleased
 
 ### Added
-- Three-stage website workflow: choose a source, edit moments, then export and download; previous steps preserve ranges, player position, and completed files.
+- Recognize fifteen video services and accept generic public HTTPS links; show the actual provider and source identity instead of limiting the source form to YouTube.
+- Separate the editing workflow into Video, Moment, Clips and Export; keep precision controls behind a disclosure and move clip management to its own stage.
+- Select individual clips for export, select all, duplicate and delete selections while preserving checked clips in the draft.
+- Theme-aware custom menus for zoom, export and defaults, with keyboard navigation, typeahead and focus management through Radix Select.
+- Provider-aware preview fallback with an original-page link and owner-protected source thumbnails.
 - Restrained light/dark/system appearance, persistent theme choice, CSP-compatible initialization before first paint, and self-hosted Geologica Variable with Cyrillic.
 - Website-specific YouTube/MP4 inputs with strict canonical sharing-link validation, upload type/container checks, and rejection of MP4 files without video while preserving the existing draft.
 - Stage-aware document titles, larger 44-pixel controls, complete RU/EN step copy, and a YouTube example consistent with the current website scope.
@@ -24,6 +28,8 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Remove the current-video/resume panel from the initial source screen; saved work remains accessible through stage navigation.
+- Keep editor shortcuts out of custom menus and dialogs, and recenter the timeline when deleting the edited clip selects another moment.
 - Share concurrent session initialization requests, preventing duplicate cookie handshakes and avoidable rate-limit failures before saved jobs restore; fresh connections and retries still revalidate the session.
 - Fit the desktop editing controls and Continue action into standard laptop/desktop viewports, including 1280×720, through compact chrome and a two-column workspace.
 - Keep long clip lists bounded, reveal newly added/selected rows without scrolling the page, and retain visibility after viewport resizing.

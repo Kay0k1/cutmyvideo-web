@@ -2,17 +2,22 @@
 
 [Русский](README.md) · English
 
-The editing interface for [cutmy.video](https://cutmy.video): choose moments from a YouTube video or an uploaded MP4 and download them as MP4 video or MP3 audio. This repository is private. Media processing lives in the open-source [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
+The editing interface for [cutmy.video](https://cutmy.video): choose moments from a linked video or an uploaded MP4 and download them as MP4 video or MP3 audio. This repository is private. Media processing lives in the open-source [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
 
 [Using the editor](#using-the-editor) · [Features](#mvp-features) · [Development](#development) · [Structure](#structure) · [Support](#supporting-development)
 
 ## Using the editor
 
-Work is divided into three steps. Going back keeps your selected moments.
+Work is divided into four steps. Going back keeps your selected moments.
 
-1. **Video.** Paste a YouTube link or choose an MP4 from your device (up to 1 GiB). Regular, Share, Shorts, and live links are accepted. Other sites and input formats are not available on the website yet. Examples includes a Blender film on YouTube.
-2. **Moments.** Choose the start and end on the timeline or enter exact times. Seconds (`15`), total minutes (`83:10`), and hours with milliseconds (`01:23:10.250`) are supported. Add up to ten moments, name them, and preview a selected clip separately. Continue with Export settings.
-3. **Export.** Choose MP4 or MP3, quality, and cut mode. Select Cut, wait for processing, and download the results. Each moment becomes a separate file.
+1. **Video.** Paste a public link to one video, stream recording or clip, or choose an MP4 from your device (up to 1 GiB). The website identifies the service; the core returns the actual title, duration and available preview.
+2. **Moment.** Choose the start and end on the timeline, mark boundaries at the player position and preview the clip. Precise time fields and zoom are available in a separate disclosure. Seconds (`15`), total minutes (`83:10`) and hours with milliseconds (`01:23:10.250`) are supported.
+3. **Clips.** Add up to twelve moments, name and edit them. Check the clips to export; select all, duplicate and delete actions apply to the checked clips.
+4. **Export.** Choose MP4 or MP3, quality and cut mode. Wait for processing and download the results. Each checked moment becomes a separate file. Files from the last export remain available while changing the next selection.
+
+The website recognizes fifteen services: YouTube (including Shorts), Twitch (recordings and clips), Rutube, TikTok, Instagram (including Reels), Vimeo, Dailymotion, VK Video, Facebook, X/Twitter, Reddit, Odnoklassniki, Bilibili, Streamable and Rumble. Public HTTPS video-file links and pages supported by the core are accepted too. Short links are resolved safely on the server.
+
+Service support does not guarantee access to every video: privacy, sign-in requirements, geographic restrictions and website changes can prevent import. The interface reports an actionable error and offers MP4 upload. Channels, playlists, DRM and ongoing live streams are not imported.
 
 Exact boundaries re-encode media. Original quality avoids re-encoding, but boundaries may shift and codecs must be compatible. Actual boundaries are shown next to each ready file. Preview depends on the source and browser; manual timecode editing remains available.
 
@@ -20,20 +25,21 @@ Changing videos replaces the old moments only after the new source opens success
 
 ## MVP features
 
-- Three separate steps with draft preservation when returning.
+- Four separate steps preserving the draft, current stage and checked clips on return and reload.
 - Light, dark, and system appearance; self-hosted Geologica with Cyrillic support.
-- Multiple intervals, precise time fields, overview and zoomed timelines, and keyboard controls.
+- A dedicated stage for selecting several intervals and bulk actions; precise time fields, overview and zoomed timelines, and keyboard controls.
+- Custom quality, cut-mode and zoom menus with keyboard navigation, typeahead, correct focus and theme support.
 - A native player for compatible files and embedded YouTube playback, without invented media or demo data.
 - MP4/MP3 export through the shared core, background jobs, cancellation, and downloads for successful clips from partially failed jobs.
 - Draft and latest-job restoration within the same browser session.
 - Russian by default and a complete English interface; switching language preserves selections.
 - Examples, help, and persistent defaults for format, quality, cut mode, and timeline zoom.
 - Support section with four wallet addresses and copy actions. The application does not perform transfers.
-- Compact desktop workspace: player and moments beside the timeline and exact times, with ready downloads beside export settings.
+- Compact desktop workspace: select one moment without a clip list or export settings on the same screen; ready files appear beside export settings.
 - The initial screen fits a small phone; mobile editing follows a natural order with comfortable touch targets. Long desktop lists scroll within their own area.
 - Visible focus, labelled sliders, and actionable errors.
 
-Preferences, language, and appearance are stored in the browser. The server defines media retention and processing limits. YouTube can restrict server access or require login; uploading an MP4 is the fallback.
+Preferences, language and appearance are stored in the browser. The server defines media retention and processing limits. Sources without a controllable preview provide the original link and manual timecodes; the website does not simulate an unavailable player.
 
 ## Development
 
