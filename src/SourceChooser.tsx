@@ -1,23 +1,20 @@
 import { useRef, useState } from 'react';
 import { useLanguage } from './Language';
 import { Icon } from './Icons';
-import type { Source } from './types';
-import { providerName, videoProvider, videoProviders } from './sourceInput';
+import { videoProvider, videoProviders } from './sourceInput';
 import './SourceChooser.css';
 
-export function SourceChooser({ url, onUrl, onOpen, onFile, source, busy, processing, ready, error, onCancel, onReconnect, onResume }: {
+export function SourceChooser({ url, onUrl, onOpen, onFile, busy, processing, ready, error, onCancel, onReconnect }: {
   url: string;
   onUrl(value: string): void;
   onOpen(): void;
   onFile(file: File): void;
-  source: Source | null;
   busy: boolean;
   processing: boolean;
   ready: boolean;
   error: string;
   onCancel(): void;
   onReconnect(): void;
-  onResume(): void;
 }) {
   const { t } = useLanguage();
   const [mode, setMode] = useState<'link' | 'file'>('link');
@@ -26,7 +23,6 @@ export function SourceChooser({ url, onUrl, onOpen, onFile, source, busy, proces
   const fileInput = useRef<HTMLInputElement>(null);
   const disabled = !ready || busy || processing;
   const detected = videoProvider(url);
-  const currentProvider = providerName(source?.provider);
 
   return <section className="source-chooser" aria-labelledby="source-heading">
     <h2 id="source-heading" className="sr-only">{t('Открыть источник')}</h2>
@@ -59,6 +55,5 @@ export function SourceChooser({ url, onUrl, onOpen, onFile, source, busy, proces
     {busy && <div className="source-progress" role="status"><p>{t('Проверяем видео. Это может занять немного времени.')}</p><button type="button" className="text-button" onClick={onCancel}>{t('Отменить')}</button></div>}
     {processing && <p className="source-lock-hint">{t('Сейчас идёт экспорт. Дождитесь его или отмените на последнем шаге.')}</p>}
     {error && <div id="source-error" className="error-message" role="alert">{t(error)}{!ready && <button type="button" className="text-button" onClick={onReconnect}>{t('Повторить подключение')}</button>}</div>}
-    {source && <div className="resume-source"><div><span>{currentProvider ? `${t('Текущее видео')} · ${t(currentProvider)}` : t('Текущее видео')}</span><strong>{source.title}</strong></div><button type="button" className="text-button" onClick={onResume}>{t('Вернуться к моментам')}</button></div>}
   </section>;
 }
