@@ -30,6 +30,7 @@ Notable product changes are recorded here.
 ### Fixed
 - Remove the current-video/resume panel from the initial source screen; saved work remains accessible through stage navigation.
 - Keep editor shortcuts out of custom menus and dialogs, and recenter the timeline when deleting the edited clip selects another moment.
+- Reject whitespace in a pasted URL's authority before browser parsing, retaining local validation and field focus without rejecting video filenames or signed query strings.
 - Share concurrent session initialization requests, preventing duplicate cookie handshakes and avoidable rate-limit failures before saved jobs restore; fresh connections and retries still revalidate the session.
 - Fit the desktop editing controls and Continue action into standard laptop/desktop viewports, including 1280×720, through compact chrome and a two-column workspace.
 - Keep long clip lists bounded, reveal newly added/selected rows without scrolling the page, and retain visibility after viewport resizing.

@@ -60,4 +60,12 @@ describe('website source boundaries', () => {
       expect(canonicalSourceUrl(value)).toBeNull();
     }
   });
+
+  it('rejects whitespace in a host while retaining video paths and signed queries', () => {
+    for (const value of ['not a valid URL', 'https://not a valid URL/video', 'https://cdn\u00a0.example.com/video.mp4']) {
+      expect(canonicalSourceUrl(value)).toBeNull();
+    }
+    expect(canonicalSourceUrl('https://cdn.example.com/my interview.mp4?token=abc%2Fdef&title=my%20video'))
+      .toBe('https://cdn.example.com/my%20interview.mp4?token=abc%2Fdef&title=my%20video');
+  });
 });

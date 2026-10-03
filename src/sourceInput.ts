@@ -22,7 +22,8 @@ function pastedURL(value: string): URL | null {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > 8192 || /[\u0000-\u001f\u007f]/.test(trimmed)) return null;
   const candidate = trimmed.startsWith('//') ? `https:${trimmed}` : trimmed.includes('://') ? trimmed : `https://${trimmed}`;
-  if (candidate.split('://')[1]?.split(/[/?#]/)[0].includes('@')) return null;
+  const authority = candidate.split('://')[1]?.split(/[/?#]/)[0] ?? '';
+  if (authority.includes('@') || /\s/.test(authority)) return null;
   try {
     const parsed = new URL(candidate);
     if (!['https:', 'http:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.port) return null;
