@@ -17,8 +17,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+let sessionRequest: Promise<{ ok: boolean }> | null = null;
+
+function session(): Promise<{ ok: boolean }> {
+  if (!sessionRequest) {
+    // Concurrent callers must use the same cookie handshake, including effect replays.
+    sessionRequest = request<{ ok: boolean }>('/session').finally(() => { sessionRequest = null; });
+  }
+  return sessionRequest;
+}
+
 export const api = {
-  session: () => request<{ ok: boolean }>('/session'),
+  session,
   source: (id: string) => request<Source>(`/sources/${encodeURIComponent(id)}`),
   open: (url: string, signal: AbortSignal) => request<Source>('/sources', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }), signal,
