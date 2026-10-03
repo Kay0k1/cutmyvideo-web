@@ -4,12 +4,13 @@ import type { KeyboardEvent, PointerEvent } from 'react';
 import type { ClipRange } from './types';
 import { formatTimecode } from './timecode';
 
-export function Timeline({ duration, current, ranges, selected, view, onSeek, onRange }: {
+export function Timeline({ duration, current, ranges, selected, view, showOverview = true, onSeek, onRange }: {
   duration: number;
   current: number;
   ranges: ClipRange[];
   selected: ClipRange;
   view: [number, number];
+  showOverview?: boolean;
   onSeek(ms: number): void;
   onRange(start: number, end: number): void;
 }) {
@@ -50,7 +51,7 @@ export function Timeline({ duration, current, ranges, selected, view, onSeek, on
       style={{ left: `${pct(value)}%` }} role="slider" aria-label={which === 'start' ? t("Начало фрагмента на шкале") : t("Конец фрагмента на шкале")}
       aria-valuemin={which === 'start' ? 0 : selected.start_ms + 100}
       aria-valuemax={which === 'start' ? selected.end_ms - 100 : duration}
-      aria-valuenow={value} aria-valuetext={formatTimecode(value, true)} aria-orientation="horizontal"
+      aria-valuenow={value} aria-valuetext={formatTimecode(value, true)} aria-orientation="horizontal" aria-describedby="trim-hint"
       onKeyDown={event => onKey(event, which)}
       onPointerDown={event => { event.stopPropagation(); drag.current = which; event.currentTarget.setPointerCapture(event.pointerId); }}
       onPointerMove={event => { if (drag.current === which) move(which, valueAt(event)); }}
@@ -59,11 +60,11 @@ export function Timeline({ duration, current, ranges, selected, view, onSeek, on
   };
 
   return <div className="timeline">
-    <div className="overview-label"><label htmlFor="overview">{t("Всё видео")}</label><span>{formatTimecode(current)} / {formatTimecode(duration)}</span></div>
-    <div className="overview-track">
+    <div className="overview-label">{showOverview ? <label htmlFor="overview">{t("Всё видео")}</label> : <span>{t('Позиция плеера')}</span>}<span>{formatTimecode(current)} / {formatTimecode(duration)}</span></div>
+    {showOverview && <div className="overview-track">
       <div className="overview-selections" aria-hidden="true">{ranges.map(range => <span key={range.id} style={{ left: `${range.start_ms / duration * 100}%`, width: `${Math.max(.3, (range.end_ms - range.start_ms) / duration * 100)}%` }} />)}</div>
       <input id="overview" type="range" min={0} max={duration} step={100} value={current} aria-valuetext={formatTimecode(current, true)} onChange={event => onSeek(Number(event.target.value))} />
-    </div>
+    </div>}
     <div className="trim-track" ref={track} onPointerDown={event => { if (!(event.target as HTMLElement).closest('.trim-handle')) onSeek(Math.min(duration, valueAt(event))); }}>
       <div className="trim-ticks" aria-hidden="true">{Array.from({ length: 21 }, (_, i) => <i key={i} />)}</div>
       <div className="trim-selection" style={{ left: `${pct(selected.start_ms)}%`, width: `${Math.max(0, pct(selected.end_ms) - pct(selected.start_ms))}%` }} aria-hidden="true" />
@@ -71,5 +72,6 @@ export function Timeline({ duration, current, ranges, selected, view, onSeek, on
       {current >= view[0] && current <= view[1] && <div className="playhead" style={{ left: `${pct(current)}%` }} aria-hidden="true" />}
     </div>
     <div className="tick-labels" aria-hidden="true"><span>{formatTimecode(view[0])}</span><span>{formatTimecode((view[0] + view[1]) / 2)}</span><span>{formatTimecode(view[1])}</span></div>
+    <p id="trim-hint" className="sr-only">{t('Двигайте ручки начала и конца. Стрелки меняют время на 0,1 секунды, Shift — на секунду.')}</p>
   </div>;
 }

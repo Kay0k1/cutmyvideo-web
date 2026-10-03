@@ -523,3 +523,154 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
   .editing-grid .player-frame video { object-fit: contain; }
   .editing-grid .player-unavailable { min-height: clamp(180px, 52dvh, 240px); }
 }
+
+/* One moment at a time; the clip collection has its own step. */
+.select-control { display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; min-height: 46px; padding: 10px 12px; border: 1px solid var(--strong-line); border-radius: 9px; color: var(--ink); background: var(--input); text-align: left; font-size: 13px; }
+.select-control > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.select-control[data-state='open'] { border-color: var(--accent); }
+.select-control[data-disabled] { color: var(--muted); background: var(--soft); cursor: default; }
+.select-chevron { display: inline-flex; color: var(--muted); flex-shrink: 0; }
+.select-popup { z-index: 200; min-width: var(--radix-select-trigger-width); max-width: calc(100vw - 24px); max-height: min(340px, var(--radix-select-content-available-height)); overflow: hidden; border: 1px solid var(--strong-line); border-radius: 11px; background: var(--surface); color: var(--ink); box-shadow: 0 12px 35px -15px #00000055; }
+.select-options { padding: 5px; }
+.select-option { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 44px; padding: 10px 12px; border-radius: 7px; font-size: 13px; line-height: 1.5; cursor: pointer; outline: none; user-select: none; }
+.select-option[data-highlighted] { color: var(--ink); background: var(--selection); box-shadow: inset 3px 0 var(--accent); }
+.select-option[data-disabled] { opacity: .5; cursor: default; }
+.select-option-text { display: flex; flex-direction: column; min-width: 0; }
+.select-description { margin-top: 3px; color: var(--muted); font-size: 11px; }
+.select-check { color: var(--accent); display: flex; }
+.select-scroll { display: flex; align-items: center; justify-content: center; height: 44px; color: var(--muted); background: var(--surface); }
+.preferences-form > .select-control { width: 100%; }
+.export-field .select-control { font-size: 12px; min-height: 44px; }
+.job-status > .job-history-label { margin-top: 0; margin-bottom: 9px; font-size: 11px; color: var(--muted); }
+.moment-layout { display: flex; flex-direction: column; }
+.moment-controls { min-width: 0; padding: 18px 24px; }
+.source-title .source-provider { flex-shrink: 0; font-size: 10px; font-weight: 400; padding: 4px 7px; border-radius: 5px; color: var(--muted); background: var(--soft); }
+.moment-boundaries { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; margin-bottom: 13px; }
+.moment-boundaries > div > span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+.moment-boundaries > div > strong { display: block; font-size: 18px; line-height: 1.5; font-weight: 470; font-variant-numeric: tabular-nums; }
+.moment-boundaries .marker-button { width: 100%; min-height: 44px; padding: 5px 0; font-size: 11px; }
+.moment-boundaries .moment-duration { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding-top: 5px; border-top: 1px solid var(--line); }
+.moment-duration > span { margin: 0 !important; }
+.moment-boundaries .moment-duration > strong { font-size: 13px; }
+.moment-controls .overview-label { margin-bottom: 11px; }
+.moment-controls .trim-track { height: 44px; }
+.moment-controls .trim-handle { height: 52px; min-height: 44px; top: -5px; bottom: auto; }
+.moment-controls .tick-labels { margin-top: 9px; margin-bottom: 14px; }
+.moment-preview { display: flex; align-items: center; justify-content: space-between; gap: 5px 12px; flex-wrap: wrap; }
+.moment-preview .button { min-height: 44px; font-size: 12px; padding: 9px 12px; }
+.precision-toggle { font-size: 11px; }
+.precision-controls { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 10px; }
+.precision-controls .time-fields { grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr); gap: 10px; }
+.precision-controls .time-fields label { font-size: 11px; margin-bottom: 5px; }
+.precision-controls .time-input { height: 44px; min-height: 44px; font-size: 16px; padding: 8px 10px; }
+.precision-controls .range-dash { padding-top: 31px; }
+.precision-controls #time-hint { position: static; width: auto; height: auto; clip-path: none; overflow: visible; font-size: 10px; line-height: 1.6; margin-top: 7px; }
+.precision-zoom { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 9px; }
+.precision-zoom > label { font-size: 10px; color: var(--muted); }
+.precision-zoom .zoom-controls { flex: 1; min-width: 160px; }
+.precision-zoom .select-control { min-height: 44px; padding: 8px; font-size: 11px; }
+.precision-zoom > .text-button { font-size: 10px; }
+.overview-track input { appearance: none; -webkit-appearance: none; outline-offset: 1px; }
+.overview-track input::-webkit-slider-runnable-track { height: 3px; background: transparent; }
+.overview-track input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 17px; height: 17px; margin-top: -7px; border: 2px solid var(--accent); background: var(--surface); border-radius: 50%; }
+.overview-track input::-moz-range-track { height: 3px; background: transparent; }
+.overview-track input::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid var(--accent); background: var(--surface); border-radius: 50%; }
+.stage-3 { max-width: 1120px; }
+.clip-library { border: 1px solid var(--line); border-radius: 16px; padding: 20px; background: var(--surface); box-shadow: var(--shadow); }
+.clip-library-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.clip-library-heading h2 { font-size: 17px; font-weight: 480; }
+.clip-library-heading p { color: var(--muted); font-size: 12px; line-height: 1.7; margin-top: 5px; }
+.clip-library-heading .button { flex-shrink: 0; }
+.clip-bulkbar { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 15px; padding: 5px 0; margin-bottom: 10px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.clip-select-all { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+.clip-checkbox { width: 44px; height: 44px; flex-shrink: 0; position: relative; display: grid; place-items: center; cursor: pointer; }
+.clip-checkbox input { appearance: none; -webkit-appearance: none; position: absolute; inset: 0; padding: 0; margin: 0; width: 44px; height: 44px; min-height: 44px; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+.clip-checkbox > span { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid var(--strong-line); border-radius: 5px; color: var(--on-accent); pointer-events: none; }
+.clip-checkbox input:checked + span, .clip-checkbox input:indeterminate + span { border-color: var(--accent); background: var(--accent); }
+.clip-selected-count { font-size: 11px; color: var(--muted); }
+.clip-bulk-actions { display: flex; align-items: center; gap: 17px; margin-left: auto; }
+.clip-bulk-actions .text-button { font-size: 11px; }
+.danger-button { color: var(--error); }
+.clip-library .clip-list { max-height: clamp(160px, calc(100dvh - 480px), 420px); overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 3px; }
+.clip-list li { gap: 10px; padding: 8px 10px 8px 3px; margin-bottom: 8px; }
+.clip-list li.editing { border-color: var(--strong-line); }
+.clip-row-body { min-width: 0; flex: 1; }
+.clip-row-name { min-height: 44px; width: 100%; max-width: 440px; padding: 6px 9px; border-color: transparent; background: transparent; font-size: 13px; }
+.clip-row-name:hover { border-color: var(--line); }
+.clip-row-name:focus { border-color: var(--strong-line); background: var(--input); }
+.clip-row-name::placeholder { color: var(--ink); font-weight: 470; }
+.clip-row-times { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 18px; padding: 0 9px; font-size: 11px; line-height: 1.7; font-variant-numeric: tabular-nums; color: var(--muted); }
+.clip-edit { min-height: 44px; padding: 9px 12px; font-size: 11px; }
+.clip-list .delete-range { margin: 0; }
+.clip-empty { text-align: center; padding: 28px 12px; color: var(--muted); }
+.clip-empty h3 { font-size: 17px; color: var(--ink); font-weight: 480; margin-top: 12px; }
+.clip-empty p { font-size: 12px; line-height: 1.8; margin-top: 7px; }
+.clip-empty .button { margin-top: 19px; }
+.clip-library-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 15px; }
+.clip-library-footer p { color: var(--muted); font-size: 11px; line-height: 1.7; }
+.clip-library-footer .button { flex-shrink: 0; }
+@media (min-width: 960px) {
+  .moment-layout { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr); align-items: start; }
+  .moment-layout > .player-frame { height: clamp(220px, calc(100dvh - 430px), 380px); }
+  .moment-layout .player-frame video, .moment-layout .youtube-player { height: 100%; max-height: none; aspect-ratio: auto; object-fit: contain; }
+  .moment-layout .player-unavailable { min-height: 0; height: 100%; }
+  .moment-controls { padding: 14px 20px; border-left: 1px solid var(--line); }
+  .moment-controls .overview-track { height: 34px; margin-bottom: 9px; }
+  .moment-controls .overview-track input { min-height: 34px; }
+}
+@media (max-width: 680px) {
+  .steps-nav { max-width: 100%; }
+  .steps-nav ol { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .steps-nav li { display: block; }
+  .steps-nav button { width: 100%; flex-direction: column; justify-content: center; gap: 4px; min-height: 55px; padding: 2px 0; font-size: 10px; }
+  .step-connector { display: none; }
+  .moment-controls { padding: 18px 16px; }
+  .moment-boundaries { column-gap: 14px; }
+  .moment-boundaries > div > strong { font-size: 16px; }
+  .moment-preview .button { flex: 1; }
+  .moment-preview .precision-toggle { margin: 0 auto; }
+  .precision-zoom > label { flex-basis: 100%; }
+  .source-title { flex-wrap: wrap; gap: 7px; }
+  .source-title > span:first-of-type { min-width: 0; flex: 1; }
+  .clip-library { padding: 16px; }
+  .clip-library-heading { flex-wrap: wrap; gap: 12px; }
+  .clip-library-heading h2 { font-size: 16px; }
+  .clip-library-heading .button { width: 100%; }
+  .clip-library .clip-list { max-height: min(50dvh, 420px); }
+  .clip-bulkbar { gap: 2px 10px; }
+  .clip-bulk-actions { flex-basis: 100%; justify-content: space-between; margin-left: 0; gap: 8px; }
+  .clip-bulk-actions .text-button { font-size: 10px; }
+  .clip-list li { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 5px; padding: 7px; }
+  .clip-row-body { grid-column: 2; }
+  .clip-row-name { font-size: 12px; padding-left: 5px; }
+  .clip-row-times { padding-left: 5px; font-size: 10px; gap: 1px 9px; }
+  .clip-edit { grid-column: 2; grid-row: 2; justify-self: start; }
+  .clip-list .delete-range { grid-column: 3; grid-row: 1; }
+  .clip-library-footer { flex-direction: column; align-items: stretch; gap: 10px; }
+  .clip-library-footer .button { width: 100%; }
+}
+@media (orientation: landscape) and (max-width: 959px) and (max-height: 500px) {
+  .moment-layout .player-frame video, .moment-layout .youtube-player { height: clamp(180px, 52dvh, 240px); aspect-ratio: auto; max-height: none; object-fit: contain; }
+  .moment-layout .player-unavailable { min-height: clamp(180px, 52dvh, 240px); }
+}
+.moment-boundaries > div > label { display: block; color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+.moment-boundaries .time-input { min-height: 44px; height: 44px; padding: 8px 10px; font-size: 16px; }
+.moment-secondary-actions { display: flex; align-items: center; gap: 24px; }
+@media (max-width: 680px) {
+  .stage-page .step-caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0; }
+  .stage-page .page-heading { margin-bottom: 14px; }
+  .moment-secondary-actions { gap: 23px; margin: auto; }
+}
+@media (min-width: 960px) {
+  .moment-layout { align-items: stretch; }
+  .moment-layout > .player-frame { height: auto; min-height: clamp(220px, calc(100dvh - 430px), 380px); }
+  .moment-controls { padding-top: 12px; padding-bottom: 12px; }
+  .moment-boundaries { margin-bottom: 6px; }
+  .moment-controls .overview-label { margin-bottom: 4px; }
+  .moment-controls .overview-track { height: 44px; margin-bottom: 4px; }
+  .moment-controls .overview-track input { min-height: 44px; }
+  .moment-controls .tick-labels { margin-bottom: 7px; }
+  .precision-controls { padding-top: 8px; margin-top: 7px; }
+  .precision-controls #time-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0; }
+  .precision-zoom { margin-top: 0; }
+}
