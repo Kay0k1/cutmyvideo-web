@@ -43,9 +43,14 @@ export async function goToClips(page: Page) {
 
 export async function showExactTimes(page: Page) {
   const start = page.getByLabel(/^(Начало|Start)$/, { exact: true })
-  if (!await start.isVisible()) {
-    await page.getByRole('button', { name: /^(Точное время и шкала|Exact time and timeline)$/ }).click()
+  const toggle = page.getByRole('button', { name: /^(Точное время и шкала|Exact time and timeline)$/ })
+  // Source restoration is asynchronous. Wait for its actual disclosure before
+  // reading state so we never close an already restored, expanded panel.
+  await expect(toggle).toBeVisible()
+  if (await toggle.getAttribute('aria-expanded') === 'false') {
+    await toggle.click()
   }
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
   await expect(start).toBeVisible()
 }
 

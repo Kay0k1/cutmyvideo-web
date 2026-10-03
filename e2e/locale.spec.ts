@@ -135,8 +135,20 @@ test('saved defaults survive reload and are applied without changing clip bounda
   await showExactTimes(page)
   await expect(page.getByRole('combobox', { name: 'Timeline zoom', exact: true })).toContainText('10 seconds')
 
+  // Reload must restore the genuine source even when metadata arrives after
+  // the document. Delay only its real response; keep the source and draft intact.
+  const sourceRestore = /\/api\/v1\/sources\/[^/?]+$/
+  const restoredStatuses: number[] = []
+  await page.route(sourceRestore, async route => {
+    const response = await route.fetch()
+    await new Promise(resolve => setTimeout(resolve, 600))
+    restoredStatuses.push(response.status())
+    await route.fulfill({ response })
+  })
   await page.reload()
   await showExactTimes(page)
+  expect(restoredStatuses).toEqual([200])
+  await page.unroute(sourceRestore)
   await expect(page.getByLabel('Start', { exact: true })).toHaveValue('00:00:02.000')
   await expect(page.getByRole('combobox', { name: 'Timeline zoom', exact: true })).toContainText('10 seconds')
   await page.getByRole('button', { name: 'Settings', exact: true }).click()

@@ -370,3 +370,21 @@ for background elements hidden by an open Radix popup, while retaining role,
 option, focus, keyboard and real media assertions. No retry, fabricated duration,
 playback workaround or successful mocked export was introduced. Production
 verification is a separate focused smoke test after release.
+
+### Delayed source restoration follow-up
+
+CI run 37139568333 passed 39 scenarios, including all three responsive projects,
+and skipped four optional cases. Its one failure was the saved-defaults test:
+the helper checked the input before source restoration completed, then clicked
+the already expanded disclosure and hid the correctly restored 00:00:02.000
+input. A real uploaded source reproduced the same failure when only its genuine
+metadata response was delayed by 600 ms; no source metadata was substituted.
+
+The helper now waits for the visible disclosure and reads `aria-expanded`
+before opening it. The delayed-response regression retains the visible input,
+exact boundary, saved MP3 format and timeline zoom assertions. Five focused
+checks passed together in 27.4 seconds: language/source/export preservation,
+delayed saved defaults, chosen-step restoration with a completed job, retained
+downloads after source expiry, and legacy draft migration. Actual jobs and
+download probes remained intact. This follow-up changed only QA files and did
+not repeat the already passing 840-state matrix.
