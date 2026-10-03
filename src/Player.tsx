@@ -2,6 +2,8 @@ import { useLanguage } from './Language';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Source } from './types';
 import { Icon } from './Icons';
+import { providerName } from './sourceInput';
+import './Player.css';
 
 export interface PlayerControls { seek(ms: number): void; play(): void; pause(): void; toggle(): void; }
 interface YTPlayer {
@@ -65,6 +67,13 @@ export const Player = forwardRef<PlayerControls, {
   const callbacks = useRef({ onTime, onAvailable });
   callbacks.current = { onTime, onAvailable };
   const [error, setError] = useState(false);
+  const provider = providerName(source?.provider);
+  const poster = source && source.thumbnail_url === `/api/v1/sources/${encodeURIComponent(source.id)}/thumbnail` ? source.thumbnail_url : undefined;
+  let pageUrl: string | undefined;
+  try {
+    const page = source?.source_url ? new URL(source.source_url) : null;
+    if (page?.protocol === 'https:' && !page.username && !page.password && (!page.port || page.port === '443')) pageUrl = page.href;
+  } catch { /* A malformed source link must not become a navigation target. */ }
 
   useImperativeHandle(ref, () => ({
     seek: ms => { if (video.current) video.current.currentTime = ms / 1000; youtube.current?.seekTo(ms / 1000, true); callbacks.current.onTime(ms); },
@@ -111,12 +120,20 @@ export const Player = forwardRef<PlayerControls, {
   </div>;
 
   return <div className="player-frame">
-    {source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} controls playsInline preload="metadata"
+    {source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata"
       onLoadedMetadata={() => callbacks.current.onAvailable(true)}
       onTimeUpdate={() => callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000))}
       onError={() => { setError(true); callbacks.current.onAvailable(false); }} />
       : embedId(source.embed_url) ? <div ref={host} className="youtube-player" />
-      : <div className="player-unavailable"><Icon name="file" size={30} /><h2>{t("Предпросмотр недоступен")}</h2><p>{t("Выберите фрагмент по таймкодам.")}<br />{t("Экспорт остаётся доступным.")}</p></div>}
+      : <div className={`player-unavailable platform-preview${poster ? ' has-poster' : ''}`}>
+        {poster && <img className="platform-poster" src={poster} alt="" loading="lazy" onError={event => { event.currentTarget.hidden = true; }} />}
+        <div className="platform-preview-copy">
+          <span className="platform-preview-provider">{provider ? t(provider) : t('Видео по ссылке')}</span>
+          <h2>{t('Видео открыто')}</h2>
+          <p>{t('У этого источника нет встроенного предпросмотра. Задайте начало и конец по таймкодам.')}</p>
+          {pageUrl && <a className="platform-source-link" href={pageUrl} target="_blank" rel="noopener noreferrer">{t('Посмотреть исходное видео')}<Icon name="link" size={15} /></a>}
+        </div>
+      </div>}
     {error && <div className="player-error" role="status">{t("Не удалось открыть плеер. Вы можете задать границы по таймкодам и вырезать фрагмент.")}</div>}
   </div>;
 });
