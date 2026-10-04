@@ -172,7 +172,21 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
   let chromeTouch: CDPSession | undefined
   async function matrix(target: Page, sizes: typeof desktopSizes, touch: boolean) {
     for (const size of sizes) {
+      if (touch) {
+        await goToExport(target)
+        await expect(target.getByRole('link', { name: labels.download })).toHaveCount(2)
+      }
       await target.setViewportSize(size)
+      if (touch) {
+        // GTK mobile emulation retains the previous layout viewport until
+        // navigation. Reload the real saved draft after selecting each size.
+        await target.reload()
+        await goToExport(target)
+        await expect(target.getByRole('link', { name: labels.download })).toHaveCount(2)
+      }
+      await settle(target)
+      expect(await target.evaluate(() => ({ width: innerWidth, height: innerHeight })),
+        `${browserName}-${size.width}x${size.height}: requested viewport`).toEqual(size)
       for (const locale of ['ru', 'en']) {
         await target.getByRole('button', { name: locale === 'ru' ? 'Русский' : 'English', exact: true }).click()
         for (const theme of ['light', 'dark'] as const) {

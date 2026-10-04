@@ -31,6 +31,7 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Navigate after each emulated phone viewport change in browser checks, retaining the real saved work and downloads while checking the exact requested dimensions and every layout assertion.
 - Run browser integration checks in a pinned official Playwright container runtime with matching bundled browsers, a virtual display, and a home directory owned by the container user.
 - Wait for YouTube player readiness before playback commands, retain the latest seek and pause requested while loading, and keep navigation usable when a player is replaced or fails.
 - Pin the core that removes unused caption URL matrices before bounded source inspection, fixing import and export preparation for recordings with large automatic-subtitle metadata.
