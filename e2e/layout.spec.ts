@@ -118,7 +118,9 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
     await page.goto('/')
     await uploadThroughUI(page)
     await expect(page.locator('video')).toBeVisible()
-    await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
+    // preload="metadata" may legitimately stop at HAVE_METADATA until play.
+    // Decoded frames and advancement are checked after the real preview click.
+    await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(1)
     await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).duration)).toBeCloseTo(12, 1)
     await showExactTimes(page)
     await page.locator('#range-start').fill('00:00:01.250')
@@ -251,7 +253,8 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
       await touchPage.goto('/')
       if (browserName === 'chromium') chromeTouch = await touchContext.newCDPSession(touchPage)
       await goToMoment(touchPage)
-      await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
+      await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(1)
+      await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).duration)).toBeCloseTo(12, 1)
       // Native touch input reaches the timeline and seeks the actual media.
       await touchPage.locator('.trim-track').tap({ position: { x: 12, y: 30 } })
       await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeLessThan(2)
