@@ -2,6 +2,7 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  'Обработка фрагментов': 'Clip processing',
   'Не удалось создать файлы': 'Files could not be created',
   'Часть фрагментов готова': 'Some clips are ready',
   'Не удалось создать фрагменты. Причина указана ниже.': 'No clips could be created. The reason is shown below.',

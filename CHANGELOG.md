@@ -5,6 +5,7 @@ Notable product changes are recorded here.
 ## Unreleased
 
 ### Added
+- Compact, theme-aware encoding progress measured from actual processed media time, weighted across selected clips, with accessible labels, retry resets and backward compatibility for older jobs.
 - Show specific export failure reasons in Russian and English, with a retry action that retains the selected source and intervals.
 - Compact trim and overview controls with separate 44-pixel hit regions, boundary-time hints and keyboard navigation that reveals the focused boundary.
 - Service health checks and automatic recovery to the previous release after a failed activation, verified through deployment fault injection.
@@ -31,6 +32,7 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Pin the optimized core with private inspection caching, faster CPU encoding, bounded memory/network maintenance and atomic, recoverable publication of completed fragments.
 - Enable app-scoped Keyboard Navigation in disposable macOS CI, restore the previous preference afterward, and retain the actual Tab-to-slider focus assertion.
 - Accept metadata-only preload before the browser preview action, verify duration in both contexts, and retain the subsequent real playback and decoded-file assertions.
 - Run the unchanged full WebKit media/layout matrix on native macOS, while retaining all other Linux projects and the documented Linux GTK playback reproducer.

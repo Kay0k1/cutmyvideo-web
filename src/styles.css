@@ -699,3 +699,10 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
   .precision-controls #time-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0; }
   .precision-zoom { margin-top: 0; }
 }
+.export-encoding-progress { min-width: 0; margin-top: 14px; }
+.export-encoding-progress-label { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.export-encoding-progress-label > span:last-child { color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.export-encoding-progress progress { appearance: none; -webkit-appearance: none; display: block; width: 100%; height: 5px; border: 0; border-radius: 999px; overflow: hidden; background: var(--line); color: var(--accent); }
+.export-encoding-progress progress::-webkit-progress-bar { border-radius: 999px; background: var(--line); }
+.export-encoding-progress progress::-webkit-progress-value { border-radius: 999px; background: var(--accent); }
+.export-encoding-progress progress::-moz-progress-bar { border-radius: 999px; background: var(--accent); }

@@ -43,6 +43,7 @@ export interface Job {
     start_ms: number;
     end_ms: number;
     status: JobStatus;
+    progress_ms?: number;
     message?: string;
     error_code?: string;
     artifact: Artifact | null;
