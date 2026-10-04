@@ -32,6 +32,7 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Avoid case-insensitive module-resolution collisions between the progress component and its time-aggregation helper on macOS.
 - Pin the optimized core with private inspection caching, faster CPU encoding, bounded memory/network maintenance and atomic, recoverable publication of completed fragments.
 - Enable app-scoped Keyboard Navigation in disposable macOS CI, restore the previous preference afterward, and retain the actual Tab-to-slider focus assertion.
 - Accept metadata-only preload before the browser preview action, verify duration in both contexts, and retain the subsequent real playback and decoded-file assertions.

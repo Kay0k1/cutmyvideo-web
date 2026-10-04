@@ -1,5 +1,5 @@
 import { useLanguage } from './Language';
-import { encodingProgress } from './exportProgress';
+import { encodingProgress } from './encodingProgress';
 import type { Job } from './types';
 
 export function ExportProgress({ job }: { job: Job }) {

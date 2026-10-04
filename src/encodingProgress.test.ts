@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { encodingProgress } from './exportProgress';
+import { encodingProgress } from './encodingProgress';
 import { translate } from './locales';
 import type { Job } from './types';
 
