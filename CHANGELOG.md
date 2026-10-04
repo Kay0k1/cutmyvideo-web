@@ -5,6 +5,9 @@ Notable product changes are recorded here.
 ## Unreleased
 
 ### Added
+- Show specific export failure reasons in Russian and English, with a retry action that retains the selected source and intervals.
+- Compact trim and overview controls with separate 44-pixel hit regions, boundary-time hints and keyboard navigation that reveals the focused boundary.
+- Service health checks and automatic recovery to the previous release after a failed activation, verified through deployment fault injection.
 - Recognize fifteen video services and accept generic public HTTPS links; show the actual provider and source identity instead of limiting the source form to YouTube.
 - Separate the editing workflow into Video, Moment, Clips and Export; keep precision controls behind a disclosure and move clip management to its own stage.
 - Select individual clips for export, select all, duplicate and delete selections while preserving checked clips in the draft.
@@ -28,6 +31,11 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Pin the core that selects compatible video/audio pairs before ranking quality, fixing accurate 1080p exports when a separate HLS rendition hides usable progressive streams.
+- Preserve millisecond boundaries when grabbing the timeline handles away from their visible grips, keep the drag scale stable, and make very short intervals independently selectable.
+- Send uncapped original-quality requests for local stream-copy exports while retaining the user's quality preference for precise exports.
+- Explain missing audio and other safe worker diagnostics instead of recommending precise mode for an already precise export; preserve successful files from partially failed jobs.
+- Recover interrupted processing and publishing after worker shutdown, and keep cancellation results consistent when cancellation races with an error.
 - Remove the current-video/resume panel from the initial source screen; saved work remains accessible through stage navigation.
 - Keep editor shortcuts out of custom menus and dialogs, and recenter the timeline when deleting the edited clip selects another moment.
 - Reject whitespace in a pasted URL's authority before browser parsing, retaining local validation and field focus without rejecting video filenames or signed query strings.

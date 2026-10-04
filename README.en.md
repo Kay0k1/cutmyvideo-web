@@ -41,6 +41,8 @@ Changing videos replaces the old moments only after the new source opens success
 
 Preferences, language and appearance are stored in the browser. The server defines media retention and processing limits. Sources without a controllable preview provide the original link and manual timecodes; the website does not simulate an unavailable player.
 
+Compact slider grips retain separate touch targets. The exact boundary time appears while dragging, and keyboard navigation keeps the focused boundary visible. Failed exports explain the cause and recovery action; retrying retains the selected moments.
+
 ## Development
 
 Node.js 22 is recommended; the minimum supported version is 20.19. Both the core HTTP API on `127.0.0.1:8080` and its worker must run.
