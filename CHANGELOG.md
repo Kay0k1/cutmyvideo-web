@@ -31,6 +31,7 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Enable app-scoped Keyboard Navigation in disposable macOS CI, restore the previous preference afterward, and retain the actual Tab-to-slider focus assertion.
 - Accept metadata-only preload before the browser preview action, verify duration in both contexts, and retain the subsequent real playback and decoded-file assertions.
 - Run the unchanged full WebKit media/layout matrix on native macOS, while retaining all other Linux projects and the documented Linux GTK playback reproducer.
 - Give the exhaustive headed WebKit viewport check a measured total runtime budget while retaining every assertion, native interaction and real download check.

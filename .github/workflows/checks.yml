@@ -200,7 +200,24 @@ jobs:
           cat "$CUTMY_CI_DIR/server.log" "$CUTMY_CI_DIR/web.log"
           exit 1
       - name: Run complete native macOS WebKit matrix
-        run: npm run test:e2e -- --project=layout-webkit
+        run: |
+          # macOS otherwise excludes native buttons from Tab navigation.
+          # Limit Keyboard Navigation to this disposable Playwright app domain.
+          keyboard_mode=$(defaults read org.webkit.Playwright AppleKeyboardUIMode 2>/dev/null || true)
+          if [[ -n "$keyboard_mode" && ! "$keyboard_mode" =~ ^[0-9]+$ ]]; then
+            echo 'Unexpected previous keyboard-navigation preference'; exit 1
+          fi
+          restore_keyboard_mode() {
+            if [[ -n "$keyboard_mode" ]]; then
+              defaults write org.webkit.Playwright AppleKeyboardUIMode -int "$keyboard_mode"
+            else
+              defaults delete org.webkit.Playwright AppleKeyboardUIMode > /dev/null 2>&1 || true
+            fi
+          }
+          trap restore_keyboard_mode EXIT
+          defaults write org.webkit.Playwright AppleKeyboardUIMode -int 2
+          [[ $(defaults read org.webkit.Playwright AppleKeyboardUIMode) == 2 ]]
+          npm run test:e2e -- --project=layout-webkit
         working-directory: web
       - name: Stop only owned backend and website
         if: always()

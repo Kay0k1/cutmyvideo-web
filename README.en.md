@@ -69,6 +69,8 @@ npm run test:e2e
 
 CI retains all five projects: Chromium and Firefox checks run on Linux, and the complete WebKit matrix runs on macOS 15. [Playwright recommends macOS for video playback closest to Safari](https://playwright.dev/docs/browsers#webkit). The same Linux project remains available with `xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --project=layout-webkit --headed`: the GTK/GStreamer stall after seeking remains unresolved, despite verified complete MP4 and byte-range delivery. Moving CI does not fix that Linux issue.
 
+The disposable macOS CI environment enables Keyboard Navigation (`AppleKeyboardUIMode=2`) only for `org.webkit.Playwright`, then restores the previous value. This preserves the real Tab-to-slider focus assertion without changing the website. [Apple keyboard-navigation setting](https://support.apple.com/en-my/guide/mac-help/mchlc06d1059/mac), [macOS WebKit behavior in Playwright](https://github.com/microsoft/playwright/issues/41808).
+
 Run options and verified scenarios are in [docs/QA.md](docs/QA.md). Server deployment and updates are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). The Dockerfile builds static files; a reverse proxy routes `/api` to the core.
 
 ## Structure

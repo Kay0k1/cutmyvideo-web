@@ -69,6 +69,8 @@ npm run test:e2e
 
 CI сохраняет все пять проектов: Chromium и Firefox проходят проверки в Linux, а полная матрица WebKit — в macOS 15. [Playwright рекомендует macOS для проверки видео ближе к Safari](https://playwright.dev/docs/browsers#webkit). На Linux тот же проект доступен командой `xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --project=layout-webkit --headed`: остановка GTK/GStreamer после перемотки пока не устранена, хотя передача исходного MP4 и диапазона байтов проверена полностью. Перенос CI не означает исправления этой проблемы Linux.
 
+В одноразовом окружении macOS CI для `org.webkit.Playwright` включается Keyboard Navigation (`AppleKeyboardUIMode=2`), чтобы проверять реальный переход Tab между кнопками-ползунками; прежнее значение восстанавливается после теста. Это настройка браузера для проверки доступности, интерфейс сайта не меняется. [Настройка навигации Apple](https://support.apple.com/en-my/guide/mac-help/mchlc06d1059/mac), [поведение macOS WebKit в Playwright](https://github.com/microsoft/playwright/issues/41808).
+
 Переменные запуска и проверенные сценарии описаны в [docs/QA.md](docs/QA.md). Размещение и обновления — в [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Dockerfile собирает статический сайт; reverse proxy маршрутизирует `/api` в ядро.
 
 ## Структура
