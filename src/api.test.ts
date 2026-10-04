@@ -1,7 +1,31 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { api } from './api';
+import { api, ApiError, errorMessage } from './api';
+import { translate } from './locales';
 
 afterEach(() => { vi.unstubAllGlobals(); });
+
+describe('safe API error messages', () => {
+  it.each(['future_source_error', 'constructor', 'toString', '__proto__'])('uses localized fallback copy for an unknown %s code', code => {
+    const message = errorMessage(new ApiError(code, 'https://cdn.example/private?token=secret stderr=extractor'));
+    expect(message).toBe('Не удалось выполнить действие. Попробуйте ещё раз или загрузите видео файлом.');
+    expect(translate(message, 'en')).toBe('The action failed. Try again or upload the video file.');
+    expect(message).not.toMatch(/https|secret|stderr|extractor/);
+  });
+
+  it.each([
+    ['platform_access_required', 'Видео требует входа, подписки или разрешения владельца. Выберите публичное видео либо загрузите MP4.'],
+    ['platform_unavailable', 'Сервис не отдал видео. Проверьте ссылку и доступность ролика либо загрузите MP4.'],
+    ['live_not_supported', 'Вставьте ссылку на запись стрима или готовый клип. Прямые эфиры пока не обрабатываются.'],
+    ['unsupported_collection', 'Вставьте ссылку на отдельное видео, запись стрима или клип. Ссылка на канал или плейлист не подойдёт.'],
+    ['unsupported_stream', 'Этот поток пока нельзя обработать. Загрузите доступное видео файлом MP4.'],
+    ['source_timeout', 'Видео слишком долго отвечает. Попробуйте ещё раз или загрузите MP4.'],
+  ])('retains the actionable message for %s without displaying provider diagnostics', (code, expected) => {
+    const message = errorMessage(new ApiError(code, 'Raw provider diagnostic must not appear.'));
+    expect(message).toBe(expected);
+    expect(translate(message, 'en')).not.toMatch(/[А-Яа-яЁё]/);
+    expect(message).not.toContain('Raw provider diagnostic');
+  });
+});
 
 describe('session initialization', () => {
   it('uses one cookie handshake for concurrent callers and revalidates after it completes', async () => {

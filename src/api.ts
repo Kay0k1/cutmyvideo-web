@@ -76,5 +76,5 @@ export function errorMessage(error: unknown): string {
     invalid_request: 'Не удалось отправить настройки. Обновите страницу и попробуйте ещё раз.',
     internal: 'Не удалось выполнить действие. Попробуйте ещё раз через минуту.',
   };
-  return messages[error.code] ?? 'Не удалось выполнить действие. Попробуйте ещё раз или загрузите видео файлом.';
+  return Object.hasOwn(messages, error.code) ? messages[error.code] : 'Не удалось выполнить действие. Попробуйте ещё раз или загрузите видео файлом.';
 }

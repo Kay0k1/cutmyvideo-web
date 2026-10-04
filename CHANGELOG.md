@@ -31,6 +31,7 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Keep source-error messages within the known localized vocabulary; unknown and inherited object-property codes use safe fallback copy instead of breaking the interface or exposing provider diagnostics.
 - Use the normal foreground for transparent trim controls and verify visible boundary hints in both themes; wait for the selected menu option's actual keyboard focus before confirming it in browser checks.
 - Pin the core that selects compatible video/audio pairs before ranking quality, fixing accurate 1080p exports when a separate HLS rendition hides usable progressive streams.
 - Preserve millisecond boundaries when grabbing the timeline handles away from their visible grips, keep the drag scale stable, and make very short intervals independently selectable.
