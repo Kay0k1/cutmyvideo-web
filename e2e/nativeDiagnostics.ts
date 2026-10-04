@@ -33,14 +33,19 @@ export async function diagnoseNativePreview(
       const steps = Array.from(document.querySelectorAll('.steps-nav button'))
       const stepIndex = steps.findIndex(button => button.getAttribute('aria-current') === 'step')
       const quality = video?.getVideoPlaybackQuality?.()
+      const duration = video ? finite(video.duration) : null
+      const readyState = video?.readyState ?? null
       return {
         elapsedMs: Date.now() - startedAt,
         monotonicElapsedMs: performance.now() - startedMonotonic,
         media: video ? {
           currentTime: finite(video.currentTime), paused: video.paused, seeking: video.seeking,
-          readyState: video.readyState, networkState: video.networkState, errorCode: video.error?.code ?? null,
-          duration: finite(video.duration),
-          buffered: ranges(video.buffered), seekable: ranges(video.seekable),
+          readyState, networkState: video.networkState, errorCode: video.error?.code ?? null,
+          duration,
+          buffered: ranges(video.buffered),
+          // GTK can cache an unknown duration as zero when seekable is read
+          // before metadata. Observe it only after a positive duration exists.
+          seekable: readyState !== null && readyState >= 1 && duration !== null && duration > 0 ? ranges(video.seekable) : null,
           totalVideoFrames: finite(quality?.totalVideoFrames), droppedVideoFrames: finite(quality?.droppedVideoFrames),
         } : null,
         previewControl, currentStep: stepIndex < 0 ? null : stepIndex + 1,
