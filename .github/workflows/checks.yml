@@ -21,7 +21,13 @@ jobs:
       - run: npm audit --omit=dev
 
   integration:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
+      options: --ipc=host
+    defaults:
+      run:
+        shell: bash
     services:
       postgres:
         image: postgres:17-alpine
@@ -29,17 +35,17 @@ jobs:
           POSTGRES_USER: cutmy
           POSTGRES_PASSWORD: cutmy_ci_only
           POSTGRES_DB: cutmy
-        ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U cutmy -d cutmy"
           --health-interval 5s --health-timeout 3s --health-retries 20
     env:
-      DATABASE_URL: postgres://cutmy:cutmy_ci_only@127.0.0.1:5432/cutmy?sslmode=disable
+      DATABASE_URL: postgres://cutmy:cutmy_ci_only@postgres:5432/cutmy?sslmode=disable
       DATA_DIR: /tmp/cutmy-ci-data
       PUBLIC_ORIGIN: http://127.0.0.1:5173
       COOKIE_SECURE: 'false'
       MUTATIONS_PER_MINUTE: '200'
       CUTMY_E2E_URL: http://127.0.0.1:5173
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -62,13 +68,11 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install media tools
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg
+          apt-get update -qq
+          apt-get install -y ffmpeg
       - run: go build -o /tmp/cutmy ./cmd/cutmy
         working-directory: core
       - run: npm ci
-        working-directory: web
-      - run: npx playwright install --with-deps chromium firefox webkit
         working-directory: web
       - name: Start real backend and website
         run: |
