@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { api, chooseOption, goToExport, goToMoment, goToSource, showExactTimes, uploadThroughUI, waitJob } from './helpers'
+import { api, assertFirstFrameMatchesSource, chooseOption, goToExport, goToMoment, goToSource, probeDownloadedFile, showExactTimes, uploadThroughUI, waitJob } from './helpers'
 
 // Exact addresses supplied by the owner, independent of the app catalog.
 const wallets = [
@@ -163,10 +163,15 @@ test('saved defaults survive reload and are applied without changing clip bounda
   await expect(page.getByRole('button', { name: 'MP3 Audio', exact: true })).toHaveAttribute('aria-pressed', 'true')
 })
 
-test('a real failed audio export explains that no clips were created in both languages', async ({ page }) => {
+test('a real failed audio export explains the cause in both languages and can retry as MP4 without losing its range', async ({ page }, testInfo) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await uploadThroughUI(page, process.env.CUTMY_E2E_VIDEO_ONLY!)
+  await showExactTimes(page)
+  await page.getByLabel('Start', { exact: true }).fill('00:00:00.500')
+  await page.getByLabel('Start', { exact: true }).press('Tab')
+  await page.getByLabel('End', { exact: true }).fill('00:00:01.250')
+  await page.getByLabel('End', { exact: true }).press('Tab')
   await goToExport(page)
   await page.getByRole('button', { name: 'MP3 Audio', exact: true }).click()
   const creationPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
@@ -176,11 +181,41 @@ test('a real failed audio export explains that no clips were created in both lan
   const job = await waitJob(page.request, (await creation.json()).id)
   expect(job.status).toBe('failed')
   expect(job.items).toHaveLength(1)
+  expect(job.items[0].error_code).toBe('audio_missing')
+  expect(job.items[0]).toMatchObject({ start_ms: 500, end_ms: 1250 })
   expect(job.items[0].artifact).toBeFalsy()
-  await expect(page.getByText('No clips could be created. Change export settings or try another source.', { exact: true })).toBeVisible()
+  await expect(page.getByText('No clips could be created. The reason is shown below.', { exact: true })).toBeVisible()
+  await expect(page.getByText('This video has no audio track. Choose MP4 to save the video.', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Retry export', exact: true })).toBeEnabled()
   await expect(page.getByRole('link', { name: 'Download', exact: true })).toHaveCount(0)
   await expectEnglishCopy(page)
   await page.getByRole('button', { name: 'Русский', exact: true }).click()
-  await expect(page.getByText('Не удалось создать фрагменты. Измените настройки экспорта или попробуйте другой источник.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Не удалось создать фрагменты. Причина указана ниже.', { exact: true })).toBeVisible()
+  await expect(page.getByText('В видео нет аудиодорожки. Выберите MP4, чтобы сохранить видео.', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Повторить экспорт', exact: true })).toBeEnabled()
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'English', exact: true }).click()
+  await page.getByRole('button', { name: 'MP4 Video', exact: true }).click()
+  const retryPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
+  await page.getByRole('button', { name: 'Retry export', exact: true }).click()
+  const retry = await retryPromise
+  expect(retry.ok(), await retry.text()).toBeTruthy()
+  expect(retry.request().postDataJSON()).toMatchObject({
+    source_id: creation.request().postDataJSON().source_id,
+    ranges: creation.request().postDataJSON().ranges,
+    format: 'mp4', cut_mode: 'accurate',
+  })
+  expect(retry.request().headers()['idempotency-key']).not.toBe(creation.request().headers()['idempotency-key'])
+  const retriedJob = await waitJob(page.request, (await retry.json()).id)
+  expect(retriedJob.id).not.toBe(job.id)
+  expect(retriedJob.status, JSON.stringify(retriedJob)).toBe('succeeded')
+  await expect(page.getByRole('link', { name: 'Download', exact: true })).toHaveCount(1)
+  const outputName = 'retried-video-only.mp4'
+  const probe = await probeDownloadedFile(page.request, retriedJob.items[0].artifact.download_url, outputName, testInfo)
+  expect(Math.abs(Number(probe.format.duration) - .75)).toBeLessThan(.1)
+  expect(probe.streams.filter((stream: { codec_type: string }) => stream.codec_type === 'video')).toHaveLength(1)
+  expect(probe.streams.filter((stream: { codec_type: string }) => stream.codec_type === 'audio')).toHaveLength(0)
+  assertFirstFrameMatchesSource(testInfo.outputPath(outputName), 500, process.env.CUTMY_E2E_VIDEO_ONLY!)
+  await expectEnglishCopy(page)
 })

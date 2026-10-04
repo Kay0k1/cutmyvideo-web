@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { api, assertFirstFrameMatchesSource, probeDownloadedFile, upload, waitJob } from './helpers'
+import { api, assertFirstFrameMatchesSource, chooseOption, goToExport, probeDownloadedFile, showExactTimes, upload, uploadThroughUI, waitJob } from './helpers'
 
 test('exports two precise MP4 ranges as real playable files', async ({ request }, testInfo) => {
   await request.get(`${api}/session`)
@@ -73,20 +73,29 @@ test('exports MP3 audio and rejects invalid ranges before creating work', async 
   }
 })
 
-test('copy mode reports its actual keyframe boundary', async ({ request }, testInfo) => {
-  await request.get(`${api}/session`)
-  const source = await upload(request)
-  const creation = await request.post(`${api}/jobs`, {
-    data: { source_id: source.id, ranges: [{ start_ms: 2500, end_ms: 4750, label: 'Copy' }], format: 'mp4', quality: 'best', cut_mode: 'copy' },
-  })
+test('the original-quality UI submits an uncapped local copy and reports its actual keyframe boundary', async ({ page }, testInfo) => {
+  await page.goto('/')
+  await uploadThroughUI(page)
+  await showExactTimes(page)
+  await page.getByLabel('Начало', { exact: true }).fill('00:00:02.500')
+  await page.getByLabel('Начало', { exact: true }).press('Tab')
+  await page.getByLabel('Конец', { exact: true }).fill('00:00:04.750')
+  await page.getByLabel('Конец', { exact: true }).press('Tab')
+  await goToExport(page)
+  await chooseOption(page, page.getByRole('combobox', { name: 'Границы и качество', exact: true }), 'Исходное качество')
+  await expect(page.getByRole('combobox', { name: 'Качество видео', exact: true })).toBeDisabled()
+  const created = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
+  await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
+  const creation = await created
   expect(creation.ok(), await creation.text()).toBeTruthy()
-  const job = await waitJob(request, (await creation.json()).id)
+  expect(creation.request().postDataJSON()).toMatchObject({ format: 'mp4', quality: 'best', cut_mode: 'copy', ranges: [{ start_ms: 2500, end_ms: 4750 }] })
+  const job = await waitJob(page.request, (await creation.json()).id)
   expect(job.status, JSON.stringify(job)).toBe('succeeded')
   const artifact = job.items[0].artifact
   expect(artifact.actual_start_ms).toBeGreaterThanOrEqual(0)
   expect(artifact.actual_start_ms).toBeLessThanOrEqual(2500)
   expect(artifact.actual_start_ms).not.toBe(2500)
-  const probe = await probeDownloadedFile(request, artifact.download_url, 'copy.mp4', testInfo)
+  const probe = await probeDownloadedFile(page.request, artifact.download_url, 'copy.mp4', testInfo)
   expect(probe.streams.find((stream: any) => stream.codec_type === 'video').codec_name).toBe('h264')
   expect(Math.abs(Number(probe.format.duration) - (artifact.actual_end_ms - artifact.actual_start_ms) / 1000)).toBeLessThan(0.1)
 })

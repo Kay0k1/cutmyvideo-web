@@ -130,12 +130,12 @@ export async function probeDownloadedFile(request: APIRequestContext, url: strin
   return details
 }
 
-export function assertFirstFrameMatchesSource(output: string, sourceMS: number) {
+export function assertFirstFrameMatchesSource(output: string, sourceMS: number, source = process.env.CUTMY_E2E_MEDIA!) {
   const frame = (file: string, seconds: number) => execFileSync('ffmpeg', [
     '-hide_banner', '-loglevel', 'error', '-ss', String(seconds), '-i', file,
     '-frames:v', '1', '-vf', 'scale=64:36,format=gray', '-f', 'rawvideo', 'pipe:1',
   ], { timeout: 15_000 })
-  const original = frame(process.env.CUTMY_E2E_MEDIA!, sourceMS / 1000)
+  const original = frame(source, sourceMS / 1000)
   const result = frame(output, 0)
   expect(result.length).toBe(original.length)
   const difference = result.reduce((total, value, i) => total + Math.abs(value - original[i]), 0) / result.length

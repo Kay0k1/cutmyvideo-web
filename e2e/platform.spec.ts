@@ -51,28 +51,34 @@ test('a real public platform source exposes honest preview availability and expo
   }
   await showExactTimes(page)
   const start = process.env.CUTMY_E2E_PLATFORM_START_MS ? Number(process.env.CUTMY_E2E_PLATFORM_START_MS) : Math.floor(source.duration_ms / 2 / 1000) * 1000
+  const end = process.env.CUTMY_E2E_PLATFORM_END_MS ? Number(process.env.CUTMY_E2E_PLATFORM_END_MS) : start + 3000
+  expect(Number.isSafeInteger(start)).toBe(true)
+  expect(Number.isSafeInteger(end)).toBe(true)
   expect(start).toBeGreaterThan(0)
-  expect(start + 3000).toBeLessThan(source.duration_ms)
+  expect(end).toBeGreaterThan(start)
+  expect(end).toBeLessThan(source.duration_ms)
   const time = (value: number) => {
     const hours = Math.floor(value / 3_600_000), minutes = Math.floor(value / 60_000) % 60, seconds = Math.floor(value / 1000) % 60
-    return [hours, minutes, seconds].map(part => String(part).padStart(2, '0')).join(':') + '.000'
+    return [hours, minutes, seconds].map(part => String(part).padStart(2, '0')).join(':') + '.' + String(value % 1000).padStart(3, '0')
   }
   await page.getByLabel('Start', { exact: true }).fill(time(start))
   await page.getByLabel('Start', { exact: true }).press('Tab')
-  await page.getByLabel('End', { exact: true }).fill(time(start + 3000))
+  await page.getByLabel('End', { exact: true }).fill(time(end))
   await page.getByLabel('End', { exact: true }).press('Tab')
   await goToExport(page)
   const created = page.waitForResponse(result => result.request().method() === 'POST' && result.url().endsWith(`${api}/jobs`))
   await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
   const creation = await created
   expect(creation.ok(), await creation.text()).toBeTruthy()
+  expect(creation.request().postDataJSON()).toMatchObject({ format: 'mp4', quality: '1080p', cut_mode: 'accurate' })
   expect(creation.request().postDataJSON().ranges.map((range: { start_ms: number; end_ms: number }) => [range.start_ms, range.end_ms]))
-    .toEqual([[start, start + 3000]])
+    .toEqual([[start, end]])
   const job = await waitJob(page.request, (await creation.json()).id)
   expect(job.status, JSON.stringify(job)).toBe('succeeded')
+  expect(job.items[0].artifact).toMatchObject({ actual_start_ms: start, actual_end_ms: end })
   const probe = await probeDownloadedFile(page.request, job.items[0].artifact.download_url, `${provider}-middle.mp4`, testInfo)
   expect(probe.streams.some((stream: { codec_type: string }) => stream.codec_type === 'video')).toBeTruthy()
-  expect(Math.abs(Number(probe.format.duration) - 3)).toBeLessThan(0.2)
+  expect(Math.abs(Number(probe.format.duration) - (end - start) / 1000)).toBeLessThan(0.2)
   await testInfo.attach('Actual public source metadata', { body: JSON.stringify({ provider: source.provider, title: source.title, duration_ms: source.duration_ms, preview_kind: source.preview_kind, source_url: source.source_url, thumbnail_checks_performed: Boolean(source.thumbnail_url) }, null, 2), contentType: 'application/json' })
 })
 

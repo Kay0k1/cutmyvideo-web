@@ -86,12 +86,12 @@ test('source, job and finished files are isolated between sessions', async ({ pl
     for (const url of [`${api}/sources/${source.id}`, `${api}/jobs/${job.id}`, source.preview_url, ...job.items.map((item: any) => item.artifact?.download_url)]) {
       if (!url) continue
       const response = await stranger.get(url)
-      expect([403, 404], url).toContain(response.status())
+      expect(response.status(), url).toBe(404)
     }
     const exportAttempt = await stranger.post(`${api}/jobs`, {
       data: { source_id: source.id, ranges: [{ start_ms: 1000, end_ms: 2000 }], format: 'mp4', quality: '720p', cut_mode: 'accurate' },
     })
-    expect([403, 404]).toContain(exportAttempt.status())
+    expect(exportAttempt.status()).toBe(404)
   } finally {
     await owner.dispose()
     await stranger.dispose()
