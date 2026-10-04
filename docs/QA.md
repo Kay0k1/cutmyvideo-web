@@ -38,7 +38,11 @@ and real FFmpeg outputs; screenshots or mocked API responses alone are not proof
   and 3 are selected, including after language changes and job restoration.
 - Both range handles are named, focusable, keyboard-operable, and bounded by the
   opposite handle. Focus order remains stable. Exact fields provide a fallback
-  for touch and assistive technology users.
+  for touch and assistive technology users. Compact visible grips retain separate
+  44-pixel hit regions even for a 100 ms selection. Grabbing away from the boundary
+  must not jump the value or discard its millisecond precision; pointer movement
+  follows the unchanged displayed scale. A focused boundary moved by Home/End must
+  be revealed rather than left outside the current timeline window.
 - MP4 and MP3 export create real files. Verify output duration and streams with
   ffprobe; MP3 has audio and no video. Accurate mode uses the selected boundaries;
   copy mode explains its limitations before export.
@@ -47,6 +51,11 @@ and real FFmpeg outputs; screenshots or mocked API responses alone are not proof
   old job's files to a new source. A completed job must not override a chosen
   earlier step on reload. A surviving artifact remains downloadable if source
   restoration fails; the page explains how to reopen a source for new exports.
+  Failed items explain their safe diagnostic in the chosen language, including
+  missing audio, platform access and an unsupported stream. They never display
+  raw subprocess output or signed media addresses. Retrying with a corrected
+  format keeps the source and selected boundaries, uses a new job/idempotency key
+  and creates a real result; completed partial results remain downloadable.
 - Source changes reset source-dependent ranges/player/job state. Saved drafts
   restore only after checking the source still belongs to the current session.
 - At 360 px and 390 px, controls remain reachable with no horizontal document
@@ -161,6 +170,12 @@ do not turn a recognised host, simulated response or blocked login into a claim
 that its media was successfully extracted.
 `CUTMY_E2E_PLATFORM_START_MS` selects a particular nonzero interval in a long
 public recording when a stable middle section has already been identified.
+`CUTMY_E2E_PLATFORM_END_MS` sets its exact end; both values retain milliseconds.
+Without an explicit end the check still exports three seconds. For the reported
+YouTube regression, use `https://www.youtube.com/watch?v=HXpdwSt_8Ns`, provider
+`youtube`, start `25600` and end `44100`. The check must submit accurate MP4 at
+1080p, preserve both exact requested bounds in its artifact and probe an actual
+18.5-second output. Provider access remains a separate network-dependent condition.
 
 The suite generates a real 12-second video with audio, a short WAV, an audio-only
 MP4 and a video-only MP4 in a temporary directory. The WAV fixtures exercise
@@ -388,3 +403,56 @@ delayed saved defaults, chosen-step restoration with a completed job, retained
 downloads after source expiry, and legacy draft migration. Actual jobs and
 download probes remained intact. This follow-up changed only QA files and did
 not repeat the already passing 840-state matrix.
+
+## Export failure and compact controls review — 4 October 2026
+
+The reported public YouTube video `HXpdwSt_8Ns` imported correctly but its
+18.5-second accurate 1080p export failed during stream selection. The extractor
+offered a high-ranked HLS video rendition without its audio alongside usable
+1080p progressive video and HTTPS audio. Recognition and metadata success alone
+had not exercised that compatible fallback.
+
+After the core stream-selection correction, a separate real website check
+submitted MP4, 1080p, accurate mode and exactly 25,600–44,100 ms. It succeeded in
+41 seconds including the source import. Its actual downloaded file was 9,033,135
+bytes, 18.500 seconds, 1920×1080 H.264 video and 48 kHz AAC audio. Full FFmpeg
+decoding returned no errors. The artifact reported the same requested global
+bounds. This is evidence for that particular public video and settings, not every
+video from all fifteen catalogued providers. It does not substitute a pixel-level
+first-frame oracle for this public source.
+
+Seven focused integrated scenarios passed together in 54.8 seconds against the
+updated real API and worker:
+
+- Original-quality UI submission sent uncapped `quality:best` for a local copy,
+  then downloaded/probed its real MP4 and checked the actual keyframe shift.
+- Custom selectors retained keyboard choice, typeahead, dismissal, native-dialog
+  focus and isolation of media shortcuts; dismissing a menu created no job.
+- Named range handles retained keyboard operation and invalid-time correction.
+- A real three-hour upload sought to minute 83, moved both boundaries, kept its
+  sixty-second pointer scale fixed, and produced a real 30-second middle MP4.
+- A real MP3 export from video-only MP4 failed with `audio_missing`, explained the
+  correction in Russian and English, and offered Retry export. Switching to MP4
+  preserved the source and 500–1,250 ms interval, used a new job and idempotency
+  key, and created a real video-only output. Its duration, streams and first frame
+  were checked against that actual video-only input.
+- A different session received exactly 404 for the source, job, preview, finished
+  file and attempted export of the owner's source.
+
+Independent compact-control checks also passed in Chromium, Firefox and Linux
+WebKit using one actual MP4 upload per engine. The focused matrix measured 144
+Moment states: 1280×720, 1440×900, 320×720, 360×640, 390×844 and 844×390, both
+languages/themes, and precise fields open/closed. There was no horizontal
+document overflow, clipped interactive control or touch target below 44 CSS
+pixels. The visible grips measured 10×28 pixels on an 8-pixel rail; their separate
+44-pixel hit regions remained independently reachable for a 100 ms interval.
+Real pointer movement on each boundary kept the original 1,234 ms precision,
+did not jump at the grab point and did not change the scale's tick labels.
+Keyboard focus order and dependent bounds remained stable. A separate three-engine
+probe checked focused Home/End visibility and short-interval touch hit regions.
+Twelve selective screenshots and the earlier baseline were visually inspected.
+
+These are focused regressions of the changed controls and failure recovery. They
+do not replace the existing complete responsive suite or establish physical Mac,
+iPhone, Android or assistive-technology certification. Operational backup and
+release-recovery evidence, including its limits, is in [DEPLOYMENT.md](DEPLOYMENT.md).
