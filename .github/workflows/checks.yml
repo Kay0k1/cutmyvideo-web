@@ -95,7 +95,7 @@ jobs:
           cat /tmp/cutmy-server.log /tmp/cutmy-web.log
           exit 1
       - name: Run browser checks with a virtual display
-        run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed
+        run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed --project=desktop --project=mobile --project=layout-chromium --project=layout-firefox
         working-directory: web
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
@@ -106,4 +106,144 @@ jobs:
             web/test-results
             /tmp/cutmy-server.log
             /tmp/cutmy-worker.log
+          retention-days: 7
+
+  # WebKit media decoding uses the host platform. Playwright recommends macOS
+  # for video playback closest to Safari; retain the entire real-media matrix.
+  integration-webkit:
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      CUTMY_CI_DIR: ${{ runner.temp }}/cutmy-webkit-ci
+      DATABASE_URL: postgres://cutmy:cutmy_ci_only@127.0.0.1:55434/cutmy?sslmode=disable
+      PGDATA: ${{ runner.temp }}/cutmy-webkit-ci/postgres
+      DATA_DIR: ${{ runner.temp }}/cutmy-webkit-ci/data
+      PUBLIC_ORIGIN: http://127.0.0.1:5173
+      COOKIE_SECURE: 'false'
+      MUTATIONS_PER_MINUTE: '200'
+      CUTMY_E2E_URL: http://127.0.0.1:5173
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/cutmy-webkit-ci/browsers
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: web
+      - id: core-ref
+        run: echo "sha=$(cat web/core.version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: Kay0k1/cutmyvideo-core
+          ref: ${{ steps.core-ref.outputs.sha }}
+          path: core
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.1'
+          cache-dependency-path: core/go.sum
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install native database and media tools
+        run: |
+          mkdir -p "$CUTMY_CI_DIR"
+          brew install postgresql@17 ffmpeg
+          echo "$(brew --prefix postgresql@17)/bin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix ffmpeg)/bin" >> "$GITHUB_PATH"
+      - name: Start owned PostgreSQL on loopback
+        run: |
+          initdb -D "$PGDATA" -U cutmy --auth=trust
+          pg_ctl -D "$PGDATA" -l "$CUTMY_CI_DIR/postgres.log" -o "-h 127.0.0.1 -p 55434 -k ''" -w start
+          PGPASSWORD=cutmy_ci_only createdb -h 127.0.0.1 -p 55434 -U cutmy cutmy
+      - run: go build -o "$CUTMY_CI_DIR/cutmy" ./cmd/cutmy
+        working-directory: core
+      - run: npm ci
+        working-directory: web
+      - run: npx playwright install webkit
+        working-directory: web
+      - name: Start real backend and website
+        working-directory: web
+        run: |
+          start_owned() {
+            python3 - "$1" "${@:2}" <<'PYTHON'
+          import json, os, subprocess, sys
+          from pathlib import Path
+          directory = Path(os.environ['CUTMY_CI_DIR'])
+          role, command = sys.argv[1], sys.argv[2:]
+          with (directory / f'{role}.log').open('wb') as log:
+              process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+          (directory / f'{role}-process.json').write_text(json.dumps({'pid': process.pid, 'command': ' '.join(command)}))
+          PYTHON
+          }
+          start_owned server "$CUTMY_CI_DIR/cutmy" server
+          backend_ready=false
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/readyz; then backend_ready=true; break; fi
+            sleep 1
+          done
+          if [ "$backend_ready" != true ]; then cat "$CUTMY_CI_DIR/server.log"; exit 1; fi
+          start_owned worker "$CUTMY_CI_DIR/cutmy" worker
+          start_owned web "$(command -v node)" "$GITHUB_WORKSPACE/web/node_modules/vite/bin/vite.js" --host 127.0.0.1
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/readyz && curl -fsS http://127.0.0.1:5173/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat "$CUTMY_CI_DIR/server.log" "$CUTMY_CI_DIR/web.log"
+          exit 1
+      - name: Run complete native macOS WebKit matrix
+        run: npm run test:e2e -- --project=layout-webkit
+        working-directory: web
+      - name: Stop only owned backend and website
+        if: always()
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, signal, subprocess, time
+          from pathlib import Path
+          directory = Path(os.environ['CUTMY_CI_DIR'])
+          owned = []
+          def matches(process):
+              try:
+                  state, command = subprocess.check_output(['ps', '-p', str(process['pid']), '-o', 'stat=', '-o', 'command='], text=True).strip().split(None, 1)
+                  if state.startswith('Z'):
+                      return False
+                  if os.getpgid(process['pid']) != process['pid'] or command != process['command']:
+                      raise RuntimeError('Owned process identity changed; refusing termination')
+                  return True
+              except (ProcessLookupError, subprocess.CalledProcessError):
+                  return False
+          for path in directory.glob('*-process.json'):
+              process = json.loads(path.read_text())
+              if matches(process):
+                  os.killpg(process['pid'], signal.SIGTERM)
+                  owned.append(process)
+          deadline = time.monotonic() + 10
+          while any(matches(process) for process in owned) and time.monotonic() < deadline:
+              time.sleep(.1)
+          for process in owned:
+              if matches(process):
+                  os.killpg(process['pid'], signal.SIGKILL)
+          PYTHON
+      - name: Stop owned PostgreSQL
+        if: always()
+        run: |
+          if command -v pg_ctl > /dev/null && [ -d "$PGDATA" ]; then
+            if pg_ctl -D "$PGDATA" status > /dev/null 2>&1; then
+              pg_ctl -D "$PGDATA" -m fast -w stop
+            fi
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: native-webkit-diagnostics
+          path: |
+            web/playwright-report
+            web/test-results
+            ${{ runner.temp }}/cutmy-webkit-ci/server.log
+            ${{ runner.temp }}/cutmy-webkit-ci/worker.log
+            ${{ runner.temp }}/cutmy-webkit-ci/web.log
+            ${{ runner.temp }}/cutmy-webkit-ci/postgres.log
           retention-days: 7
