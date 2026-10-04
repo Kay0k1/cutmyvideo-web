@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-24.04
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
-      options: --ipc=host
+      options: --init --ipc=host
     defaults:
       run:
         shell: bash
@@ -47,6 +47,8 @@ jobs:
       CUTMY_E2E_URL: http://127.0.0.1:5173
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     steps:
+      - name: Prepare browser user directory
+        run: chown "$(id -u):$(id -g)" -- "$HOME"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           path: web
@@ -92,7 +94,8 @@ jobs:
           done
           cat /tmp/cutmy-server.log /tmp/cutmy-web.log
           exit 1
-      - run: npm run test:e2e
+      - name: Run browser checks with a virtual display
+        run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed
         working-directory: web
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
