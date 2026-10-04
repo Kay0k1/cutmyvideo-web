@@ -2,6 +2,9 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  'Дождитесь открытия текущего видео или отмените его перед загрузкой другого.': 'Wait for the current video to open or cancel it before uploading another.',
+  'Сервис открывает другие видео. Попробуйте ещё раз через минуту.': 'The service is opening other videos. Try again in a minute.',
+  'Недостаточно места для видео. Выберите файл меньшего размера или дождитесь удаления старых файлов.': 'There is not enough storage for the video. Choose a smaller file or wait for older files to expire.',
   'Обработка фрагментов': 'Clip processing',
   'Не удалось создать файлы': 'Files could not be created',
   'Часть фрагментов готова': 'Some clips are ready',

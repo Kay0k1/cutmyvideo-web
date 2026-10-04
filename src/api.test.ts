@@ -19,6 +19,9 @@ describe('safe API error messages', () => {
     ['unsupported_collection', 'Вставьте ссылку на отдельное видео, запись стрима или клип. Ссылка на канал или плейлист не подойдёт.'],
     ['unsupported_stream', 'Этот поток пока нельзя обработать. Загрузите доступное видео файлом MP4.'],
     ['source_timeout', 'Видео слишком долго отвечает. Попробуйте ещё раз или загрузите MP4.'],
+    ['source_busy', 'Дождитесь открытия текущего видео или отмените его перед загрузкой другого.'],
+    ['server_busy', 'Сервис открывает другие видео. Попробуйте ещё раз через минуту.'],
+    ['storage_limit', 'Недостаточно места для видео. Выберите файл меньшего размера или дождитесь удаления старых файлов.'],
   ])('retains the actionable message for %s without displaying provider diagnostics', (code, expected) => {
     const message = errorMessage(new ApiError(code, 'Raw provider diagnostic must not appear.'));
     expect(message).toBe(expected);

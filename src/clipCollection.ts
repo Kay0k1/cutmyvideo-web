@@ -1,7 +1,23 @@
 import type { ClipRange } from './types';
+import { validateRange } from './timecode';
 
 export const maxClips = 12;
 export type WorkbenchStep = 1 | 2 | 3 | 4;
+
+export function restoreRanges(value: unknown, duration: number): ClipRange[] {
+  if (!Array.isArray(value)) return [];
+  const ids = new Set<string>();
+  const result: ClipRange[] = [];
+  for (const item of value) {
+    if (typeof item !== 'object' || item === null) continue;
+    const { id, label, start_ms, end_ms } = item as Record<string, unknown>;
+    if (typeof id !== 'string' || !id || ids.has(id) || typeof label !== 'string' || new TextEncoder().encode(label.trim()).length > 200 || typeof start_ms !== 'number' || typeof end_ms !== 'number' || !Number.isSafeInteger(start_ms) || !Number.isSafeInteger(end_ms) || validateRange(start_ms, end_ms, duration)) continue;
+    ids.add(id);
+    result.push({ id, label, start_ms, end_ms });
+    if (result.length === maxClips) break;
+  }
+  return result;
+}
 
 export function restoredStep(step: unknown, workflowVersion: unknown): WorkbenchStep | undefined {
   if (step !== 1 && step !== 2 && step !== 3 && step !== 4) return undefined;

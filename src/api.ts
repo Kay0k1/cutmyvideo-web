@@ -39,7 +39,7 @@ export const api = {
   },
   createJob: (source_id: string, ranges: ClipRange[], output: OutputSettings, key: string) => request<Job>('/jobs', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
-    body: JSON.stringify({ source_id, ranges: ranges.map(({ start_ms, end_ms, label }) => ({ start_ms, end_ms, label })), ...output }),
+    body: JSON.stringify({ source_id, ranges: ranges.map(({ start_ms, end_ms, label }) => ({ start_ms, end_ms, label })), format: output.format, quality: output.quality, cut_mode: output.cut_mode }),
   }),
   job: (id: string) => request<Job>(`/jobs/${encodeURIComponent(id)}`),
   cancel: (id: string) => request<Job>(`/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
@@ -62,6 +62,9 @@ export function errorMessage(error: unknown): string {
     platform_unavailable: 'Сервис не отдал видео. Проверьте ссылку и доступность ролика либо загрузите MP4.',
     unsupported_stream: 'Этот поток пока нельзя обработать. Загрузите доступное видео файлом MP4.',
     source_limit: 'Достигнут лимит источников. Дождитесь текущей обработки и попробуйте позже.',
+    source_busy: 'Дождитесь открытия текущего видео или отмените его перед загрузкой другого.',
+    server_busy: 'Сервис открывает другие видео. Попробуйте ещё раз через минуту.',
+    storage_limit: 'Недостаточно места для видео. Выберите файл меньшего размера или дождитесь удаления старых файлов.',
     source_unavailable: 'Видео недоступно или требует входа. Проверьте ссылку либо загрузите файл.',
     source_too_large: 'Файл превышает лимит сервиса. Выберите файл меньшего размера.',
     unsupported_media: 'В файле не найдено поддерживаемое видео или аудио. Выберите другой файл.',

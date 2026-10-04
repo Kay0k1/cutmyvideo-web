@@ -1,7 +1,7 @@
 import { useLanguage } from './Language';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { api, errorMessage } from './api';
+import { api, ApiError, errorMessage } from './api';
 import { Icon } from './Icons';
 import { Player } from './Player';
 import type { PlayerControls } from './Player';
@@ -13,11 +13,11 @@ import { LanguageSwitch, WorkspaceNav } from './WorkspaceNav';
 import { SourceChooser } from './SourceChooser';
 import { ThemeToggle } from './Theme';
 import { canonicalSourceUrl, providerName, validateMP4 } from './sourceInput';
-import { readPreferences, savePreferences } from './preferences';
+import { readOutputSettings, readPreferences, savePreferences } from './preferences';
 import type { Preferences } from './preferences';
 import { SelectControl } from './SelectControl';
 import { ClipLibrary } from './ClipLibrary';
-import { duplicateRanges, markBounds, maxClips, rangeSelection, removeRanges, restoredStep } from './clipCollection';
+import { duplicateRanges, markBounds, maxClips, rangeSelection, removeRanges, restoreRanges, restoredStep } from './clipCollection';
 import type { WorkbenchStep } from './clipCollection';
 import { exportFailureReason, repeatsFailedExport } from './jobFailure';
 import { ExportProgress } from './ExportProgress';
@@ -52,7 +52,7 @@ function simpleRangeView(duration: number, range: ClipRange): [number, number] {
   return zoomWindow(duration, (range.start_ms + range.end_ms) / 2, Math.min(duration, Math.max(60000, (range.end_ms - range.start_ms) * 2)));
 }
 
-function rememberedDraft(): { source_id?: string; ranges?: ClipRange[]; selected_id?: string; selected_range_ids?: unknown; output?: OutputSettings; job_id?: string; job_range_numbers?: number[]; step?: number; current_ms?: number; workflow_version?: number; precision_open?: boolean } {
+function rememberedDraft(): Record<string, unknown> {
   try {
     const value = JSON.parse(localStorage.getItem(storageKey) ?? '{}');
     if (typeof value !== 'object' || value === null) return {};
@@ -95,6 +95,7 @@ export default function App() {
   const player = useRef<PlayerControls>(null);
   const previewEnd = useRef<number | null>(null);
   const sourceController = useRef<AbortController | null>(null);
+  const exportAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
   const startField = useRef<HTMLInputElement>(null);
   const endField = useRef<HTMLInputElement>(null);
   const restored = useRef(false);
@@ -125,6 +126,11 @@ export default function App() {
         if (disposed) return;
         if (!restored.current) {
           const saved = rememberedDraft();
+          const attempt = saved.export_attempt;
+          if (typeof attempt === 'object' && attempt !== null) {
+            const { fingerprint, key } = attempt as Record<string, unknown>;
+            if (typeof fingerprint === 'string' && typeof key === 'string' && key.length > 0 && key.length <= 128) exportAttempt.current = { fingerprint, key };
+          }
           const savedStep = restoredStep(saved.step, saved.workflow_version);
           let sourceWasRestored = false;
           let sourceStep: WorkbenchStep | undefined;
@@ -132,8 +138,8 @@ export default function App() {
             try {
               const original = await api.source(saved.source_id);
               if (disposed) return;
-              const valid = Array.isArray(saved.ranges) ? saved.ranges.filter(range => typeof range.id === 'string' && typeof range.label === 'string' && Number.isFinite(range.start_ms) && Number.isFinite(range.end_ms) && !validateRange(range.start_ms, range.end_ms, original.duration_ms)).slice(0, maxClips) : [];
-              const restoredRanges = valid.length || saved.ranges?.length === 0 ? valid : [newRange(original.duration_ms)];
+              const valid = restoreRanges(saved.ranges, original.duration_ms);
+              const restoredRanges = valid.length || Array.isArray(saved.ranges) && saved.ranges.length === 0 ? valid : [newRange(original.duration_ms)];
               const active = restoredRanges.find(range => range.id === saved.selected_id) ?? restoredRanges[0];
               setSource(original); setRanges(restoredRanges); setSelectedId(active?.id ?? ''); if (active) setFields(active);
               setSelectedRangeIds(rangeSelection(restoredRanges, saved.selected_range_ids)); setRevealId(active?.id ?? '');
@@ -145,7 +151,8 @@ export default function App() {
               setViewCenter(active ? (active.start_ms + active.end_ms) / 2 : 0);
               if (active) setSimpleView(simpleRangeView(original.duration_ms, active));
               setSpan(Math.min(original.duration_ms, preferences.timeline_span));
-              if (saved.output && ['mp4', 'mp3'].includes(saved.output.format) && ['best', '1080p', '720p'].includes(saved.output.quality) && ['copy', 'accurate'].includes(saved.output.cut_mode)) setOutput(saved.output);
+              const restoredOutput = readOutputSettings(saved.output);
+              if (restoredOutput) setOutput(restoredOutput);
             } catch { if (!disposed) setSourceError('Предыдущий источник больше недоступен. Откройте его заново.'); }
           }
           if (typeof saved.job_id === 'string') {
@@ -161,7 +168,7 @@ export default function App() {
 
   useEffect(() => {
     if (!sessionReady || !source) return;
-    try { localStorage.setItem(storageKey, JSON.stringify({ workflow_version: 2, source_id: source.id, ranges, selected_id: selectedId, selected_range_ids: selectedRangeIds, output, job_id: job?.id, job_range_numbers: jobRangeNumbers, step, current_ms: current, precision_open: precisionOpen })); }
+    try { localStorage.setItem(storageKey, JSON.stringify({ workflow_version: 2, source_id: source.id, ranges, selected_id: selectedId, selected_range_ids: selectedRangeIds, output, job_id: job?.id, job_range_numbers: jobRangeNumbers, step, current_ms: current, precision_open: precisionOpen, export_attempt: exportAttempt.current })); }
     catch { /* Editing remains available without browser storage. */ }
   }, [source, ranges, selectedId, selectedRangeIds, output, job?.id, jobRangeNumbers, sessionReady, step, current, precisionOpen]);
 
@@ -176,7 +183,11 @@ export default function App() {
         setJob(fresh); setJobError('');
         if (activeJob(fresh)) timer = window.setTimeout(poll, 1500);
       } catch (error) {
-        if (!disposed) { setJobError(errorMessage(error)); timer = window.setTimeout(poll, 3000); }
+        if (!disposed) {
+          setJobError(errorMessage(error));
+          if (error instanceof ApiError && ['not_found', 'expired', 'session_required'].includes(error.code)) setJob(null);
+          else timer = window.setTimeout(poll, 3000);
+        }
       }
     };
     timer = window.setTimeout(poll, 500);
@@ -363,7 +374,17 @@ export default function App() {
     if (selected && !range) { setStep(2); return; }
     const committed = ranges.map(item => item.id === range?.id ? range! : item);
     setRanges(committed); setSubmitting(true); setJobError('');
-    try { const included = committed.filter(item => selectedRangeIds.includes(item.id)); const requestedOutput = preserveLocalQuality ? { ...output, quality: 'best' as const } : output; const created = await api.createJob(source.id, included, requestedOutput, crypto.randomUUID()); setJobRangeNumbers(included.map(item => committed.findIndex(original => original.id === item.id) + 1)); setJob(created); }
+    try {
+      const included = committed.filter(item => selectedRangeIds.includes(item.id));
+      const requestedOutput = preserveLocalQuality ? { ...output, quality: 'best' as const } : output;
+      const fingerprint = JSON.stringify({ source_id: source.id, ranges: included.map(({ start_ms, end_ms, label }) => ({ start_ms, end_ms, label })), ...requestedOutput });
+      if (exportAttempt.current?.fingerprint !== fingerprint) exportAttempt.current = { fingerprint, key: crypto.randomUUID() };
+      try { localStorage.setItem(storageKey, JSON.stringify({ ...rememberedDraft(), export_attempt: exportAttempt.current })); }
+      catch { /* The retry key remains available in memory when storage is unavailable. */ }
+      const created = await api.createJob(source.id, included, requestedOutput, exportAttempt.current.key);
+      exportAttempt.current = null;
+      setJobRangeNumbers(included.map(item => committed.findIndex(original => original.id === item.id) + 1)); setJob(created);
+    }
     catch (error) { setJobError(errorMessage(error)); }
     finally { setSubmitting(false); }
   }

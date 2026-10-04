@@ -32,6 +32,11 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Validate saved clips independently and normalize restored export settings; malformed drafts no longer discard a usable source or submit invalid MP3/copy requests.
+- Reuse an unacknowledged export's idempotency key across retries and reloads, preventing duplicate jobs after a lost response.
+- Stop polling missing or expired jobs and release the export controls; retry the YouTube player library after a failed load.
+- Show distinct source preparation, storage and server-capacity errors in Russian and English.
+- Pin the core that fences expired worker leases and applies the source timeout to quota admission, upload/download transfer and inspection.
 - Avoid case-insensitive module-resolution collisions between the progress component and its time-aggregation helper on macOS.
 - Pin the optimized core with private inspection caching, faster CPU encoding, bounded memory/network maintenance and atomic, recoverable publication of completed fragments.
 - Enable app-scoped Keyboard Navigation in disposable macOS CI, restore the previous preference afterward, and retain the actual Tab-to-slider focus assertion.

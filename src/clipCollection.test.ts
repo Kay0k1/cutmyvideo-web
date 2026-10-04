@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { duplicateRanges, markBounds, rangeSelection, removeRanges, restoredStep } from './clipCollection';
+import { duplicateRanges, markBounds, rangeSelection, removeRanges, restoreRanges, restoredStep } from './clipCollection';
 import type { ClipRange } from './types';
 
 const ranges: ClipRange[] = [
@@ -8,6 +8,11 @@ const ranges: ClipRange[] = [
 ];
 
 describe('clip selection and workflow restoration', () => {
+  it('recovers valid clips from malformed storage without duplicate IDs or invalid API bounds', () => {
+    expect(restoreRanges([null, 42, {}, ranges[0], ranges[0], { ...ranges[1], start_ms: 6000.5 }, { ...ranges[1], end_ms: 50000 }, { ...ranges[1], label: 'я'.repeat(101) }, ranges[1]], 12000)).toEqual(ranges);
+    expect(restoreRanges({}, 12000)).toEqual([]);
+    expect(restoreRanges([], 12000)).toEqual([]);
+  });
   it('migrates the old export step without changing the new clip-list step', () => {
     expect(restoredStep(3, undefined)).toBe(4);
     expect(restoredStep(3, 2)).toBe(3);

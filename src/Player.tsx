@@ -38,16 +38,26 @@ function youtubeApi(): Promise<YTNamespace> {
   if (window.YT?.Player) return Promise.resolve(window.YT);
   if (youtubePromise) return youtubePromise;
   youtubePromise = new Promise((resolve, reject) => {
-    const timeout = window.setTimeout(() => { youtubePromise = null; reject(new Error('embed unavailable')); }, 15000);
-    window.onYouTubeIframeAPIReady = () => {
+    let script = document.querySelector<HTMLScriptElement>('script[data-youtube-api]');
+    const fail = () => {
       window.clearTimeout(timeout);
-      if (window.YT) resolve(window.YT); else reject(new Error('embed unavailable'));
+      if (script) { script.onerror = null; script.remove(); }
+      if (window.onYouTubeIframeAPIReady === ready) window.onYouTubeIframeAPIReady = undefined;
+      youtubePromise = null;
+      reject(new Error('embed unavailable'));
     };
-    if (!document.querySelector('script[data-youtube-api]')) {
-      const script = document.createElement('script');
+    const timeout = window.setTimeout(fail, 15000);
+    const ready = () => {
+      window.clearTimeout(timeout);
+      if (window.YT?.Player) { if (script) script.onerror = null; resolve(window.YT); }
+      else fail();
+    };
+    window.onYouTubeIframeAPIReady = ready;
+    if (!script) {
+      script = document.createElement('script');
       script.src = 'https://www.youtube.com/iframe_api';
       script.dataset.youtubeApi = 'true';
-      script.onerror = () => { window.clearTimeout(timeout); youtubePromise = null; reject(new Error('embed unavailable')); };
+      script.onerror = fail;
       document.head.appendChild(script);
     }
   });
