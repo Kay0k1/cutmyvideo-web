@@ -117,18 +117,24 @@ jobs:
       run:
         shell: bash
     env:
-      CUTMY_CI_DIR: ${{ runner.temp }}/cutmy-webkit-ci
       DATABASE_URL: postgres://cutmy:cutmy_ci_only@127.0.0.1:55434/cutmy?sslmode=disable
-      PGDATA: ${{ runner.temp }}/cutmy-webkit-ci/postgres
-      DATA_DIR: ${{ runner.temp }}/cutmy-webkit-ci/data
       PUBLIC_ORIGIN: http://127.0.0.1:5173
       COOKIE_SECURE: 'false'
       MUTATIONS_PER_MINUTE: '200'
       CUTMY_E2E_URL: http://127.0.0.1:5173
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/cutmy-webkit-ci/browsers
       HOMEBREW_NO_AUTO_UPDATE: '1'
       HOMEBREW_NO_INSTALL_CLEANUP: '1'
     steps:
+      - name: Prepare owned integration directories
+        run: |
+          cutmy_ci_path="$RUNNER_TEMP/cutmy-webkit-ci"
+          mkdir -p "$cutmy_ci_path"
+          {
+            printf 'CUTMY_CI_DIR=%s\n' "$cutmy_ci_path"
+            printf 'PGDATA=%s\n' "$cutmy_ci_path/postgres"
+            printf 'DATA_DIR=%s\n' "$cutmy_ci_path/data"
+            printf 'PLAYWRIGHT_BROWSERS_PATH=%s\n' "$cutmy_ci_path/browsers"
+          } >> "$GITHUB_ENV"
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           path: web
@@ -150,7 +156,6 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install native database and media tools
         run: |
-          mkdir -p "$CUTMY_CI_DIR"
           brew install postgresql@17 ffmpeg
           echo "$(brew --prefix postgresql@17)/bin" >> "$GITHUB_PATH"
           echo "$(brew --prefix ffmpeg)/bin" >> "$GITHUB_PATH"
