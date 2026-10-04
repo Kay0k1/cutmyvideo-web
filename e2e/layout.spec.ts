@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
 import { expect, test, type CDPSession, type Locator, type Page, type TestInfo } from '@playwright/test'
+import { diagnoseNativePreview } from './nativeDiagnostics'
 import { addClip, api, assertFirstFrameMatchesSource, goToClips, goToExport, goToMoment, goToSource, saveClip, setTheme, showExactTimes, uploadThroughUI, waitJob } from './helpers'
 
 const desktopSizes = [
@@ -107,25 +108,27 @@ async function screen(page: Page, testInfo: TestInfo, name: string) {
   await testInfo.attach(name, { path, contentType: 'image/png' })
 }
 
-test('real clips remain usable across laptop, desktop, tablet and touch viewport matrix', async ({ page, browser, browserName }, testInfo) => {
+test('real clips remain usable across laptop, desktop, tablet and touch viewport matrix', async ({ page, browser, browserName, headless }, testInfo) => {
   test.setTimeout(300_000)
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
-  await page.goto('/')
-  await uploadThroughUI(page)
-  await expect(page.locator('video')).toBeVisible()
-  await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
-  await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).duration)).toBeCloseTo(12, 1)
-  await showExactTimes(page)
-  await page.locator('#range-start').fill('00:00:01.250')
-  await page.locator('#range-start').press('Tab')
-  await page.locator('#range-end').fill('00:00:03.750')
-  await page.locator('#range-end').press('Tab')
-  await page.getByRole('button', { name: labels.preview }).click()
-  await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(1.25)
-  await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).paused)).toBe(true)
-  await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeGreaterThanOrEqual(3.7)
-  await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).getVideoPlaybackQuality().totalVideoFrames)).toBeGreaterThan(3)
+  await diagnoseNativePreview(page, testInfo, { browserName, headless, context: 'desktop' }, async () => {
+    await page.goto('/')
+    await uploadThroughUI(page)
+    await expect(page.locator('video')).toBeVisible()
+    await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
+    await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).duration)).toBeCloseTo(12, 1)
+    await showExactTimes(page)
+    await page.locator('#range-start').fill('00:00:01.250')
+    await page.locator('#range-start').press('Tab')
+    await page.locator('#range-end').fill('00:00:03.750')
+    await page.locator('#range-end').press('Tab')
+    await page.getByRole('button', { name: labels.preview }).click()
+    await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(1.25)
+    await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).paused)).toBe(true)
+    await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeGreaterThanOrEqual(3.7)
+    await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).getVideoPlaybackQuality().totalVideoFrames)).toBeGreaterThan(3)
+  })
   const startHandle = page.locator('.trim-handle.start')
   await startHandle.focus()
   await page.keyboard.press('ArrowRight')
@@ -242,37 +245,39 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
   const touchPage = await touchContext.newPage()
   touchPage.on('pageerror', error => errors.push(error.message))
   try {
-    await touchPage.goto('/')
-    if (browserName === 'chromium') chromeTouch = await touchContext.newCDPSession(touchPage)
-    await goToMoment(touchPage)
-    await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
-    // Native touch input reaches the timeline and seeks the actual media.
-    await touchPage.locator('.trim-track').tap({ position: { x: 12, y: 30 } })
-    await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeLessThan(2)
-    await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).seeking)).toBe(false)
-    await touchPage.locator('.trim-handle.start').tap()
-    await expect(touchPage.locator('.trim-handle.start')).toHaveAttribute('aria-valuenow', '6000')
-    if (browserName === 'chromium') {
-      // Chromium exposes trusted multi-point touch injection via CDP. Firefox
-      // and WebKit are tested with native taps and exact-field fallback; these
-      // checks do not pretend that synthetic DOM events are a physical drag.
-      const handle = await touchPage.locator('.trim-handle.start').boundingBox()
-      const track = await touchPage.locator('.trim-track').boundingBox()
-      expect(handle).not.toBeNull(); expect(track).not.toBeNull()
-      const cdp = chromeTouch!
-      const x = handle!.x + handle!.width / 2, y = handle!.y + handle!.height / 2
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] })
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + track!.width * .04, y, id: 1 }] })
-      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
-      await expect.poll(async () => Number(await touchPage.locator('.trim-handle.start').getAttribute('aria-valuenow'))).toBeGreaterThan(6000)
-      // This input session is released together with its touch context below.
-      await showExactTimes(touchPage)
-      await touchPage.locator('#range-start').fill('00:00:06.000')
-      await touchPage.locator('#range-start').press('Tab')
-    }
-    await touchPage.getByRole('button', { name: labels.preview }).tap()
-    await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(6)
-    await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).paused)).toBe(true)
+    await diagnoseNativePreview(touchPage, testInfo, { browserName, headless, context: 'touch' }, async () => {
+      await touchPage.goto('/')
+      if (browserName === 'chromium') chromeTouch = await touchContext.newCDPSession(touchPage)
+      await goToMoment(touchPage)
+      await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
+      // Native touch input reaches the timeline and seeks the actual media.
+      await touchPage.locator('.trim-track').tap({ position: { x: 12, y: 30 } })
+      await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeLessThan(2)
+      await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).seeking)).toBe(false)
+      await touchPage.locator('.trim-handle.start').tap()
+      await expect(touchPage.locator('.trim-handle.start')).toHaveAttribute('aria-valuenow', '6000')
+      if (browserName === 'chromium') {
+        // Chromium exposes trusted multi-point touch injection via CDP. Firefox
+        // and WebKit are tested with native taps and exact-field fallback; these
+        // checks do not pretend that synthetic DOM events are a physical drag.
+        const handle = await touchPage.locator('.trim-handle.start').boundingBox()
+        const track = await touchPage.locator('.trim-track').boundingBox()
+        expect(handle).not.toBeNull(); expect(track).not.toBeNull()
+        const cdp = chromeTouch!
+        const x = handle!.x + handle!.width / 2, y = handle!.y + handle!.height / 2
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 1 }] })
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + track!.width * .04, y, id: 1 }] })
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+        await expect.poll(async () => Number(await touchPage.locator('.trim-handle.start').getAttribute('aria-valuenow'))).toBeGreaterThan(6000)
+        // This input session is released together with its touch context below.
+        await showExactTimes(touchPage)
+        await touchPage.locator('#range-start').fill('00:00:06.000')
+        await touchPage.locator('#range-start').press('Tab')
+      }
+      await touchPage.getByRole('button', { name: labels.preview }).tap()
+      await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(6)
+      await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).paused)).toBe(true)
+    })
     await matrix(touchPage, phoneSizes, true)
     await goToExport(touchPage)
     const pending = touchPage.waitForEvent('download')
