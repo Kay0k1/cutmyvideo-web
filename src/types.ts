@@ -44,6 +44,7 @@ export interface Job {
     end_ms: number;
     status: JobStatus;
     message?: string;
+    error_code?: string;
     artifact: Artifact | null;
   }[];
 }

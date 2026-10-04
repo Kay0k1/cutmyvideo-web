@@ -19,6 +19,7 @@ import { SelectControl } from './SelectControl';
 import { ClipLibrary } from './ClipLibrary';
 import { duplicateRanges, markBounds, maxClips, rangeSelection, removeRanges, restoredStep } from './clipCollection';
 import type { WorkbenchStep } from './clipCollection';
+import { exportFailureReason, repeatsFailedExport } from './jobFailure';
 
 const storageKey = 'cutmy.workbench.v1';
 const activeJob = (job: Job | null) => job?.status === 'queued' || job?.status === 'running';
@@ -26,7 +27,7 @@ const stageNames: Record<string, string> = {
   queued: 'В очереди', preparing: 'Готовим обработку', resolving: 'Проверяем источник', resolve: 'Проверяем источник', fetching: 'Получаем видео', fetch: 'Получаем видео',
   downloading: 'Получаем видео', processing: 'Вырезаем фрагменты', process: 'Вырезаем фрагменты',
   verifying: 'Проверяем файлы', verify: 'Проверяем файлы', publish: 'Готовим скачивание',
-  publishing: 'Сохраняем файл', finished: 'Обработка завершена', succeeded: 'Файлы готовы', failed: 'Обработка остановлена', cancelled: 'Обработка отменена',
+  publishing: 'Сохраняем файл', finished: 'Обработка завершена', succeeded: 'Файлы готовы', failed: 'Не удалось создать файлы', cancelled: 'Обработка отменена',
 };
 
 function jobDescription(job: Job, t: (text: string, values?: Record<string, string | number>) => string): string {
@@ -35,7 +36,7 @@ function jobDescription(job: Job, t: (text: string, values?: Record<string, stri
   if (job.status === 'succeeded') return t('Все фрагменты готовы к скачиванию.');
   if (job.status === 'failed') return t(job.items.some(item => item.artifact)
     ? 'Часть фрагментов не удалось обработать. Готовые файлы доступны ниже.'
-    : 'Не удалось создать фрагменты. Измените настройки экспорта или попробуйте другой источник.');
+    : 'Не удалось создать фрагменты. Причина указана ниже.');
   const position = job.items.findIndex(item => item.status === 'running');
   if (position >= 0) return t('Фрагмент {index} из {total}.', { index: position + 1, total: job.items.length });
   return t('Задание выполняется. Страница обновляется автоматически.');
@@ -353,7 +354,7 @@ export default function App() {
     if (selected && !range) { setStep(2); return; }
     const committed = ranges.map(item => item.id === range?.id ? range! : item);
     setRanges(committed); setSubmitting(true); setJobError('');
-    try { const included = committed.filter(item => selectedRangeIds.includes(item.id)); const created = await api.createJob(source.id, included, output, crypto.randomUUID()); setJobRangeNumbers(included.map(item => committed.findIndex(original => original.id === item.id) + 1)); setJob(created); }
+    try { const included = committed.filter(item => selectedRangeIds.includes(item.id)); const requestedOutput = preserveLocalQuality ? { ...output, quality: 'best' as const } : output; const created = await api.createJob(source.id, included, requestedOutput, crypto.randomUUID()); setJobRangeNumbers(included.map(item => committed.findIndex(original => original.id === item.id) + 1)); setJob(created); }
     catch (error) { setJobError(errorMessage(error)); }
     finally { setSubmitting(false); }
   }
@@ -374,10 +375,13 @@ export default function App() {
   }
 
   const files = job?.items.filter(item => item.artifact) ?? [];
+  const failedItems = job?.items.filter(item => item.status === 'failed') ?? [];
+  const repeatExport = repeatsFailedExport(job, exportRanges);
+  const jobHeading = job?.status === 'failed' && files.length > 0 ? 'Часть фрагментов готова' : stageNames[job?.status === 'running' ? job.stage : job?.status ?? ''] ?? 'Обрабатываем фрагменты';
   const sourceProvider = providerName(source?.provider);
   const qualityLabel = source?.width && source?.height ? `${source.width} × ${source.height}` : null;
 
-  const jobProgress = job && <section className={`job-status ${job.status}`} aria-label={t("Состояние экспорта")} aria-live="polite"><p className="job-history-label">{t("Последний экспорт")}</p><div className="job-status-heading">{activeJob(job) ? <span className="spinner" /> : <Icon name={job.status === 'succeeded' ? 'check' : 'file'} size={20} />}<h3>{t(stageNames[job.status === 'running' ? job.stage : job.status] ?? 'Обрабатываем фрагменты')}</h3></div><p>{jobDescription(job, t)}</p><p className="job-file-count">{t('Готово: {count} из {total}', { count: files.length, total: job.items.length })}</p>{job.items.some(item => item.status === 'failed') && <div className="failed-items"><p>{t("Не удалось создать:")}</p><ul>{job.items.filter(item => item.status === 'failed').map(item => <li key={item.id}>{item.label || `${t('Фрагмент')} ${jobRangeNumbers[job.items.indexOf(item)] ?? job.items.indexOf(item) + 1}`}</li>)}</ul><p>{t("Попробуйте точные границы, другое качество или загрузите видео файлом.")}</p></div>}{activeJob(job) && <button type="button" className="button secondary cancel-button" disabled={cancelling} onClick={() => void cancelJob()}>{cancelling ? t("Отменяем…") : t("Отменить обработку")}</button>}</section>;
+  const jobProgress = job && <section className={`job-status ${job.status}`} aria-label={t("Состояние экспорта")} aria-live="polite"><p className="job-history-label">{t("Последний экспорт")}</p><div className="job-status-heading">{activeJob(job) ? <span className="spinner" /> : <Icon name={job.status === 'succeeded' ? 'check' : 'file'} size={20} />}<h3>{t(jobHeading)}</h3></div><p>{jobDescription(job, t)}</p><p className="job-file-count">{t('Готово: {count} из {total}', { count: files.length, total: job.items.length })}</p>{failedItems.length > 0 && <div className="failed-items"><ul>{failedItems.map(item => <li key={item.id}><strong>{item.label || `${t('Фрагмент')} ${jobRangeNumbers[job.items.indexOf(item)] ?? job.items.indexOf(item) + 1}`}</strong><span>{t(exportFailureReason(item, job.message))}</span></li>)}</ul>{source && <p className="job-recovery-note">{t('Выбранные моменты сохранены. Настройки можно изменить перед повтором.')}</p>}</div>}{activeJob(job) && <button type="button" className="button secondary cancel-button" disabled={cancelling} onClick={() => void cancelJob()}>{cancelling ? t("Отменяем…") : t("Отменить обработку")}</button>}</section>;
 
   const resultsPanel = files.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading">{t("Файлы последнего экспорта")}</h2><p>{t("Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(files.length, 'file', locale)}</span></div><ul className="file-list">{files.map((item, index) => {
         const artifact = item.artifact!;
@@ -434,7 +438,7 @@ export default function App() {
             <div className="export-field"><label htmlFor="cut-mode">{t("Границы и качество")}</label><SelectControl id="cut-mode" value={output.cut_mode} disabled={output.format === 'mp3'} onChange={value => setOutput(previous => ({ ...previous, cut_mode: value as OutputSettings['cut_mode'] }))} options={[{ value: 'accurate', label: t('Точные границы') }, { value: 'copy', label: t('Исходное качество') }]} /><p className="mode-hint">{output.format === 'mp3' ? t("Аудио будет преобразовано в MP3.") : output.cut_mode === 'accurate' ? t("Видео будет перекодировано. Начало и конец — по выбранным таймкодам.") : t("Без перекодирования. Границы могут сдвинуться; некоторые кодеки несовместимы с MP4.")}</p></div>
           </fieldset>
           <div className="export-summary"><span>{source ? countLabel(exportRanges.length, 'clip', locale) : t("Фрагменты не выбраны")}</span>{source && <strong>{durationLabel(totalDuration, locale)}</strong>}</div>
-          <button className="button primary export-submit" type="submit" disabled={!source || !exportRanges.length || busy || sourceBusy || invalidDraft}>{submitting ? <><span className="spinner" />{t("Создаём задание…")}</> : activeJob(job) ? <><span className="spinner" />{t("Идёт обработка…")}</> : <><Icon name="cut" size={18} />{exportRanges.length > 1 ? t("Вырезать фрагменты") : t("Вырезать фрагмент")}</>}</button>
+          <button className="button primary export-submit" type="submit" disabled={!source || !exportRanges.length || busy || sourceBusy || invalidDraft}>{submitting ? <><span className="spinner" />{t("Создаём задание…")}</> : activeJob(job) ? <><span className="spinner" />{t("Идёт обработка…")}</> : <><Icon name="cut" size={18} />{repeatExport ? t('Повторить экспорт') : exportRanges.length > 1 ? t("Вырезать фрагменты") : t("Вырезать фрагмент")}</>}</button>
           {!source && <p className="export-empty-hint">{t("Сначала откройте видео.")}</p>}
           {source && <p className="export-empty-hint">{t("Результат:")}{' '}{exportRanges.length > 1 ? t("отдельные файлы") : t("один файл")} {output.format.toUpperCase()}.</p>}
         </form>

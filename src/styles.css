@@ -208,8 +208,12 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 .job-status.succeeded .job-status-heading { color: var(--success); }
 .job-status.failed .job-status-heading { color: var(--error); }
 .job-status > p { font-size: 12px; color: var(--muted); line-height: 1.8; margin-top: 11px; }
-.failed-items { color: var(--error); font-size: 12px; line-height: 1.8; margin-top: 12px; }
-.failed-items ul { padding-left: 18px; margin: 6px 0; }
+.failed-items { font-size: 12px; line-height: 1.8; margin-top: 12px; }
+.failed-items ul { list-style: none; padding: 0; margin: 6px 0; }
+.failed-items li { display: flex; flex-direction: column; gap: 3px; padding: 9px 0; border-top: 1px solid var(--line); }
+.failed-items li strong { color: var(--error); font-weight: 480; }
+.failed-items li span { color: var(--ink); overflow-wrap: anywhere; }
+.failed-items .job-recovery-note { color: var(--muted); font-size: 11px; line-height: 1.7; margin-top: 8px; }
 .cancel-button { width: 100%; margin-top: 16px; }
 .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; flex-shrink: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -617,6 +621,10 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
   .moment-controls { padding: 14px 20px; border-left: 1px solid var(--line); }
   .moment-controls .overview-track { height: 34px; margin-bottom: 9px; }
   .moment-controls .overview-track input { min-height: 34px; }
+  .failed-items ul { max-height: 180px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+}
+@media (pointer: coarse) {
+  .moment-controls .overview-track, .moment-controls .overview-track input { min-height: 44px; }
 }
 @media (max-width: 680px) {
   .steps-nav { max-width: 100%; }
