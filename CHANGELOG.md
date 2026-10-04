@@ -31,6 +31,7 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Use the normal foreground for transparent trim controls and verify visible boundary hints in both themes; wait for the selected menu option's actual keyboard focus before confirming it in browser checks.
 - Pin the core that selects compatible video/audio pairs before ranking quality, fixing accurate 1080p exports when a separate HLS rendition hides usable progressive streams.
 - Preserve millisecond boundaries when grabbing the timeline handles away from their visible grips, keep the drag scale stable, and make very short intervals independently selectable.
 - Send uncapped original-quality requests for local stream-copy exports while retaining the user's quality preference for precise exports.

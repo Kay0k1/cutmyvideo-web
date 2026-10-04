@@ -456,3 +456,24 @@ These are focused regressions of the changed controls and failure recovery. They
 do not replace the existing complete responsive suite or establish physical Mac,
 iPhone, Android or assistive-technology certification. Operational backup and
 release-recovery evidence, including its limits, is in [DEPLOYMENT.md](DEPLOYMENT.md).
+
+Visible boundary hints also passed 48 hover/focus checks across the three engines,
+both languages and both themes. The lowest measured label contrast was 5.29:1;
+timecode contrast was at least 12.20:1. Transparent handle buttons now inherit the
+normal text color; the grip and hint surfaces retain their explicit colors.
+
+Keyboard-selector checks require the selected option to receive focus after the
+popup opens, then require the Home/End target to receive focus before confirming
+or dismissing it. Radix deliberately defers this focus transfer; a visible list
+alone is insufficient synchronization for immediate synthetic key presses. The
+additional focus assertions retain the final chosen-value and cancellation
+checks, without fixed delays or retries.
+
+Release verification observed one Linux WebKit preview stall immediately after
+a 1.25-second seek, at encoded frame 32 (1.280 seconds). The full media response
+and its seek response were complete; the partial body matched the corresponding
+slice of the full file byte for byte. That exact H.264/AAC fixture passed full
+FFmpeg decoding, four local application previews and an independent native-player
+preview. A subsequent unchanged-code CI run passed the complete WebKit playback,
+download and layout scenario. This is consistent with the independently observed
+Linux runtime issue described above; no speculative product workaround was added.
