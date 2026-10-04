@@ -5,6 +5,8 @@ const fallbackMessage = 'Не удалось обработать видео. П
 export const exportFailureMessages: Record<string, string> = {
   platform_access_required: 'Для нарезки этого видео нужен вход или разрешение владельца. Загрузите доступное видео файлом MP4.',
   platform_unavailable: 'Площадка не отдала видео для нарезки. Повторите экспорт позже или загрузите MP4.',
+  live_not_supported: 'Прямые эфиры пока не обрабатываются. Откройте запись стрима или готовый клип.',
+  unsupported_collection: 'Ссылка ведёт на канал или подборку. Откройте отдельное видео или клип.',
   unsupported_stream: 'У видео пока нет поддерживаемого потока для нарезки. Загрузите доступное видео файлом MP4.',
   source_changed: 'Видео изменилось после открытия. Откройте ссылку заново и проверьте выбранные моменты.',
   source_timeline_changed: 'Запись ещё меняется или её шкала времени неполная. Откройте завершённую запись.',
@@ -28,7 +30,8 @@ export const exportFailureMessages: Record<string, string> = {
 // Older jobs contain only fixed, public-safe worker messages. Exact matching
 // preserves useful recovery without displaying arbitrary diagnostics or URLs.
 const legacyCodes: Record<string, string> = {
-  'Live broadcasts are not supported yet. Paste a recording or clip link instead': 'source_timeline_changed',
+  'Live broadcasts are not supported yet. Paste a recording or clip link instead': 'live_not_supported',
+  'Choose a single recorded video or clip, rather than a channel or playlist': 'unsupported_collection',
   'This video requires login, membership, or permission. Use an accessible recording or upload your file': 'platform_access_required',
   'The platform did not provide an accessible recording. Check the link, regional availability, or upload your file': 'platform_unavailable',
   'This video uses unsupported encryption or media streams. Upload an accessible file instead': 'unsupported_stream',

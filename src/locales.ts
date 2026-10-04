@@ -9,6 +9,8 @@ export const english: Record<string, string> = {
   'Выбранные моменты сохранены. Настройки можно изменить перед повтором.': 'Your selected moments are saved. You can change the settings before trying again.',
   'Для нарезки этого видео нужен вход или разрешение владельца. Загрузите доступное видео файлом MP4.': 'Cutting this video requires sign-in or the owner\'s permission. Upload an accessible MP4 file.',
   'Площадка не отдала видео для нарезки. Повторите экспорт позже или загрузите MP4.': 'The platform did not provide the video for cutting. Retry later or upload an MP4.',
+  'Прямые эфиры пока не обрабатываются. Откройте запись стрима или готовый клип.': 'Live streams are not processed yet. Open a stream recording or a finished clip.',
+  'Ссылка ведёт на канал или подборку. Откройте отдельное видео или клип.': 'The link leads to a channel or collection. Open a single video or clip.',
   'У видео пока нет поддерживаемого потока для нарезки. Загрузите доступное видео файлом MP4.': 'This video has no supported stream for cutting yet. Upload an accessible MP4 file.',
   'Видео изменилось после открытия. Откройте ссылку заново и проверьте выбранные моменты.': 'The video changed after you opened it. Open the link again and check your selected moments.',
   'Запись ещё меняется или её шкала времени неполная. Откройте завершённую запись.': 'The recording is still changing or its timeline is incomplete. Open a completed recording.',

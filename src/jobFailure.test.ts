@@ -30,6 +30,13 @@ describe('export recovery', () => {
     }
   });
 
+  it('covers every public worker failure code, including a recording that became live or a collection', () => {
+    const codes = ['audio_missing', 'output_limit', 'platform_access_required', 'platform_unavailable', 'unsupported_stream', 'live_not_supported', 'unsupported_collection', 'media_upstream_denied', 'media_upstream_unavailable', 'media_network_timeout', 'media_network_reset', 'copy_incompatible', 'copy_quality_unsupported', 'media_processing_failed', 'source_expired', 'source_changed', 'source_timeline_changed', 'source_timeout', 'job_timeout', 'storage_full', 'server_error', 'cancelled'];
+    for (const code of codes) expect(Object.hasOwn(exportFailureMessages, code)).toBe(true);
+    expect(exportFailureReason({ error_code: 'live_not_supported' })).toContain('запись стрима');
+    expect(exportFailureReason({ error_code: 'unsupported_collection' })).toContain('отдельное видео');
+  });
+
   it('offers repeat export only for the same selected moments, preserving the stored job snapshot', () => {
     const ranges: ClipRange[] = [{ id: 'local-1', label: '', start_ms: 25600, end_ms: 44100 }, { id: 'local-3', label: 'Second', start_ms: 60000, end_ms: 63000 }];
     const job: Job = { id: 'job-1', status: 'failed', stage: 'finished', message: '', items: ranges.map(range => ({ ...range, id: `item-${range.id}`, status: 'failed', artifact: null })) };
