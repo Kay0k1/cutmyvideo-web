@@ -109,7 +109,9 @@ async function screen(page: Page, testInfo: TestInfo, name: string) {
 }
 
 test('real clips remain usable across laptop, desktop, tablet and touch viewport matrix', async ({ page, browser, browserName, headless }, testInfo) => {
-  test.setTimeout(300_000)
+  // The measured headed WebKit matrix needs time for every saved-draft reload
+  // and screenshot; individual behavior assertions retain their 15-second limit.
+  test.setTimeout(browserName === 'webkit' ? 600_000 : 300_000)
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
   await diagnoseNativePreview(page, testInfo, { browserName, headless, context: 'desktop' }, async () => {

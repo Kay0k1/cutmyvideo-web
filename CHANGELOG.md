@@ -31,6 +31,7 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Give the exhaustive headed WebKit viewport check a measured total runtime budget while retaining every assertion, native interaction and real download check.
 - Read diagnostic seekable ranges only after valid media metadata exists, preventing the test observer from changing WebKit's duration during startup.
 - Attach bounded playback events and media state when a native browser preview check fails, without recording URLs or session data or changing playback assertions.
 - Navigate after each emulated phone viewport change in browser checks, retaining the real saved work and downloads while checking the exact requested dimensions and every layout assertion.
