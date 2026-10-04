@@ -129,17 +129,35 @@ input[aria-invalid='true'] { border-color: var(--error); }
 .overview-label { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .overview-track { position: relative; height: 44px; display: flex; align-items: center; margin-bottom: 18px; }
 .overview-track input { width: 100%; min-height: 44px; padding: 0; margin: 0; border: 0; background: transparent; position: relative; z-index: 2; accent-color: var(--accent); cursor: pointer; }
-.overview-selections { position: absolute; inset: 19px 0; background: var(--line); border-radius: 4px; }
-.overview-selections span { position: absolute; top: -3px; bottom: -3px; background: var(--accent); border-radius: 3px; }
-.trim-track { position: relative; height: 60px; margin: 0 22px; border: 1px solid var(--line); background: var(--soft); border-radius: 7px; cursor: crosshair; touch-action: none; }
-.trim-ticks { position: absolute; inset: 0; display: flex; justify-content: space-between; align-items: end; padding: 0 3px; overflow: hidden; border-radius: 7px; }
-.trim-ticks i { width: 1px; height: 10px; background: var(--strong-line); }
-.trim-ticks i:nth-child(5n+1) { height: 17px; }
-.trim-selection { position: absolute; top: 0; bottom: 0; background: var(--selection); border-top: 2px solid var(--accent); border-bottom: 2px solid var(--accent); }
-.trim-handle { position: absolute; top: -4px; bottom: -4px; left: 0; width: 44px; margin-left: -22px; z-index: 3; border: 1px solid var(--trim-line); border-radius: 8px; background: var(--trim); color: var(--trim-ink); cursor: ew-resize; touch-action: none; padding: 0; font-size: 23px; font-weight: 500; }
-.trim-handle.offscreen { border-style: dashed; }
-.playhead { position: absolute; z-index: 2; top: -7px; bottom: -7px; width: 2px; background: var(--ink); pointer-events: none; }
-.playhead::before { content: ''; position: absolute; top: -1px; left: -3px; border-top: 6px solid var(--ink); border-left: 4px solid transparent; border-right: 4px solid transparent; }
+.overview-selections { position: absolute; top: 50%; left: 0; right: 0; height: 6px; transform: translateY(-50%); background: var(--line); border-radius: 3px; }
+.overview-selections span { position: absolute; top: 0; bottom: 0; background: var(--accent); border-radius: 3px; }
+.trim-track { position: relative; height: 44px; margin: 0 44px; border: 0; background: transparent; cursor: crosshair; touch-action: none; }
+.trim-track::before { content: ''; position: absolute; top: 18px; left: 0; right: 0; height: 8px; background: var(--line); border-radius: 4px; }
+.trim-ticks { position: absolute; top: 32px; left: 0; right: 0; height: 6px; display: flex; justify-content: space-between; align-items: start; padding: 0; overflow: hidden; }
+.trim-ticks i { width: 1px; height: 3px; background: var(--strong-line); }
+.trim-ticks i:nth-child(5n+1) { height: 6px; }
+.trim-selection { position: absolute; top: 18px; height: 8px; background: var(--accent); border-radius: 4px; pointer-events: none; }
+.trim-handle { position: absolute; top: 0; left: 0; width: 44px; height: 44px; z-index: 3; border: 0; border-radius: 6px; background: transparent; color: var(--trim-ink); cursor: ew-resize; touch-action: none; padding: 0; }
+.trim-handle.start { margin-left: -44px; }
+.trim-handle.end { margin-left: 0; }
+.trim-grip { position: absolute; top: 8px; width: 10px; height: 28px; border: 1px solid var(--trim-line); border-radius: 4px; background: var(--trim); box-shadow: 0 1px 3px #00000015; }
+.start .trim-grip { right: -5px; }
+.end .trim-grip { left: -5px; }
+.trim-grip::after { content: ''; position: absolute; top: 8px; bottom: 8px; left: 4px; width: 1px; background: var(--trim-ink); opacity: .55; }
+.trim-handle.offscreen .trim-grip { border-style: dashed; }
+.trim-handle.close-handles.start .trim-grip { top: 0; }
+.trim-handle.close-handles.end .trim-grip { top: 16px; }
+.trim-handle:hover, .trim-handle:focus-visible, .trim-handle[data-dragging] { z-index: 5; }
+.trim-handle:focus-visible { outline: 0; }
+.trim-handle:focus-visible .trim-grip { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus); }
+.trim-handle:hover .trim-grip, .trim-handle[data-dragging] .trim-grip { border-color: var(--trim-ink); }
+.trim-tooltip { position: absolute; top: -28px; display: flex; align-items: baseline; gap: 7px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: var(--surface); box-shadow: 0 3px 10px #00000012; white-space: nowrap; font-size: 10px; line-height: 1.5; font-weight: 400; opacity: 0; pointer-events: none; }
+.trim-tooltip.align-start { left: 0; }
+.trim-tooltip.align-end { right: 0; }
+.trim-tooltip strong { color: var(--ink); font-weight: 480; font-variant-numeric: tabular-nums; }
+.trim-handle:hover .trim-tooltip, .trim-handle:focus-visible .trim-tooltip, .trim-handle[data-dragging] .trim-tooltip { opacity: 1; }
+.playhead { position: absolute; z-index: 2; top: 14px; height: 16px; width: 1px; background: var(--ink); pointer-events: none; }
+.playhead::before { content: ''; position: absolute; top: -5px; left: -3px; border-top: 4px solid var(--ink); border-left: 3px solid transparent; border-right: 3px solid transparent; }
 .tick-labels { display: flex; justify-content: space-between; margin: 12px 14px 25px; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .time-fields { display: grid; grid-template-columns: minmax(0,1fr) 15px minmax(0,1fr) minmax(110px,.8fr); gap: 14px; align-items: start; }
 .time-fields label { display: block; font-size: 12px; font-weight: 450; margin-bottom: 9px; }
@@ -405,9 +423,7 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
   .overview-label { font-size: 10px; }
   .overview-track { height: 28px; margin-bottom: 5px; }
   .overview-track input { min-height: 28px; }
-  .overview-selections { inset: 12px 0; }
-  .trim-track { height: 36px; }
-  .trim-handle { top: -5px; bottom: -5px; }
+  .trim-track { height: 44px; }
   .tick-labels { margin-top: 7px; margin-bottom: 13px; }
   .time-fields { grid-template-columns: minmax(0, 1fr) 10px minmax(0, 1fr) minmax(65px, .65fr); gap: 9px; }
   .time-fields label { font-size: 11px; margin-bottom: 5px; }
@@ -558,7 +574,7 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 .moment-boundaries .moment-duration > strong { font-size: 13px; }
 .moment-controls .overview-label { margin-bottom: 11px; }
 .moment-controls .trim-track { height: 44px; }
-.moment-controls .trim-handle { height: 52px; min-height: 44px; top: -5px; bottom: auto; }
+.moment-controls .trim-handle { height: 44px; min-height: 44px; top: 0; }
 .moment-controls .tick-labels { margin-top: 9px; margin-bottom: 14px; }
 .moment-preview { display: flex; align-items: center; justify-content: space-between; gap: 5px 12px; flex-wrap: wrap; }
 .moment-preview .button { min-height: 44px; font-size: 12px; padding: 9px 12px; }
@@ -575,10 +591,11 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 .precision-zoom .select-control { min-height: 44px; padding: 8px; font-size: 11px; }
 .precision-zoom > .text-button { font-size: 10px; }
 .overview-track input { appearance: none; -webkit-appearance: none; outline-offset: 1px; }
-.overview-track input::-webkit-slider-runnable-track { height: 3px; background: transparent; }
-.overview-track input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 17px; height: 17px; margin-top: -7px; border: 2px solid var(--accent); background: var(--surface); border-radius: 50%; }
-.overview-track input::-moz-range-track { height: 3px; background: transparent; }
-.overview-track input::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid var(--accent); background: var(--surface); border-radius: 50%; }
+.overview-track input::-webkit-slider-runnable-track { height: 4px; background: transparent; }
+.overview-track input::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 10px; height: 22px; margin-top: -9px; border: 1px solid var(--accent); background: var(--surface); border-radius: 4px; }
+.overview-track input::-moz-range-track { height: 4px; background: transparent; }
+.overview-track input::-moz-range-thumb { box-sizing: border-box; width: 10px; height: 22px; border: 1px solid var(--accent); background: var(--surface); border-radius: 4px; }
+.overview-track input::-moz-range-progress { background: transparent; }
 .stage-3 { max-width: 1120px; }
 .clip-library { border: 1px solid var(--line); border-radius: 16px; padding: 20px; background: var(--surface); box-shadow: var(--shadow); }
 .clip-library-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }

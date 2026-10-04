@@ -1,10 +1,11 @@
 import { useLanguage } from './Language';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import type { ClipRange } from './types';
 import { formatTimecode } from './timecode';
+import { keyboardTrimValue, pointerTrimValue } from './timelineControls';
 
-export function Timeline({ duration, current, ranges, selected, view, showOverview = true, onSeek, onRange }: {
+export function Timeline({ duration, current, ranges, selected, view, showOverview = true, onSeek, onRange, onReveal }: {
   duration: number;
   current: number;
   ranges: ClipRange[];
@@ -13,11 +14,22 @@ export function Timeline({ duration, current, ranges, selected, view, showOvervi
   showOverview?: boolean;
   onSeek(ms: number): void;
   onRange(start: number, end: number): void;
+  onReveal(ms: number): void;
 }) {
   const { t } = useLanguage();
   const track = useRef<HTMLDivElement>(null);
-  const drag = useRef<'start' | 'end' | null>(null);
+  const drag = useRef<{ which: 'start' | 'end'; pointer: number; x: number; value: number; width: number; span: number } | null>(null);
+  const [dragging, setDragging] = useState<'start' | 'end' | null>(null);
+  const [trackWidth, setTrackWidth] = useState(0);
   const span = view[1] - view[0];
+  useEffect(() => {
+    const node = track.current;
+    if (!node) return;
+    const measure = () => setTrackWidth(node.getBoundingClientRect().width);
+    measure();
+    const observer = new ResizeObserver(measure); observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
   const pct = (ms: number) => Math.max(0, Math.min(100, (ms - view[0]) / span * 100));
   const valueAt = (event: PointerEvent) => {
     const rect = track.current!.getBoundingClientRect();
@@ -31,32 +43,36 @@ export function Timeline({ duration, current, ranges, selected, view, showOvervi
     const value = which === 'start' ? selected.start_ms : selected.end_ms;
     const min = which === 'start' ? 0 : selected.start_ms + 100;
     const max = which === 'start' ? selected.end_ms - 100 : duration;
-    let next: number;
-    switch (event.key) {
-      case 'ArrowLeft': case 'ArrowDown': next = value - (event.shiftKey ? 1000 : 100); break;
-      case 'ArrowRight': case 'ArrowUp': next = value + (event.shiftKey ? 1000 : 100); break;
-      case 'PageDown': next = value - 5000; break;
-      case 'PageUp': next = value + 5000; break;
-      case 'Home': next = min; break;
-      case 'End': next = max; break;
-      default: return;
-    }
-    event.preventDefault(); move(which, next);
+    const next = keyboardTrimValue(event.key, value, min, max, event.shiftKey);
+    if (next === null) return;
+    event.preventDefault(); move(which, next); onReveal(next);
   };
+  const endDrag = (which: 'start' | 'end', pointer: number) => {
+    if (drag.current?.which === which && drag.current.pointer === pointer) { drag.current = null; setDragging(null); }
+  };
+  const closeHandles = (pct(selected.end_ms) - pct(selected.start_ms)) / 100 * trackWidth < 18;
 
   const handle = (which: 'start' | 'end') => {
     const value = which === 'start' ? selected.start_ms : selected.end_ms;
     const visible = value >= view[0] && value <= view[1];
-    return <button type="button" className={`trim-handle ${which}${!visible ? ' offscreen' : ''}`}
+    return <button type="button" className={`trim-handle ${which}${!visible ? ' offscreen' : ''}${closeHandles ? ' close-handles' : ''}`} data-dragging={dragging === which || undefined}
       style={{ left: `${pct(value)}%` }} role="slider" aria-label={which === 'start' ? t("Начало фрагмента на шкале") : t("Конец фрагмента на шкале")}
       aria-valuemin={which === 'start' ? 0 : selected.start_ms + 100}
       aria-valuemax={which === 'start' ? selected.end_ms - 100 : duration}
       aria-valuenow={value} aria-valuetext={formatTimecode(value, true)} aria-orientation="horizontal" aria-describedby="trim-hint"
       onKeyDown={event => onKey(event, which)}
-      onPointerDown={event => { event.stopPropagation(); drag.current = which; event.currentTarget.setPointerCapture(event.pointerId); }}
-      onPointerMove={event => { if (drag.current === which) move(which, valueAt(event)); }}
-      onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}
-    ><span aria-hidden="true">{which === 'start' ? '[' : ']'}</span></button>;
+      onPointerDown={event => {
+        if (event.button !== 0 || drag.current) return;
+        event.stopPropagation(); event.currentTarget.focus({ preventScroll: true });
+        drag.current = { which, pointer: event.pointerId, x: event.clientX, value, width: track.current!.getBoundingClientRect().width, span };
+        setDragging(which); event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={event => {
+        const original = drag.current;
+        if (original?.which === which && original.pointer === event.pointerId) move(which, pointerTrimValue(original.value, event.clientX - original.x, original.width, original.span));
+      }}
+      onPointerUp={event => endDrag(which, event.pointerId)} onPointerCancel={event => endDrag(which, event.pointerId)} onLostPointerCapture={event => endDrag(which, event.pointerId)}
+    ><span className="trim-grip" aria-hidden="true" /><span className={`trim-tooltip ${pct(value) < 50 ? 'align-start' : 'align-end'}`} aria-hidden="true">{which === 'start' ? t('Начало') : t('Конец')}<strong>{formatTimecode(value, true)}</strong></span></button>;
   };
 
   return <div className="timeline">
@@ -65,7 +81,7 @@ export function Timeline({ duration, current, ranges, selected, view, showOvervi
       <div className="overview-selections" aria-hidden="true">{ranges.map(range => <span key={range.id} style={{ left: `${range.start_ms / duration * 100}%`, width: `${Math.max(.3, (range.end_ms - range.start_ms) / duration * 100)}%` }} />)}</div>
       <input id="overview" type="range" min={0} max={duration} step={100} value={current} aria-valuetext={formatTimecode(current, true)} onChange={event => onSeek(Number(event.target.value))} />
     </div>}
-    <div className="trim-track" ref={track} onPointerDown={event => { if (!(event.target as HTMLElement).closest('.trim-handle')) onSeek(Math.min(duration, valueAt(event))); }}>
+    <div className="trim-track" ref={track} onPointerDown={event => { if (event.button === 0 && !(event.target as HTMLElement).closest('.trim-handle')) onSeek(Math.min(duration, valueAt(event))); }}>
       <div className="trim-ticks" aria-hidden="true">{Array.from({ length: 21 }, (_, i) => <i key={i} />)}</div>
       <div className="trim-selection" style={{ left: `${pct(selected.start_ms)}%`, width: `${Math.max(0, pct(selected.end_ms) - pct(selected.start_ms))}%` }} aria-hidden="true" />
       {handle('start')}{handle('end')}

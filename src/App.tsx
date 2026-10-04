@@ -213,6 +213,13 @@ export default function App() {
     previewEnd.current = null; setPreviewing(false);
   }
 
+  function revealBoundary(ms: number) {
+    const visible = precisionOpen ? view : simpleView;
+    if (ms >= visible[0] && ms <= visible[1]) return;
+    if (precisionOpen) setViewCenter(ms);
+    else setSimpleView(zoomWindow(duration, ms, visible[1] - visible[0]));
+  }
+
   function validateFields(focus = false): ClipRange | null {
     if (!selected) return null;
     const start = parseTimecode(startText);
@@ -414,7 +421,7 @@ export default function App() {
           }} />
           {selected && <div className="moment-controls">
             <div className="moment-boundaries"><div><label htmlFor="range-start">{t('Начало')}</label><strong hidden={precisionOpen}>{displayTimecode(selected.start_ms)}</strong><input ref={startField} id="range-start" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitFields(); } }} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span>{t('Начало здесь')}<kbd>I</kbd></button></div><div><label htmlFor="range-end">{t('Конец')}</label><strong hidden={precisionOpen}>{displayTimecode(selected.end_ms)}</strong><input ref={endField} id="range-end" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" value={endText} onChange={event => { setEndText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitFields(); } }} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span>{t('Конец здесь')}<kbd>O</kbd></button></div><div className="moment-duration"><span>{t('Длительность')}</span><strong>{durationLabel(selected.end_ms - selected.start_ms, locale)}</strong></div></div>
-            <Timeline duration={duration} current={current} ranges={ranges} selected={selected} view={precisionOpen ? view : simpleView} showOverview={precisionOpen} onSeek={seek} onRange={changeBounds} />
+            <Timeline duration={duration} current={current} ranges={ranges} selected={selected} view={precisionOpen ? view : simpleView} showOverview={precisionOpen} onSeek={seek} onRange={changeBounds} onReveal={revealBoundary} />
             <div className="moment-preview"><button className="button secondary" type="button" disabled={!playerAvailable} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} />{previewing ? t('Остановить просмотр') : t('Посмотреть фрагмент')}</button><button className="text-button precision-toggle" type="button" aria-expanded={precisionOpen} aria-controls="range-start range-end precision-controls" onClick={() => { if (precisionOpen && invalidDraft) { validateFields(true); return; } if (precisionOpen) setSimpleView(simpleRangeView(duration, selected)); setPrecisionOpen(!precisionOpen); setViewCenter((selected.start_ms + selected.end_ms) / 2); }}>{t('Точное время и шкала')}<Icon name="chevron" size={15} style={{ transform: precisionOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button></div>
             <div id="precision-controls" className="precision-controls" hidden={!precisionOpen}>
               <p id="time-hint" className="field-hint">{t('Часы:минуты:секунды. Можно ввести 83:10 или 01:23:10.250.')}</p>
