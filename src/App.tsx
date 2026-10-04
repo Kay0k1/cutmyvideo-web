@@ -245,6 +245,7 @@ export default function App() {
 
   function seek(ms: number) {
     const value = Math.max(0, Math.min(duration, ms));
+    restoredPosition.current = null;
     previewEnd.current = null; setPreviewing(false);
     setCurrent(value); player.current?.seek(value);
   }
@@ -415,7 +416,7 @@ export default function App() {
         <div className="editing-panel">
           <div className="media-heading"><div className="source-title"><Icon name="file" size={18} /><span>{source.title}</span>{sourceProvider && <span className="source-provider">{t(sourceProvider)}</span>}</div><span className="source-meta">{qualityLabel && <>{qualityLabel}<span className="meta-separator"> / </span></>}{formatTimecode(duration)}</span></div>
           <div className="moment-layout">
-          <Player ref={player} source={source} onAvailable={available => { setPlayerAvailable(available); if (available && restoredPosition.current !== null) { player.current?.seek(restoredPosition.current); restoredPosition.current = null; } }} onTime={ms => {
+          <Player ref={player} source={source} onAvailable={available => { setPlayerAvailable(available); if (!available) { previewEnd.current = null; setPreviewing(false); } if (available && restoredPosition.current !== null) { player.current?.seek(restoredPosition.current); restoredPosition.current = null; } }} onTime={ms => {
             setCurrent(Math.min(duration, ms));
             if (previewEnd.current !== null && ms >= previewEnd.current) { player.current?.pause(); previewEnd.current = null; setPreviewing(false); }
           }} />

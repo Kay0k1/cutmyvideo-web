@@ -19,8 +19,17 @@ interface YTNamespace {
     videoId: string;
     host: string;
     playerVars: Record<string, string | number>;
-    events: { onReady(): void; onError(): void };
+    events: { onReady(event: { target: YTPlayer }): void; onError(event: { target: YTPlayer }): void };
   }) => YTPlayer;
+}
+interface YoutubeInstance {
+  player: YTPlayer | null;
+  ready: boolean;
+  failed: boolean;
+  disposed: boolean;
+  pendingSeek: number | null;
+  pendingPause: boolean;
+  fail(): void;
 }
 declare global { interface Window { YT?: YTNamespace; onYouTubeIframeAPIReady?: () => void; } }
 
@@ -63,7 +72,7 @@ export const Player = forwardRef<PlayerControls, {
   const { t } = useLanguage();
   const video = useRef<HTMLVideoElement>(null);
   const host = useRef<HTMLDivElement>(null);
-  const youtube = useRef<YTPlayer | null>(null);
+  const youtube = useRef<YoutubeInstance | null>(null);
   const callbacks = useRef({ onTime, onAvailable });
   callbacks.current = { onTime, onAvailable };
   const [error, setError] = useState(false);
@@ -75,13 +84,32 @@ export const Player = forwardRef<PlayerControls, {
     if (page?.protocol === 'https:' && !page.username && !page.password && (!page.port || page.port === '443')) pageUrl = page.href;
   } catch { /* A malformed source link must not become a navigation target. */ }
 
+  function readyCommand(command: (player: YTPlayer) => void) {
+    const instance = youtube.current;
+    if (!instance?.ready || instance.failed || instance.disposed || !instance.player) return;
+    // Only calls into the external iframe API are contained here. Application
+    // callbacks remain outside this boundary so their errors remain visible.
+    try { command(instance.player); } catch { instance.fail(); }
+  }
+
   useImperativeHandle(ref, () => ({
-    seek: ms => { if (video.current) video.current.currentTime = ms / 1000; youtube.current?.seekTo(ms / 1000, true); callbacks.current.onTime(ms); },
-    play: () => { void video.current?.play().catch(() => undefined); youtube.current?.playVideo(); },
-    pause: () => { video.current?.pause(); youtube.current?.pauseVideo(); },
+    seek: ms => {
+      if (video.current) video.current.currentTime = ms / 1000;
+      const instance = youtube.current;
+      if (instance && !instance.ready && !instance.failed && !instance.disposed) instance.pendingSeek = ms;
+      else readyCommand(player => player.seekTo(ms / 1000, true));
+      callbacks.current.onTime(ms);
+    },
+    play: () => { void video.current?.play().catch(() => undefined); readyCommand(player => player.playVideo()); },
+    pause: () => {
+      video.current?.pause();
+      const instance = youtube.current;
+      if (instance && !instance.ready && !instance.failed && !instance.disposed) instance.pendingPause = true;
+      else readyCommand(player => player.pauseVideo());
+    },
     toggle: () => {
       if (video.current) { if (video.current.paused) void video.current.play().catch(() => undefined); else video.current.pause(); }
-      if (youtube.current) { if (youtube.current.getPlayerState() === 1) youtube.current.pauseVideo(); else youtube.current.playVideo(); }
+      readyCommand(player => { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); });
     },
   }), []);
 
@@ -90,26 +118,55 @@ export const Player = forwardRef<PlayerControls, {
     callbacks.current.onAvailable(false);
     const id = embedId(source?.embed_url ?? null);
     if (!id || source?.preview_url || !host.current) return;
-    let disposed = false;
     let timer: number | undefined;
+    const instance: YoutubeInstance = { player: null, ready: false, failed: false, disposed: false, pendingSeek: null, pendingPause: false, fail: () => {
+      if (instance.disposed || youtube.current !== instance) return;
+      instance.failed = true; instance.ready = false; instance.pendingSeek = null; instance.pendingPause = false;
+      window.clearInterval(timer); timer = undefined;
+      setError(true); callbacks.current.onAvailable(false);
+    } };
+    youtube.current = instance;
     const element = document.createElement('div');
     host.current.replaceChildren(element);
     void youtubeApi().then(YT => {
-      if (disposed) return;
-      youtube.current = new YT.Player(element, {
+      if (instance.disposed || youtube.current !== instance) return;
+      instance.player = new YT.Player(element, {
         videoId: id, host: 'https://www.youtube-nocookie.com',
         playerVars: { origin: window.location.origin, playsinline: 1, rel: 0 },
         events: {
-          onReady: () => {
-            if (disposed) return;
+          onReady: event => {
+            if (instance.disposed || instance.failed || youtube.current !== instance || (instance.player && event.target !== instance.player)) return;
+            instance.player = event.target; instance.ready = true;
+            const pendingSeek = instance.pendingSeek;
+            if (pendingSeek !== null) readyCommand(player => player.seekTo(pendingSeek / 1000, true));
+            if (instance.pendingPause) readyCommand(player => player.pauseVideo());
+            instance.pendingSeek = null; instance.pendingPause = false;
+            if (!instance.ready) return;
             callbacks.current.onAvailable(true);
-            timer = window.setInterval(() => callbacks.current.onTime(Math.round((youtube.current?.getCurrentTime() ?? 0) * 1000)), 150);
+            if (!instance.ready || instance.failed || instance.disposed || youtube.current !== instance) return;
+            window.clearInterval(timer);
+            timer = window.setInterval(() => {
+              if (!instance.ready || instance.failed || instance.disposed || youtube.current !== instance || !instance.player) return;
+              let seconds: number;
+              try { seconds = instance.player.getCurrentTime(); } catch { instance.fail(); return; }
+              if (!Number.isFinite(seconds) || seconds < 0) { instance.fail(); return; }
+              callbacks.current.onTime(Math.round(seconds * 1000));
+            }, 150);
           },
-          onError: () => { if (!disposed) { setError(true); callbacks.current.onAvailable(false); } },
+          onError: event => { if (!instance.disposed && youtube.current === instance && (!instance.player || event.target === instance.player)) instance.fail(); },
         },
       });
-    }).catch(() => { if (!disposed) setError(true); });
-    return () => { disposed = true; window.clearInterval(timer); youtube.current?.destroy(); youtube.current = null; };
+    }).catch(() => { instance.fail(); });
+    return () => {
+      instance.disposed = true; instance.ready = false; instance.pendingSeek = null; instance.pendingPause = false;
+      window.clearInterval(timer);
+      if (youtube.current === instance) youtube.current = null;
+      // An iframe can remove itself before disposal. Cleanup must not leave the
+      // application mounted with references to that external player.
+      if (typeof instance.player?.destroy === 'function') {
+        try { instance.player.destroy(); } catch { /* The instance is already detached from application state. */ }
+      }
+    };
   }, [source?.id, source?.embed_url, source?.preview_url]);
 
   if (!source) return <div className="player-empty">

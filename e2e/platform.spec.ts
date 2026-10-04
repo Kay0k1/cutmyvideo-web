@@ -1,6 +1,194 @@
 import { expect, test } from '@playwright/test'
 import { api, goToExport, goToSource, probeDownloadedFile, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
 
+type YoutubeProbe = { commands: string[]; polls: number; destroyed: boolean; throwDestroy: boolean; throwSeek: boolean; destroy?: () => void; ready(): void; fail(): void }
+type YoutubeProbeWindow = Window & { __youtubeProbe: { instances: YoutubeProbe[] } }
+
+test('YouTube navigation and controls wait for readiness and ignore replaced or failed players', async ({ page }) => {
+  const pageErrors: string[] = []
+  page.on('pageerror', error => pageErrors.push(error.message))
+  await page.clock.install()
+  await page.addInitScript(() => {
+    const probe = { instances: [] as YoutubeProbe[] }
+    class ControlledPlayer {
+      commands: string[] = []
+      polls = 0
+      destroyed = false
+      throwDestroy = false
+      throwSeek = false
+      state = 2
+      currentTime = 0
+      frame: HTMLIFrameElement
+      seekTo?: (seconds: number) => void
+      playVideo?: () => void
+      pauseVideo?: () => void
+      getCurrentTime?: () => number
+      getPlayerState?: () => number
+      constructor(element: HTMLElement, private options: { events: { onReady(event: { target: ControlledPlayer }): void; onError(event: { target: ControlledPlayer }): void } }) {
+        this.frame = document.createElement('iframe')
+        this.frame.src = 'about:blank'
+        element.replaceWith(this.frame)
+        probe.instances.push(this)
+      }
+      ready() {
+        this.seekTo = seconds => { this.commands.push(`seek:${seconds}`); if (this.throwSeek) throw new Error('SDK seek unavailable'); this.currentTime = seconds }
+        this.playVideo = () => { this.commands.push('play'); this.state = 1 }
+        this.pauseVideo = () => { this.commands.push('pause'); this.state = 2 }
+        this.getCurrentTime = () => { this.polls++; return this.currentTime }
+        this.getPlayerState = () => { this.commands.push('state'); return this.state }
+        this.options.events.onReady({ target: this })
+      }
+      fail() {
+        delete this.seekTo; delete this.playVideo; delete this.pauseVideo
+        delete this.getCurrentTime; delete this.getPlayerState
+        this.options.events.onError({ target: this })
+      }
+      destroy() { this.destroyed = true; this.frame.remove(); if (this.throwDestroy) throw new Error('SDK frame already unavailable') }
+    }
+    Object.assign(window, { YT: { Player: ControlledPlayer }, __youtubeProbe: probe })
+  })
+  await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
+  let sources = 0
+  let restoredSourceReads = 0
+  const preparedSources = new Map<string, object>()
+  await page.route(`**${api}/sources/src_youtube_probe_*`, route => {
+    restoredSourceReads++
+    return route.fulfill({ json: preparedSources.get(new URL(route.request().url()).pathname.split('/').at(-1)!) })
+  })
+  await page.route(`**${api}/sources`, route => {
+    const url = route.request().postDataJSON().url
+    sources++
+    const source = {
+      id: `src_youtube_probe_${sources}`, kind: 'youtube', provider: 'youtube', provider_video_id: new URL(url).searchParams.get('v'),
+      source_url: url, title: `Controlled video ${sources}`, duration_ms: 1200000,
+      preview_url: null, embed_url: `https://www.youtube-nocookie.com/embed/${new URL(url).searchParams.get('v')}`, thumbnail_url: null, preview_kind: 'youtube',
+    }
+    preparedSources.set(source.id, source)
+    return route.fulfill({ status: 201, json: source })
+  })
+  const snapshot = (index: number) => page.evaluate(index => {
+    const instance = (window as YoutubeProbeWindow).__youtubeProbe.instances[index]
+    return { commands: instance.commands, polls: instance.polls, destroyed: instance.destroyed }
+  }, index)
+  const ready = (index: number) => page.evaluate(index => (window as YoutubeProbeWindow).__youtubeProbe.instances[index].ready(), index)
+  const fail = (index: number) => page.evaluate(index => (window as YoutubeProbeWindow).__youtubeProbe.instances[index].fail(), index)
+  const open = async (id: string) => {
+    await goToSource(page)
+    await page.getByLabel('Ссылка на видео', { exact: true }).fill(`https://www.youtube.com/watch?v=${id}`)
+    await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
+    await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+    await expect.poll(() => page.evaluate(() => (window as YoutubeProbeWindow).__youtubeProbe.instances.length)).toBe(sources)
+  }
+  const preview = page.getByRole('button', { name: 'Посмотреть фрагмент', exact: true })
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled()
+  await open('N3REfH4N9Dg')
+  await expect(preview).toBeDisabled()
+  await page.locator('.trim-track').click({ position: { x: 80, y: 4 } })
+  await goToSource(page)
+  await expect(page.getByLabel('Ссылка на видео', { exact: true })).toHaveValue('https://www.youtube.com/watch?v=N3REfH4N9Dg')
+  await stepButton(page, 2).click()
+  expect((await snapshot(0)).commands).toEqual([])
+  await page.evaluate(() => { (window as YoutubeProbeWindow).__youtubeProbe.instances[0].throwDestroy = true })
+
+  await open('aqz-KE-bpKQ')
+  expect((await snapshot(0)).destroyed).toBe(true)
+  await ready(0)
+  await fail(0)
+  await page.clock.runFor(300)
+  await expect(preview).toBeDisabled()
+  expect((await snapshot(0)).polls).toBe(0)
+  await expect(page.getByText('Не удалось открыть плеер.', { exact: false })).toHaveCount(0)
+
+  await showExactTimes(page)
+  const position = page.locator('#overview')
+  await position.focus(); await position.press('Home'); await position.press('ArrowRight'); await position.press('ArrowRight'); await position.press('ArrowLeft')
+  await expect(position).toHaveValue('100')
+  await goToSource(page)
+  await ready(1)
+  await page.clock.runFor(300)
+  expect((await snapshot(1)).commands).toEqual(['seek:0.1', 'pause'])
+  await stepButton(page, 2).click()
+  await expect(position).toHaveValue('100')
+  await page.getByRole('button', { name: 'Начало по позиции плеера', exact: true }).click()
+  await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:00.100')
+  await expect(preview).toBeEnabled()
+  await preview.click()
+  await page.getByRole('button', { name: 'Остановить просмотр', exact: true }).click()
+  expect((await snapshot(1)).commands.slice(-3)).toEqual(['seek:0.1', 'play', 'pause'])
+  await page.locator('h1').focus()
+  await page.keyboard.press('Space')
+  await page.keyboard.press('Space')
+  expect((await snapshot(1)).commands.slice(-4)).toEqual(['state', 'play', 'state', 'pause'])
+  await page.clock.runFor(300)
+  expect((await snapshot(1)).polls).toBeGreaterThan(0)
+
+  await preview.click()
+  await expect(page.getByRole('button', { name: 'Остановить просмотр', exact: true })).toBeEnabled()
+  await fail(1)
+  await expect(preview).toBeDisabled()
+  await expect(page.getByText('Не удалось открыть плеер.', { exact: false })).toBeVisible()
+  const failed = await snapshot(1)
+  await page.locator('.trim-track').click({ position: { x: 80, y: 4 } })
+  await goToSource(page)
+  await stepButton(page, 2).click()
+  await ready(1)
+  await page.clock.runFor(300)
+  await expect(preview).toBeDisabled()
+  expect((await snapshot(1)).polls).toBe(failed.polls)
+  expect((await snapshot(1)).commands).toEqual(failed.commands)
+  await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:00.100')
+  await expect(page.getByLabel('Конец', { exact: true })).toHaveValue('00:00:30.000')
+  await page.evaluate(() => { (window as YoutubeProbeWindow).__youtubeProbe.instances[1].destroy = undefined })
+  await open('HXpdwSt_8Ns')
+  await ready(1); await fail(1)
+  await expect(preview).toBeDisabled()
+  await expect(page.getByText('Не удалось открыть плеер.', { exact: false })).toHaveCount(0)
+  await ready(2)
+  await expect(preview).toBeEnabled()
+
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem('cutmy.workbench.v1')!)
+    saved.current_ms = 8000
+    localStorage.setItem('cutmy.workbench.v1', JSON.stringify(saved))
+  })
+  await page.reload()
+  await expect.poll(() => page.evaluate(() => (window as YoutubeProbeWindow).__youtubeProbe.instances.length)).toBe(1)
+  await showExactTimes(page)
+  await expect(position).toHaveValue('8000')
+  await ready(0)
+  await expect(preview).toBeEnabled()
+  await page.clock.runFor(300)
+  await expect(position).toHaveValue('8000')
+  expect((await snapshot(0)).commands).toEqual(['seek:8'])
+
+  await page.reload()
+  await expect.poll(() => page.evaluate(() => (window as YoutubeProbeWindow).__youtubeProbe.instances.length)).toBe(1)
+  await showExactTimes(page)
+  await expect(position).toHaveValue('8000')
+  await position.focus(); await position.press('Home'); await position.press('ArrowRight')
+  await expect(position).toHaveValue('100')
+  await ready(0)
+  await expect(preview).toBeEnabled()
+  await page.clock.runFor(300)
+  await expect(position).toHaveValue('100')
+  expect((await snapshot(0)).commands).toEqual(['seek:0.1'])
+  await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:00.000')
+  await expect(page.getByLabel('Конец', { exact: true })).toHaveValue('00:00:30.000')
+
+  await page.reload()
+  await expect.poll(() => page.evaluate(() => (window as YoutubeProbeWindow).__youtubeProbe.instances.length)).toBe(1)
+  await page.evaluate(() => { (window as YoutubeProbeWindow).__youtubeProbe.instances[0].throwSeek = true })
+  await ready(0)
+  await expect(preview).toBeDisabled()
+  await expect(page.getByText('Не удалось открыть плеер.', { exact: false })).toBeVisible()
+  await page.clock.runFor(300)
+  expect((await snapshot(0)).polls).toBe(0)
+  expect(pageErrors).toEqual([])
+  expect(sources).toBe(3)
+  expect(restoredSourceReads).toBe(3)
+})
+
 test('a real public platform source exposes honest preview availability and exports a manual middle interval', async ({ page, playwright, baseURL }, testInfo) => {
   const url = process.env.CUTMY_E2E_PLATFORM_SOURCE
   const provider = process.env.CUTMY_E2E_PLATFORM_PROVIDER

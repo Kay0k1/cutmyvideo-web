@@ -31,6 +31,7 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Wait for YouTube player readiness before playback commands, retain the latest seek and pause requested while loading, and keep navigation usable when a player is replaced or fails.
 - Pin the core that removes unused caption URL matrices before bounded source inspection, fixing import and export preparation for recordings with large automatic-subtitle metadata.
 - Keep source-error messages within the known localized vocabulary; unknown and inherited object-property codes use safe fallback copy instead of breaking the interface or exposing provider diagnostics.
 - Use the normal foreground for transparent trim controls and verify visible boundary hints in both themes; wait for the selected menu option's actual keyboard focus before confirming it in browser checks.
