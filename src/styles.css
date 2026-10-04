@@ -137,7 +137,7 @@ input[aria-invalid='true'] { border-color: var(--error); }
 .trim-ticks i { width: 1px; height: 3px; background: var(--strong-line); }
 .trim-ticks i:nth-child(5n+1) { height: 6px; }
 .trim-selection { position: absolute; top: 18px; height: 8px; background: var(--accent); border-radius: 4px; pointer-events: none; }
-.trim-handle { position: absolute; top: 0; left: 0; width: 44px; height: 44px; z-index: 3; border: 0; border-radius: 6px; background: transparent; color: var(--trim-ink); cursor: ew-resize; touch-action: none; padding: 0; }
+.trim-handle { position: absolute; top: 0; left: 0; width: 44px; height: 44px; z-index: 3; border: 0; border-radius: 6px; background: transparent; color: var(--ink); cursor: ew-resize; touch-action: none; padding: 0; }
 .trim-handle.start { margin-left: -44px; }
 .trim-handle.end { margin-left: 0; }
 .trim-grip { position: absolute; top: 8px; width: 10px; height: 28px; border: 1px solid var(--trim-line); border-radius: 4px; background: var(--trim); box-shadow: 0 1px 3px #00000015; }
