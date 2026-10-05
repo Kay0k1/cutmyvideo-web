@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { canonicalSourceUrl, canonicalYouTubeUrl, validateMP4, videoProvider, videoProviders } from './sourceInput';
 
 describe('website source boundaries', () => {
@@ -67,5 +67,14 @@ describe('website source boundaries', () => {
     }
     expect(canonicalSourceUrl('https://cdn.example.com/my interview.mp4?token=abc%2Fdef&title=my%20video'))
       .toBe('https://cdn.example.com/my%20interview.mp4?token=abc%2Fdef&title=my%20video');
+  });
+});
+
+describe('live upload byte limits', () => {
+  it('rejects a file exceeding the session policy before inspecting its bytes', async () => {
+    const inspect = vi.fn();
+    const file = { size: 1025, name: 'video.mp4', type: 'video/mp4', slice: inspect } as unknown as File;
+    await expect(validateMP4(file, 1024)).resolves.toBe('Файл превышает лимит сервиса. Выберите файл меньшего размера.');
+    expect(inspect).not.toHaveBeenCalled();
   });
 });

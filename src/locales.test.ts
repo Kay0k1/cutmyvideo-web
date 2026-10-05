@@ -24,5 +24,6 @@ describe('interface language', () => {
     expect(durationLabel(1250, 'en')).toBe('1.25 s');
     expect(durationLabel(61000, 'en')).toBe('1 min 1 s');
     expect(formatBytes(1024 * 1024, 'en')).toBe('1.0 MB');
+    expect(formatBytes(0, 'en')).toBe('0 KB');
   });
 });

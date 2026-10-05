@@ -130,6 +130,15 @@ export const Player = memo(forwardRef<PlayerControls, {
   useEffect(() => { youtube.current?.syncPolling(); }, [active]);
 
   useEffect(() => {
+    const visibility = () => {
+      if (document.hidden) { video.current?.pause(); readyCommand(player => player.pauseVideo()); }
+      youtube.current?.syncPolling();
+    };
+    document.addEventListener('visibilitychange', visibility);
+    return () => document.removeEventListener('visibilitychange', visibility);
+  }, []);
+
+  useEffect(() => {
     setError(false);
     callbacks.current.onAvailable(false);
     const id = embedId(source?.embed_url ?? null);
@@ -137,7 +146,7 @@ export const Player = memo(forwardRef<PlayerControls, {
     let timer: number | undefined;
     const instance: YoutubeInstance = { player: null, ready: false, failed: false, disposed: false, pendingSeek: null, pendingPause: false, syncPolling: () => {
       window.clearInterval(timer); timer = undefined;
-      if (!pollingActive.current || !instance.ready || instance.failed || instance.disposed) return;
+      if (document.hidden || !pollingActive.current || !instance.ready || instance.failed || instance.disposed) return;
       timer = window.setInterval(() => {
         if (!instance.ready || instance.failed || instance.disposed || youtube.current !== instance || !instance.player) return;
         let seconds: number;

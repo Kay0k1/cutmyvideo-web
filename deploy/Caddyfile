@@ -11,6 +11,15 @@
 
     @api path /api/* /healthz /readyz
     handle @api {
+        @upload path /api/v1/uploads
+        request_body @upload {
+            # Source maximum + 2 MiB multipart metadata, matching the API.
+            max_size {$MAX_UPLOAD_BODY_BYTES:1075838976}
+        }
+        @metadata not path /api/v1/uploads
+        request_body @metadata {
+            max_size 2MB
+        }
         reverse_proxy api:8080 {
             header_up X-Forwarded-For {remote_host}
         }

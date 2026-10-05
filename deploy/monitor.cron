@@ -1,0 +1,7 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# State changes only; unchanged healthy/alert states produce no cron output.
+* * * * * root python3 /opt/cutmy/current/web/deploy/operations.py monitor > /dev/null 2>&1
+# Independent expiry/orphan cleanup keeps running while the worker is down.
+*/5 * * * * root python3 /opt/cutmy/current/web/deploy/operations.py maintain > /dev/null 2>&1

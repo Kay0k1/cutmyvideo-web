@@ -84,6 +84,88 @@ describe('read cancellation', () => {
       expect(result.status).toBe('rejected');
       if (result.status === 'rejected') expect(result.reason.name).toBe('AbortError');
     }
-    expect(fetchMock.mock.calls.every(([, options]) => options.signal === controller.signal)).toBe(true);
+    expect(fetchMock.mock.calls.every(([, options]) => options.signal?.aborted === true)).toBe(true);
+  });
+});
+
+describe('empty deletion responses', () => {
+  it('accepts a successful DELETE 204 without parsing JSON', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(api.deleteSource('src_a')).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/sources/src_a', expect.objectContaining({ method: 'DELETE' }));
+  });
+  it('turns a malformed error body into safe fallback copy', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json(null, { status: 500 })));
+    await expect(api.deleteSource('src_a')).rejects.toMatchObject({ code: 'server' });
+  });
+});
+
+class UploadXHR {
+  static current: UploadXHR;
+  upload: { onprogress: ((event: { loaded: number; total: number; lengthComputable: boolean }) => void) | null } = { onprogress: null };
+  onload: (() => void) | null = null; onerror: (() => void) | null = null; onabort: (() => void) | null = null; ontimeout: (() => void) | null = null;
+  status = 201; response: unknown = { id: 'src_uploaded' }; responseType = ''; timeout = 0;
+  open = vi.fn(); send = vi.fn(); abort = vi.fn(() => this.onabort?.());
+  constructor() { UploadXHR.current = this; }
+}
+
+describe('native uploads with bounded progress work', () => {
+  it('passes the original File in FormData, throttles percentage updates and reports the response', async () => {
+    vi.stubGlobal('XMLHttpRequest', UploadXHR);
+    const file = new File(['media'], 'file.mp4', { type: 'video/mp4' });
+    const read = vi.spyOn(file, 'arrayBuffer'); const onProgress = vi.fn();
+    const controller = new AbortController(); const result = api.upload(file, controller.signal, onProgress);
+    const xhr = UploadXHR.current;
+    expect(xhr.open).toHaveBeenCalledWith('POST', '/api/v1/uploads');
+    expect(xhr.send.mock.calls[0][0]).toBeInstanceOf(FormData);
+    expect((xhr.send.mock.calls[0][0] as FormData).get('file')).toBe(file);
+    expect(read).not.toHaveBeenCalled();
+    xhr.upload.onprogress?.({ loaded: 10, total: 100, lengthComputable: true });
+    xhr.upload.onprogress?.({ loaded: 10.5, total: 100, lengthComputable: true });
+    xhr.upload.onprogress?.({ loaded: 101, total: 100, lengthComputable: true });
+    expect(onProgress.mock.calls).toEqual([[{ loaded: 10, total: 100 }], [{ loaded: 100, total: 100 }]]);
+    xhr.onload?.(); await expect(result).resolves.toMatchObject({ id: 'src_uploaded' });
+    controller.abort(); expect(xhr.abort).not.toHaveBeenCalled(); read.mockRestore();
+  });
+  it('aborts a pending upload and removes progress handlers', async () => {
+    vi.stubGlobal('XMLHttpRequest', UploadXHR);
+    const controller = new AbortController();
+    const result = api.upload(new File(['media'], 'file.mp4'), controller.signal);
+    const rejection = expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    controller.abort(); await rejection;
+    expect(UploadXHR.current.abort).toHaveBeenCalledOnce(); expect(UploadXHR.current.upload.onprogress).toBeNull();
+  });
+  it('does not construct a request when the signal was already cancelled', async () => {
+    const construct = vi.fn(); vi.stubGlobal('XMLHttpRequest', construct);
+    const controller = new AbortController(); controller.abort();
+    await expect(api.upload(new File(['media'], 'file.mp4'), controller.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(construct).not.toHaveBeenCalled();
+  });
+});
+
+
+describe('bounded server waits', () => {
+  it('turns a stalled status read into a retryable connection error and aborts the request', async () => {
+    vi.useFakeTimers();
+    try {
+      let signal!: AbortSignal;
+      vi.stubGlobal('fetch', vi.fn().mockImplementation((_url: string, options: RequestInit) => {
+        signal = options.signal as AbortSignal;
+        return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError'))));
+      }));
+      const result = api.job('job_stalled');
+      const rejection = expect(result).rejects.toMatchObject({ code: 'connection' });
+      await vi.advanceTimersByTimeAsync(30000); await rejection; expect(signal.aborted).toBe(true);
+    } finally { vi.useRealTimers(); }
+  });
+});
+
+
+describe('export storage budget recovery', () => {
+  it('explains the worst-case per-fragment reservation rather than suggesting a shorter source', () => {
+    const message = errorMessage(new ApiError('storage_limit', 'private diagnostic'), 'export');
+    expect(message).toContain('Выберите меньше фрагментов');
+    expect(translate(message, 'en')).toBe('This export exceeds the server storage budget. Select fewer clips and try again.');
   });
 });

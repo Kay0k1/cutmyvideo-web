@@ -2,7 +2,7 @@ name: cutmy
 
 x-core: &core
   image: cutmy-core:${RELEASE_TAG:-local}
-  restart: unless-stopped
+  restart: on-failure:5
   init: true
   read_only: true
   cap_drop:
@@ -18,12 +18,22 @@ x-core: &core
     TRUST_PROXY: "true"
     XDG_CACHE_HOME: /tmp/cache
     MAX_STORAGE_BYTES: "${MAX_STORAGE_BYTES:-10737418240}"
-    SOURCE_TTL: 24h
-    ARTIFACT_TTL: 24h
+    MAX_SOURCE_BYTES: "${MAX_SOURCE_BYTES:-1073741824}"
+    MAX_OUTPUT_BYTES: "${MAX_OUTPUT_BYTES:-1073741824}"
+    MAX_OWNER_BYTES: "${MAX_OWNER_BYTES:-2147483648}"
+    STORAGE_SAFETY_BYTES: "${STORAGE_SAFETY_BYTES:-536870912}"
+    STORAGE_WAIT_TIMEOUT: "${STORAGE_WAIT_TIMEOUT:-30m}"
+    SOURCE_TTL: "${SOURCE_TTL:-24h}"
+    ARTIFACT_TTL: "${ARTIFACT_TTL:-24h}"
+    WORKER_CONCURRENCY: "${WORKER_CONCURRENCY:-1}"
+    FFMPEG_THREADS: "${FFMPEG_THREADS:-2}"
+    FFMPEG_PROFILE: "${FFMPEG_PROFILE:-fast}"
   volumes:
     - media:/data
   security_opt:
     - no-new-privileges:true
+  sysctls:
+    net.ipv6.conf.all.disable_ipv6: "1"
   logging: &logs
     driver: json-file
     options:
@@ -48,6 +58,9 @@ services:
     mem_limit: 768m
     cpus: 1
     logging: *logs
+    networks:
+      processing:
+        ipv4_address: 172.30.240.12
 
   api:
     <<: *core
@@ -66,6 +79,9 @@ services:
     mem_limit: 512m
     cpus: 1
     pids_limit: 256
+    networks:
+      processing:
+        ipv4_address: 172.30.240.10
 
   worker:
     <<: *core
@@ -83,6 +99,9 @@ services:
     mem_limit: 4g
     cpus: 3
     pids_limit: 256
+    networks:
+      processing:
+        ipv4_address: 172.30.240.11
 
   web:
     image: cutmy-web:${RELEASE_TAG:-local}
@@ -100,12 +119,15 @@ services:
       retries: 3
       start_period: 5s
     logging: *logs
+    networks:
+      - processing
 
   edge:
     image: caddy:2.11.6-alpine@sha256:c776e0c6413b544d0459665e54ec7b8b2a15000c0cbee8b254da0067b1d184ff
     restart: unless-stopped
     environment:
       DOMAIN: ${DOMAIN:-cutmy.video}
+      MAX_UPLOAD_BODY_BYTES: "${MAX_UPLOAD_BODY_BYTES:-1075838976}"
     ports:
       - 80:80
       - 443:443
@@ -129,6 +151,16 @@ services:
     security_opt:
       - no-new-privileges:true
     logging: *logs
+    networks:
+      - processing
+
+networks:
+  processing:
+    name: cutmy-processing-v1
+    enable_ipv6: false
+    ipam:
+      config:
+        - subnet: 172.30.240.0/24
 
 volumes:
   database:

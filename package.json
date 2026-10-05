@@ -11,7 +11,7 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
     "test": "vitest run src",
-    "test:deploy": "python3 deploy/activation_test.py",
+    "test:deploy": "python3 -m unittest discover -s deploy -p '*_test.py'",
     "test:e2e": "playwright test --config=e2e/playwright.config.ts",
     "preview": "vite preview --host 0.0.0.0"
   },

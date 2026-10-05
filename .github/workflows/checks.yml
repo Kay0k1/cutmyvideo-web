@@ -20,6 +20,48 @@ jobs:
       - run: npm run test:deploy
       - run: npm audit --omit=dev
 
+  database-access:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          path: web
+      - id: core-ref
+        run: echo "sha=$(cat web/core.version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: Kay0k1/cutmyvideo-core
+          ref: ${{ steps.core-ref.outputs.sha }}
+          path: core
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.27.1'
+          cache-dependency-path: core/go.sum
+      - name: Build actual maintenance command
+        working-directory: core
+        run: CGO_ENABLED=0 go build -trimpath -o /tmp/cutmy-role-core ./cmd/cutmy
+      - name: Verify database privileges and migrations in isolated PostgreSQL
+        working-directory: web
+        run: |
+          set -euo pipefail
+          container=cutmy-role-audit-ci
+          cleanup() { docker rm -f -v "$container" > /dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker run -d --name "$container" --network none \
+            -e POSTGRES_USER=cutmy -e POSTGRES_DB=cutmy \
+            -e POSTGRES_PASSWORD=cutmy_ci_role_only \
+            postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+          ready=false
+          for attempt in $(seq 1 60); do
+            if docker exec "$container" pg_isready -U cutmy -d cutmy; then ready=true; break; fi
+            sleep 1
+          done
+          [[ "$ready" == true ]]
+          CUTMY_DATABASE_TEST_CONTAINER="$container" \
+          CUTMY_DATABASE_TEST_CORE_BINARY=/tmp/cutmy-role-core \
+            python3 -m unittest discover -s deploy -p 'database_access_test.py'
+
   integration:
     runs-on: ubuntu-24.04
     container:

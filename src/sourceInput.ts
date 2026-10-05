@@ -82,8 +82,8 @@ export function canonicalYouTubeUrl(value: string): string | null {
 }
 
 /** A light container check; the core still validates the media streams. */
-export async function validateMP4(file: File): Promise<string | null> {
-  if (file.size > 1024 ** 3) return 'Файл больше 1 ГБ. Выберите видео меньшего размера.';
+export async function validateMP4(file: File, maximumBytes = 1024 ** 3): Promise<string | null> {
+  if (file.size > maximumBytes) return 'Файл превышает лимит сервиса. Выберите файл меньшего размера.';
   if (!/\.mp4$/i.test(file.name) || (file.type && !['video/mp4', 'application/mp4'].includes(file.type))) return 'Выберите файл MP4. Другие форматы пока не поддерживаются на сайте.';
   if (!file.size) return 'Файл пустой. Выберите другое видео MP4.';
   const bytes = new Uint8Array(await file.slice(0, 4096).arrayBuffer());

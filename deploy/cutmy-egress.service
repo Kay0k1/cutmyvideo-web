@@ -1,0 +1,14 @@
+[Unit]
+Description=Cutmy media process outgoing network restrictions
+Requires=docker.service
+After=docker.service
+Before=cutmy-stack.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/cutmy/current/web/deploy/egress.sh apply
+RemainAfterExit=yes
+
+[Install]
+WantedBy=docker.service

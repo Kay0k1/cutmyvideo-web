@@ -30,7 +30,7 @@ and real FFmpeg outputs; screenshots or mocked API responses alone are not proof
 - Checked clips alone enter the export, in source-list order. Selection survives
   language changes and reload, including an explicitly empty selection. Bulk
   duplicate and delete affect the intended clips; copies are independent, and
-  the twelve-clip limit prevents partial unannounced duplication. Deleting every
+  the configured clip limit (twelve by default) prevents partial unannounced duplication. Deleting every
   clip leaves a usable empty state from which a new moment can be added. Legacy
   three-step drafts restore their old Export step as the new fourth step, and
   existing ranges default to selected when the legacy draft has no selection.
@@ -58,6 +58,23 @@ and real FFmpeg outputs; screenshots or mocked API responses alone are not proof
   and creates a real result; completed partial results remain downloadable.
 - Source changes reset source-dependent ranges/player/job state. Saved drafts
   restore only after checking the source still belongs to the current session.
+- The source list loads only when opened, exposes retention accurately, and
+  requires explicit confirmation before deleting a source, its terminal jobs and
+  output files. Cancellation and `waiting_storage` remain active states; deleting
+  an old source can free space while a different source's job waits. A source-in-use
+  conflict preserves the draft and explains the recovery action.
+- Public session limits reject oversized uploads before container inspection or
+  mutation and prevent exports exceeding count, individual duration or total
+  duration limits. Lowering limits preserves existing clips and downloadable
+  results; newly created default clips fit the new duration budget. A missing or
+  malformed limits object uses safe defaults. Browser storage is bounded before
+  parsing, and malformed identifiers never create restore requests.
+- Upload progress uses actual multipart byte events and the original native
+  `File` in `FormData`, without reading the whole file into JavaScript. Hidden
+  pages abort and stop job polling; returning to the page requests fresh status
+  immediately. Older responses cannot undo cancellation or replace a newer job.
+  Transient restoration errors preserve the draft for retry. Surviving outputs
+  remain downloadable across further reloads after their source expires.
 - At 360 px and 390 px, controls remain reachable with no horizontal document
   overflow on every step and in navigation dialogs. Touch preview, stage movement,
   export and a real download work; focus indicators remain visible.
@@ -477,3 +494,47 @@ FFmpeg decoding, four local application previews and an independent native-playe
 preview. A subsequent unchanged-code CI run passed the complete WebKit playback,
 download and layout scenario. This is consistent with the independently observed
 Linux runtime issue described above; no speculative product workaround was added.
+
+## Audit remediation verification — 5 October 2026
+
+The audit changes passed 88 frontend unit tests and a production TypeScript/Vite
+build. The JavaScript bundle is 452.40 kB (139.88 kB gzip). Tests use their own
+PostgreSQL database, API, worker and media directory; production media and sessions
+are not used.
+
+The full desktop/mobile run passed 61 scenarios. Two optional network-dependent
+YouTube/provider scenarios were explicitly skipped; the public direct-media URL
+and actual three-hour source scenarios were enabled and passed. Actual MP4/MP3
+downloads, decoded frames, ffprobe durations/streams, cross-session access,
+idempotent retries, bootstrap recovery, translations and contrast were checked.
+Fourteen resource/policy scenarios cover byte progress, hidden-page polling,
+stale cancellation, retention, explicit deletion and lowered server limits.
+
+A final code reread found a deletion race when the source-list component unmounted
+before its DELETE response. The owning workbench is now notified after a completed
+mutation even if the list has closed. Three focused checks passed after this fix:
+leaving the list during deletion, freeing an old source while another job waits
+for storage, and actual multipart upload/export/source-and-output deletion.
+
+Chromium, Firefox and WebKit each passed the complete real-media responsive matrix: fourteen
+viewport sizes, both languages and themes, all four steps, touch input, downloads
+and a twelve-clip collection. Each engine recorded 280 layout measurements. The
+short laptop Export view was adjusted to keep both download buttons visible while
+retaining cleanup dates and 44-pixel controls. The last measured English buttons
+at 1280×720 end at 608.38 and 710.38 CSS pixels.
+
+The first Firefox attempt lost the isolated API during a late page reload: its
+trace records a session HTTP 502 and the frontend proxy reports connection refused.
+After restarting the test API/worker/preview, the unchanged Firefox scenario passed
+in full. This was a test-runtime interruption, with no weakened assertion or
+product workaround. Across the full suite and final focused regression, 65
+distinct browser scenarios passed and two optional scenarios were skipped. The
+three complete matrices retain 840 measurements, actual downloaded media/probes,
+HTML reports and screenshots in the private operator test cache.
+
+The operator host lacked native decoding dependencies and had an unrelated pending
+kernel package configuration. Codec libraries were extracted into an isolated
+test directory, without changing host package state. WebKit used a private
+GStreamer registry; its actual H.264/AAC preview, seeking, frame decoding and
+downloads passed. macOS WebKit CI remains the release check closest to Safari;
+these Linux checks do not certify physical mobile devices or screen readers.

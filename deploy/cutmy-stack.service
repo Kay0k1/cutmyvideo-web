@@ -1,0 +1,16 @@
+[Unit]
+Description=Cutmy services after outgoing network restrictions
+Requires=docker.service cutmy-egress.service
+After=docker.service cutmy-egress.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/flock --exclusive --wait 300 /opt/cutmy/shared/deployment.lock /usr/bin/docker compose --env-file /opt/cutmy/shared/production.env -f /opt/cutmy/current/web/deploy/compose.yaml up -d --wait --wait-timeout 120
+ExecStop=/usr/bin/flock --exclusive --wait 30 /opt/cutmy/shared/deployment.lock /usr/bin/docker compose --env-file /opt/cutmy/shared/production.env -f /opt/cutmy/current/web/deploy/compose.yaml stop --timeout 20 api worker
+RemainAfterExit=yes
+TimeoutStartSec=480
+TimeoutStopSec=60
+
+[Install]
+WantedBy=docker.service

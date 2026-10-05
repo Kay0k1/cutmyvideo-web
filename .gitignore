@@ -8,3 +8,4 @@ test-results/
 coverage/
 *.log
 *.tsbuildinfo
+__pycache__/

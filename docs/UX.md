@@ -84,3 +84,57 @@ heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/) and
 [W3C form feedback guidance](https://www.w3.org/WAI/tutorials/forms/notifications/).
 The checks cover browser semantics and keyboard behavior, not certification of
 all assistive technologies.
+
+## Resource lifecycle and recovery — 5 October 2026
+
+Uploads use native XMLHttpRequest with the original File inside FormData. The
+browser reads only the existing 4 KiB container-validation slice in JavaScript;
+it does not create a complete ArrayBuffer or Blob copy for transfer. The progress
+bar reports transmitted bytes. Reaching its end changes the copy to server
+inspection; it does not claim that processing is complete. Percentage updates are
+coalesced, avoiding a React update for every network callback. Cancel aborts the
+request and invalidates late progress/results from that attempt.
+
+The Video step exposes a bounded list of the current session's twenty retained
+sources. Replacing a source does not make old uploads and results impossible to
+remove. A user can free older sources while another job is waiting for storage.
+Deletion always requires a native confirmation that explicitly includes the
+source, all its jobs and output files. Active work cannot be deleted; the core
+returns a conflict with a corrective explanation. Empty successful HTTP 204
+responses are accepted, and retrying a lost deletion response handles 404 safely.
+
+Source cleanup targets and result download deadlines come from server timestamps,
+formatted in the browser's timezone. A retained source explains that referencing
+jobs and results postpone deletion. Nullable deadlines are not replaced by an
+invented expiry. The storage-wait stage remains an active, cancellable job and
+shows its server-provided deadline. Upload progress is separate from encoding
+progress and storage waiting.
+
+Hidden tabs abort status reads and stop timers; returning starts a fresh read
+immediately. Generation checks reject an old response even when a transport
+ignores cancellation. Cancelling a job disposes polling before issuing the
+mutation, so a late running status cannot overwrite cancellation. Transient
+failures back off, and stalled JSON/status requests abort after thirty seconds.
+Source preparation keeps its longer two-and-a-half-minute HTTP deadline. Native
+and embedded players pause when the page becomes hidden; YouTube position timers
+also stop until the editor is visible again. Returning never silently starts
+playback.
+
+Persisted JSON is bounded before parsing (256 KiB for the workbench, 4 KiB for
+preferences). Source/job IDs and retry header keys accept only bounded safe
+identifiers; clip bounds, unique IDs and UTF-8 label sizes are checked before
+restoration. A temporary network failure while restoring does not overwrite the
+saved workbench with an empty draft. Completed results can remain restorable even
+when their source has expired. Same-fingerprint retries retain the export's
+idempotency key; successfully opening another source clears that pending attempt.
+
+Public session limits now drive upload byte checks, clip counts, individual range
+duration and total selected duration. Older or malformed responses retain safe
+defaults; valid client state is bounded to 128 ranges. Lowered limits do not
+discard already saved ranges or downloads: the editor explains which new export
+violates the current policy. New default ranges fit both duration budgets. Every
+included range is checked, including a restored range that is not being edited.
+Pending retry fingerprints are bounded to 128 KiB so the allowed larger range
+collection retains idempotency across reload. Control characters in saved labels
+are rejected. Cleanup dates that have already passed explicitly say that deletion
+may happen at any time, without promising future availability.

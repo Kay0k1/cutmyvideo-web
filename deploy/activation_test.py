@@ -27,19 +27,43 @@ class ActivationTest(unittest.TestCase):
             deploy.mkdir(parents=True)
             (deploy / "compose.yaml").write_text("name: cutmy\n")
             (deploy / "backup.cron").write_text(tag + " cron\n")
+            (deploy / "monitor.cron").write_text(tag + " monitor\n")
+            (deploy / "service-control.py").write_text('''import pathlib,sys,os
+root=pathlib.Path(os.environ["CUTMY_TEST_ROOT"])
+with (root/"service-events").open("a") as f: f.write(sys.argv[1]+"\\n")
+if sys.argv[1]=="install" and os.environ["CUTMY_TEST_MODE"]=="service-failure": sys.exit(77)
+''')
+            (deploy / "database_access.py").write_text('''import sys,os
+if os.environ["CUTMY_TEST_MODE"]=="database-access-failure": sys.exit(78)
+print('{"ok":true,"restart_required":'+('true' if os.environ["CUTMY_TEST_MODE"]=="database-bootstrap-changed" else 'false')+'}')
+''')
+            self.mock(deploy / "egress.sh", '''#!/usr/bin/env bash
+set -eu
+printf '%s %s\\n' "${PWD##*/}" "$1" >> "$CUTMY_TEST_ROOT/egress-events"
+if [[ "$CUTMY_TEST_MODE" == egress-failure && "$1" == apply && ! -e "$CUTMY_TEST_ROOT/egress-failed" ]]; then touch "$CUTMY_TEST_ROOT/egress-failed"; exit 76; fi
+''')
         self.current = self.root / "current"
         self.current.symlink_to(self.root / "releases" / OLD)
         self.cron = self.root / "backup.cron"
         self.cron.write_text(OLD + " cron\n")
+        self.monitor_cron = self.root / "monitor.cron"
+        self.monitor_cron.write_text("operator-specific monitor\n")
         self.state = self.root / "running-release"
         self.state.write_text(OLD)
         bindir = self.root / "bin"
         bindir.mkdir()
         self.mock(bindir / "docker", r'''#!/usr/bin/env bash
 set -eu
+if [[ " $* " == *" config "* ]]; then printf '{"services":{"api":{"environment":{"MAX_SOURCE_BYTES":"1073741824"}}}}'; exit 0; fi
 if [[ " $* " == *" build "* ]]; then
   [[ "$CUTMY_TEST_MODE" != build-failure ]] || exit 71
   exit 0
+fi
+if [[ " $* " == *" stop "* ]]; then printf 'stopped' > "$CUTMY_TEST_ROOT/running-release"; exit 0; fi
+if [[ " $* " == *" restart "* ]]; then printf 'restarted' > "$CUTMY_TEST_ROOT/role-restart"; exit 0; fi
+if [[ " $* " == *" exec "* ]]; then
+ [[ "$CUTMY_TEST_MODE" != post-role-health-failure ]] || exit 79
+ exit 0
 fi
 [[ " $* " == *" up "* ]] || exit 90
 printf '%s' "$RELEASE_TAG" > "$CUTMY_TEST_ROOT/running-release"
@@ -59,6 +83,7 @@ exec /bin/mv "$@"
             "PATH": str(bindir) + os.pathsep + os.environ["PATH"],
             "CUTMY_INSTALL_DIR": str(self.root),
             "CUTMY_CRON_FILE": str(self.cron),
+            "CUTMY_MONITOR_CRON_FILE": str(self.monitor_cron),
             "CUTMY_TEST_ROOT": str(self.root),
             "CUTMY_TEST_NEW": NEW,
         }
@@ -83,6 +108,7 @@ exec /bin/mv "$@"
         self.assertEqual(self.current.resolve(), self.root / "releases" / OLD)
         self.assertEqual(self.state.read_text(), OLD)
         self.assertEqual(self.cron.read_text(), OLD + " cron\n")
+        self.assertEqual(self.monitor_cron.read_text(), "operator-specific monitor\n")
 
     def assert_no_snapshots(self):
         self.assertEqual(list((self.root / "shared").glob("production.env.*")), [])
@@ -95,6 +121,7 @@ exec /bin/mv "$@"
         self.assertIn("RELEASE_TAG=" + NEW + "\n", self.env_file.read_text())
         self.assertIn("POSTGRES_PASSWORD=fixture-private-value\n", self.env_file.read_text())
         self.assertEqual(self.cron.read_text(), NEW + " cron\n")
+        self.assertEqual(self.monitor_cron.read_text(), NEW + " monitor\n")
         self.assertEqual((self.current / "release.env").read_text(), "CORE_COMMIT=" + CORE + "\nWEB_COMMIT=" + WEB + "\n")
         self.assert_no_snapshots()
 
@@ -141,6 +168,63 @@ exec /bin/mv "$@"
         self.assertEqual(self.env_file.read_text(), self.original)
         self.assertIn("no previous release exists", result.stderr)
         self.assert_no_snapshots()
+        self.assertEqual(self.state.read_text(), "stopped")
+
+    def test_actual_operator_cron_is_restored_not_old_release_template(self):
+        self.cron.write_text("operator changed backup schedule\n")
+        result = self.run_activation("commit-failure")
+        self.assertEqual(result.returncode, 74)
+        self.assertEqual(self.cron.read_text(), "operator changed backup schedule\n")
+        self.assertEqual(self.monitor_cron.read_text(), "operator-specific monitor\n")
+
+    def test_egress_failure_does_not_start_new_containers(self):
+        result = self.run_activation("egress-failure")
+        self.assertEqual(result.returncode, 76)
+        self.assert_old_release()
+        self.assert_no_snapshots()
+
+    def test_service_enable_failure_restores_release_and_unit_snapshot(self):
+        result = self.run_activation("service-failure")
+        self.assertEqual(result.returncode, 77)
+        self.assert_old_release()
+        self.assertEqual((self.root / "service-events").read_text(), "snapshot\ninstall\nrestore\n")
+        self.assert_no_snapshots()
+
+    def test_database_role_setup_failure_rolls_back_before_release_commit(self):
+        result = self.run_activation("database-access-failure")
+        self.assertEqual(result.returncode, 78)
+        self.assert_old_release()
+        self.assert_no_snapshots()
+
+    def test_bootstrap_role_switch_restarts_media_containers_and_checks_readiness(self):
+        result = self.run_activation("database-bootstrap-changed")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.root / "role-restart").read_text(), "restarted")
+
+    def test_post_role_readiness_failure_restores_previous_release(self):
+        result = self.run_activation("post-role-health-failure")
+        self.assertEqual(result.returncode, 79)
+        self.assert_old_release()
+        self.assert_no_snapshots()
+
+    def test_concurrent_rollout_is_rejected_before_snapshot_or_build(self):
+        import fcntl
+        with (self.root / "shared/deployment.lock").open("a") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            result = self.run_activation("success")
+        self.assertEqual(result.returncode, 75)
+        self.assert_old_release()
+        self.assert_no_snapshots()
+
+    def test_first_release_restores_absent_cron_files(self):
+        self.current.unlink()
+        self.cron.unlink()
+        self.monitor_cron.unlink()
+        result = self.run_activation("commit-failure")
+        self.assertEqual(result.returncode, 74)
+        self.assertFalse(self.cron.exists())
+        self.assertFalse(self.monitor_cron.exists())
+        self.assertEqual(self.state.read_text(), "stopped")
 
 
 if __name__ == "__main__":

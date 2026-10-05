@@ -88,6 +88,12 @@ test('source, job and finished files are isolated between sessions', async ({ pl
       const response = await stranger.get(url)
       expect(response.status(), url).toBe(404)
     }
+    expect((await stranger.delete(`${api}/sources/${source.id}`)).status()).toBe(404)
+    const privateList = await stranger.get(`${api}/sources`)
+    expect(privateList.ok()).toBeTruthy()
+    expect((await privateList.json()).sources).toEqual([])
+    const ownedList = await owner.get(`${api}/sources`)
+    expect((await ownedList.json()).sources.some((item: { id: string }) => item.id === source.id)).toBe(true)
     const exportAttempt = await stranger.post(`${api}/jobs`, {
       data: { source_id: source.id, ranges: [{ start_ms: 1000, end_ms: 2000 }], format: 'mp4', quality: '720p', cut_mode: 'accurate' },
     })

@@ -1,0 +1,8 @@
+/opt/cutmy/shared/backup.log {
+    size 1M
+    rotate 3
+    compress
+    missingok
+    notifempty
+    create 0600 root root
+}

@@ -1,5 +1,5 @@
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Daily database backup at 03:17 in the server's timezone.
-17 3 * * * root /opt/cutmy/current/web/deploy/backup.sh >> /opt/cutmy/shared/backup.log 2>&1
+# Hourly at :17 in the server's timezone; target DB RPO is about one hour.
+17 * * * * root /opt/cutmy/current/web/deploy/backup.sh >> /opt/cutmy/shared/backup.log 2>&1

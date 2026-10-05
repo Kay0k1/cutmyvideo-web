@@ -1,4 +1,5 @@
 import type { OutputSettings } from './types';
+import { readStoredRecord } from './browserStorage';
 
 export interface Preferences { output: OutputSettings; timeline_span: number; }
 export const defaultPreferences: Preferences = { output: { format: 'mp4', quality: '1080p', cut_mode: 'accurate' }, timeline_span: 60000 };
@@ -12,9 +13,9 @@ export function readOutputSettings(value: unknown): OutputSettings | null {
 
 export function readPreferences(): Preferences {
   try {
-    const saved = JSON.parse(localStorage.getItem('cutmyvideo.preferences') ?? 'null') as Preferences | null;
+    const saved = readStoredRecord('cutmyvideo.preferences', 4096);
     const output = readOutputSettings(saved?.output);
-    if (!output || !saved || ![10000, 60000, 300000].includes(saved.timeline_span)) return defaultPreferences;
+    if (!output || typeof saved.timeline_span !== 'number' || ![10000, 60000, 300000].includes(saved.timeline_span)) return defaultPreferences;
     return { output, timeline_span: saved.timeline_span };
   } catch { return defaultPreferences; }
 }
