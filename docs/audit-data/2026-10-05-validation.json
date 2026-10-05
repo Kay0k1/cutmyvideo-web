@@ -1,0 +1,69 @@
+{
+  "date": "2026-10-05",
+  "core_baseline": "6819e87eee867d6b048ae085b94735986315d188",
+  "web_baseline": "ebd51a2",
+  "core": {
+    "top_level_passed": 119,
+    "including_subtests_passed": 330,
+    "failed": [],
+    "skipped_tests": [],
+    "race": true,
+    "postgres": true,
+    "ffmpeg": true
+  },
+  "frontend_unit_passed": 63,
+  "deploy_tests_passed": 7,
+  "browser_runs": {
+    "browser-final": {
+      "stats": {
+        "total": 49,
+        "expected": 45,
+        "unexpected": 0,
+        "flaky": 0,
+        "skipped": 4,
+        "ok": true
+      },
+      "duration_ms": 188520.237,
+      "projects": [
+        "desktop",
+        "mobile"
+      ]
+    },
+    "layout": {
+      "stats": {
+        "total": 1,
+        "expected": 1,
+        "unexpected": 0,
+        "flaky": 0,
+        "skipped": 0,
+        "ok": true
+      },
+      "duration_ms": 165554.334,
+      "projects": [
+        "layout-chromium"
+      ]
+    },
+    "firefox-final": {
+      "stats": {
+        "total": 1,
+        "expected": 1,
+        "unexpected": 0,
+        "flaky": 0,
+        "skipped": 0,
+        "ok": true
+      },
+      "duration_ms": 223639.144,
+      "projects": [
+        "layout-firefox"
+      ]
+    }
+  },
+  "notes": [
+    "Browser desktop/mobile Playwright report is passed; shell reported 143 after the complete green summary.",
+    "Chromium layout ran against the initial local core binary; Firefox and the final functional suite ran against the updated core.",
+    "Four optional real-video browser scenarios were skipped.",
+    "Safari/WebKit and production deployment were not verified.",
+    "Docker image build blocked by unavailable network proxy."
+  ],
+  "core_revision": "e9b4bb15734a08a897e85c171b8692b0cd658b55"
+}

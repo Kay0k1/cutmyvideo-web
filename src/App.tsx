@@ -1,5 +1,5 @@
 import { useLanguage } from './Language';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, ApiError, errorMessage } from './api';
 import { Icon } from './Icons';
@@ -21,6 +21,8 @@ import { duplicateRanges, markBounds, maxClips, rangeSelection, removeRanges, re
 import type { WorkbenchStep } from './clipCollection';
 import { exportFailureReason, repeatsFailedExport } from './jobFailure';
 import { ExportProgress } from './ExportProgress';
+import { createPlaybackPosition } from './playbackPosition';
+import { coalescedTask } from './coalescedTask';
 
 const storageKey = 'cutmy.workbench.v1';
 const activeJob = (job: Job | null) => job?.status === 'queued' || job?.status === 'running';
@@ -78,7 +80,7 @@ export default function App() {
   const [startText, setStartText] = useState('');
   const [endText, setEndText] = useState('');
   const [rangeError, setRangeError] = useState('');
-  const [current, setCurrent] = useState(0);
+  const [position] = useState(createPlaybackPosition);
   const [playerAvailable, setPlayerAvailable] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [span, setSpan] = useState(preferences.timeline_span);
@@ -102,6 +104,7 @@ export default function App() {
   const stageHeading = useRef<HTMLHeadingElement>(null);
   const previousStep = useRef(step);
   const restoredPosition = useRef<number | null>(null);
+  const draftWriter = useRef<ReturnType<typeof coalescedTask> | null>(null);
   const selected = ranges.find(range => range.id === selectedId) ?? ranges[0];
   const exportRanges = ranges.filter(range => selectedRangeIds.includes(range.id));
   const busy = activeJob(job) || submitting;
@@ -112,6 +115,17 @@ export default function App() {
   const invalidDraft = !!selected && !!validateRange(parseTimecode(startText), parseTimecode(endText), duration);
   const preserveLocalQuality = output.cut_mode === 'copy' && (source?.kind === 'upload' || source?.kind === 'direct');
 
+  const playbackPosition = useCallback((ms: number) => {
+    position.set(Math.min(duration, ms));
+    if (previewEnd.current !== null && ms >= previewEnd.current) { player.current?.pause(); previewEnd.current = null; setPreviewing(false); }
+  }, [duration, position]);
+
+  const playerAvailability = useCallback((available: boolean) => {
+    setPlayerAvailable(available);
+    if (!available) { previewEnd.current = null; setPreviewing(false); }
+    if (available && restoredPosition.current !== null) { player.current?.seek(restoredPosition.current); restoredPosition.current = null; }
+  }, []);
+
   const setFields = useCallback((range: ClipRange) => {
     setStartText(formatTimecode(range.start_ms, true));
     setEndText(formatTimecode(range.end_ms, true));
@@ -120,6 +134,7 @@ export default function App() {
 
   useEffect(() => {
     let disposed = false;
+    const controller = new AbortController();
     void (async () => {
       try {
         await api.session();
@@ -136,7 +151,7 @@ export default function App() {
           let sourceStep: WorkbenchStep | undefined;
           if (typeof saved.source_id === 'string') {
             try {
-              const original = await api.source(saved.source_id);
+              const original = await api.source(saved.source_id, controller.signal);
               if (disposed) return;
               const valid = restoreRanges(saved.ranges, original.duration_ms);
               const restoredRanges = valid.length || Array.isArray(saved.ranges) && saved.ranges.length === 0 ? valid : [newRange(original.duration_ms)];
@@ -146,8 +161,8 @@ export default function App() {
               setPrecisionOpen(saved.precision_open === true || original.preview_kind === 'none' || (!original.preview_url && !original.embed_url));
               sourceStep = !active && (savedStep === 2 || savedStep === undefined) ? 3 : savedStep ?? 2;
               sourceWasRestored = true; setStep(sourceStep);
-              const position = typeof saved.current_ms === 'number' && Number.isFinite(saved.current_ms) ? Math.max(0, Math.min(original.duration_ms, saved.current_ms)) : 0;
-              restoredPosition.current = position; setCurrent(position);
+              const savedPosition = typeof saved.current_ms === 'number' && Number.isFinite(saved.current_ms) ? Math.max(0, Math.min(original.duration_ms, saved.current_ms)) : 0;
+              restoredPosition.current = savedPosition; position.set(savedPosition);
               setViewCenter(active ? (active.start_ms + active.end_ms) / 2 : 0);
               if (active) setSimpleView(simpleRangeView(original.duration_ms, active));
               setSpan(Math.min(original.duration_ms, preferences.timeline_span));
@@ -155,30 +170,53 @@ export default function App() {
               if (restoredOutput) setOutput(restoredOutput);
             } catch { if (!disposed) setSourceError('Предыдущий источник больше недоступен. Откройте его заново.'); }
           }
+          if (disposed) return;
           if (typeof saved.job_id === 'string') {
-            try { const previous = await api.job(saved.job_id); if (!disposed) { setJob(previous); setJobRangeNumbers(Array.isArray(saved.job_range_numbers) && saved.job_range_numbers.length === previous.items.length && saved.job_range_numbers.every(number => Number.isInteger(number) && number > 0 && number <= maxClips) ? saved.job_range_numbers : previous.items.map((_, index) => index + 1)); setStep(sourceWasRestored ? sourceStep ?? 4 : 4); } } catch { /* Old job may have expired. */ }
+            try { const previous = await api.job(saved.job_id, controller.signal); if (!disposed) { setJob(previous); setJobRangeNumbers(Array.isArray(saved.job_range_numbers) && saved.job_range_numbers.length === previous.items.length && saved.job_range_numbers.every(number => Number.isInteger(number) && number > 0 && number <= maxClips) ? saved.job_range_numbers : previous.items.map((_, index) => index + 1)); setStep(sourceWasRestored ? sourceStep ?? 4 : 4); } } catch { /* Old job may have expired. */ }
           }
+          if (disposed) return;
           restored.current = true;
         }
         if (!disposed) setSessionReady(true);
       } catch (error) { if (!disposed) setSourceError(errorMessage(error)); }
     })();
-    return () => { disposed = true; };
+    return () => { disposed = true; controller.abort(); };
   }, [sessionAttempt, setFields]);
 
-  useEffect(() => {
+  function draftSnapshot() {
+    return { workflow_version: 2, source_id: source?.id, ranges, selected_id: selectedId, selected_range_ids: selectedRangeIds, output, job_id: job?.id, job_range_numbers: jobRangeNumbers, step, current_ms: position.getSnapshot(), precision_open: precisionOpen, export_attempt: exportAttempt.current };
+  }
+
+  const saveDraft = useEffectEvent(() => {
     if (!sessionReady || !source) return;
-    try { localStorage.setItem(storageKey, JSON.stringify({ workflow_version: 2, source_id: source.id, ranges, selected_id: selectedId, selected_range_ids: selectedRangeIds, output, job_id: job?.id, job_range_numbers: jobRangeNumbers, step, current_ms: current, precision_open: precisionOpen, export_attempt: exportAttempt.current })); }
+    try { localStorage.setItem(storageKey, JSON.stringify(draftSnapshot())); }
     catch { /* Editing remains available without browser storage. */ }
-  }, [source, ranges, selectedId, selectedRangeIds, output, job?.id, jobRangeNumbers, sessionReady, step, current, precisionOpen]);
+  });
+
+  useEffect(() => {
+    const writer = coalescedTask(saveDraft);
+    draftWriter.current = writer;
+    const unsubscribe = position.subscribe(() => writer.schedule());
+    const onHidden = () => { if (document.hidden) writer.flush(); };
+    window.addEventListener('pagehide', writer.flush);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      unsubscribe(); writer.flush(); draftWriter.current = null;
+      window.removeEventListener('pagehide', writer.flush);
+      document.removeEventListener('visibilitychange', onHidden);
+    };
+  }, [position]);
+
+  useEffect(() => { draftWriter.current?.schedule(300); }, [source, ranges, selectedId, selectedRangeIds, output, job?.id, jobRangeNumbers, sessionReady, step, precisionOpen]);
 
   useEffect(() => {
     if (!job || !activeJob(job)) return;
     let disposed = false;
+    const controller = new AbortController();
     let timer: number;
     const poll = async () => {
       try {
-        const fresh = await api.job(job.id);
+        const fresh = await api.job(job.id, controller.signal);
         if (disposed) return;
         setJob(fresh); setJobError('');
         if (activeJob(fresh)) timer = window.setTimeout(poll, 1500);
@@ -191,7 +229,7 @@ export default function App() {
       }
     };
     timer = window.setTimeout(poll, 500);
-    return () => { disposed = true; window.clearTimeout(timer); };
+    return () => { disposed = true; controller.abort(); window.clearTimeout(timer); };
   }, [job?.id, job?.status]);
 
   useEffect(() => () => sourceController.current?.abort(), []);
@@ -220,7 +258,7 @@ export default function App() {
   function changeBounds(start: number, end: number) {
     if (!selected) return;
     const updated = { ...selected, start_ms: start, end_ms: end };
-    setRanges(previous => previous.map(range => range.id === selected.id ? updated : range));
+    if (start !== selected.start_ms || end !== selected.end_ms) setRanges(previous => previous.map(range => range.id === selected.id ? updated : range));
     setFields(updated);
     previewEnd.current = null; setPreviewing(false);
   }
@@ -259,29 +297,30 @@ export default function App() {
     const value = Math.max(0, Math.min(duration, ms));
     restoredPosition.current = null;
     previewEnd.current = null; setPreviewing(false);
-    setCurrent(value); player.current?.seek(value);
+    position.set(value); player.current?.seek(value);
   }
 
   function marker(which: 'start' | 'end') {
     if (!selected) return;
-    const [start, end] = markBounds(selected, current, which, duration);
+    const [start, end] = markBounds(selected, position.getSnapshot(), which, duration);
     const error = validateRange(start, end, duration);
     if (error) { setRangeError(error); return; }
     changeBounds(start, end); setViewCenter((start + end) / 2); setSimpleView(simpleRangeView(duration, { ...selected, start_ms: start, end_ms: end }));
   }
 
+  const handleShortcut = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || document.querySelector('dialog[open]')) return;
+    if ((event.target as HTMLElement).closest('input, textarea, select, button, a, [contenteditable], [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"]')) return;
+    if (step !== 2 || !source || !selected) return;
+    if (event.code === 'KeyI') { event.preventDefault(); marker('start'); }
+    if (event.code === 'KeyO') { event.preventDefault(); marker('end'); }
+    if (event.code === 'Space' && playerAvailable) { event.preventDefault(); player.current?.toggle(); }
+  });
   useEffect(() => {
-    const key = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || document.querySelector('dialog[open]')) return;
-      if ((event.target as HTMLElement).closest('input, textarea, select, button, a, [contenteditable], [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"]')) return;
-      if (step !== 2 || !source || !selected) return;
-      if (event.code === 'KeyI') { event.preventDefault(); marker('start'); }
-      if (event.code === 'KeyO') { event.preventDefault(); marker('end'); }
-      if (event.code === 'Space' && playerAvailable) { event.preventDefault(); player.current?.toggle(); }
-    };
+    const key = (event: KeyboardEvent) => handleShortcut(event);
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  });
+  }, []);
 
   async function openSource(file?: File, providedUrl?: string) {
     if (!sessionReady || sourceBusy || busy) return;
@@ -306,7 +345,7 @@ export default function App() {
       player.current?.pause(); previewEnd.current = null; restoredPosition.current = null;
       setSource(opened); setRanges([range]); setSelectedId(range.id); setFields(range);
       setSelectedRangeIds([range.id]); setRevealId(range.id); setSimpleView(simpleRangeView(opened.duration_ms, range)); setPrecisionOpen(opened.preview_kind === 'none' || (!opened.preview_url && !opened.embed_url));
-      setCurrent(0); setViewCenter((range.start_ms + range.end_ms) / 2); setSpan(Math.min(opened.duration_ms, preferences.timeline_span)); setOutput(preferences.output);
+      position.set(0); setViewCenter((range.start_ms + range.end_ms) / 2); setSpan(Math.min(opened.duration_ms, preferences.timeline_span)); setOutput(preferences.output);
       setJob(null); setJobRangeNumbers([]); setJobError(''); setPreviewing(false); setPlayerAvailable(false); setStep(2);
       if (!file) setUrl(candidateUrl!);
       setNotice('Источник открыт. Укажите границы фрагмента.');
@@ -332,7 +371,7 @@ export default function App() {
     if (!source || ranges.length >= maxClips) return;
     const committed = selected ? validateFields(true) : null;
     if (selected && !committed) { setStep(2); return; }
-    const range = newRange(duration, current);
+    const range = newRange(duration, position.getSnapshot());
     setRanges(previous => [...previous.map(item => item.id === committed?.id ? committed! : item), range]);
     setSelectedRangeIds(previous => [...previous, range.id]);
     setSelectedId(range.id); setFields(range); setViewCenter((range.start_ms + range.end_ms) / 2); setSimpleView(simpleRangeView(duration, range));
@@ -379,7 +418,7 @@ export default function App() {
       const requestedOutput = preserveLocalQuality ? { ...output, quality: 'best' as const } : output;
       const fingerprint = JSON.stringify({ source_id: source.id, ranges: included.map(({ start_ms, end_ms, label }) => ({ start_ms, end_ms, label })), ...requestedOutput });
       if (exportAttempt.current?.fingerprint !== fingerprint) exportAttempt.current = { fingerprint, key: crypto.randomUUID() };
-      try { localStorage.setItem(storageKey, JSON.stringify({ ...rememberedDraft(), export_attempt: exportAttempt.current })); }
+      try { localStorage.setItem(storageKey, JSON.stringify({ ...draftSnapshot(), ranges: committed })); }
       catch { /* The retry key remains available in memory when storage is unavailable. */ }
       const created = await api.createJob(source.id, included, requestedOutput, exportAttempt.current.key);
       exportAttempt.current = null;
@@ -438,13 +477,10 @@ export default function App() {
         <div className="editing-panel">
           <div className="media-heading"><div className="source-title"><Icon name="file" size={18} /><span>{source.title}</span>{sourceProvider && <span className="source-provider">{t(sourceProvider)}</span>}</div><span className="source-meta">{qualityLabel && <>{qualityLabel}<span className="meta-separator"> / </span></>}{formatTimecode(duration)}</span></div>
           <div className="moment-layout">
-          <Player ref={player} source={source} onAvailable={available => { setPlayerAvailable(available); if (!available) { previewEnd.current = null; setPreviewing(false); } if (available && restoredPosition.current !== null) { player.current?.seek(restoredPosition.current); restoredPosition.current = null; } }} onTime={ms => {
-            setCurrent(Math.min(duration, ms));
-            if (previewEnd.current !== null && ms >= previewEnd.current) { player.current?.pause(); previewEnd.current = null; setPreviewing(false); }
-          }} />
+          <Player ref={player} source={source} active={step === 2} onAvailable={playerAvailability} onTime={playbackPosition} />
           {selected && <div className="moment-controls">
             <div className="moment-boundaries"><div><label htmlFor="range-start">{t('Начало')}</label><strong hidden={precisionOpen}>{displayTimecode(selected.start_ms)}</strong><input ref={startField} id="range-start" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitFields(); } }} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span>{t('Начало здесь')}<kbd>I</kbd></button></div><div><label htmlFor="range-end">{t('Конец')}</label><strong hidden={precisionOpen}>{displayTimecode(selected.end_ms)}</strong><input ref={endField} id="range-end" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" value={endText} onChange={event => { setEndText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitFields(); } }} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span>{t('Конец здесь')}<kbd>O</kbd></button></div><div className="moment-duration"><span>{t('Длительность')}</span><strong>{durationLabel(selected.end_ms - selected.start_ms, locale)}</strong></div></div>
-            <Timeline duration={duration} current={current} ranges={ranges} selected={selected} view={precisionOpen ? view : simpleView} showOverview={precisionOpen} onSeek={seek} onRange={changeBounds} onReveal={revealBoundary} />
+            <Timeline duration={duration} position={position} ranges={ranges} selected={selected} view={precisionOpen ? view : simpleView} showOverview={precisionOpen} onSeek={seek} onRange={changeBounds} onReveal={revealBoundary} />
             <div className="moment-preview"><button className="button secondary" type="button" disabled={!playerAvailable} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} />{previewing ? t('Остановить просмотр') : t('Посмотреть фрагмент')}</button><button className="text-button precision-toggle" type="button" aria-expanded={precisionOpen} aria-controls="range-start range-end precision-controls" onClick={() => { if (precisionOpen && invalidDraft) { validateFields(true); return; } if (precisionOpen) setSimpleView(simpleRangeView(duration, selected)); setPrecisionOpen(!precisionOpen); setViewCenter((selected.start_ms + selected.end_ms) / 2); }}>{t('Точное время и шкала')}<Icon name="chevron" size={15} style={{ transform: precisionOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button></div>
             <div id="precision-controls" className="precision-controls" hidden={!precisionOpen}>
               <p id="time-hint" className="field-hint">{t('Часы:минуты:секунды. Можно ввести 83:10 или 01:23:10.250.')}</p>
@@ -457,7 +493,7 @@ export default function App() {
         <div className="stage-actions"><div className="moment-secondary-actions"><button className="text-button change-source" type="button" onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button><button className="text-button" type="button" onClick={() => setShowShortcuts(!showShortcuts)} aria-expanded={showShortcuts}><span className="keycap">?</span>{t('Горячие клавиши')}</button></div><button className="button primary" type="button" onClick={() => goToStep(3)} disabled={sourceBusy || !selected}>{t('Сохранить фрагмент')}<Icon name="check" size={17} /></button></div>
         {showShortcuts && <div className="shortcut-guide"><span><kbd>I</kbd>{t('начало по позиции плеера')}</span><span><kbd>O</kbd>{t('конец')}</span><span><kbd>{t('Пробел')}</kbd>{t('пауза / воспроизведение')}</span><span><kbd>←</kbd><kbd>→</kbd>{t('на ручке: 0,1 с;')}<kbd>Shift</kbd>{t(': 1 с')}</span><p>{t('Клавиши I, O и пробел работают вне полей ввода. В плеере действуют его собственные клавиши.')}</p></div>}
       </section>}
-      {step === 3 && source && <ClipLibrary ranges={ranges} selectedIds={selectedRangeIds} editedId={selectedId} revealId={revealId} onSelect={id => { setSelectedRangeIds(previous => previous.includes(id) ? previous.filter(value => value !== id) : [...previous, id]); setRevealId(id); }} onSelectAll={() => setSelectedRangeIds(exportRanges.length === ranges.length ? [] : ranges.map(range => range.id))} onEdit={pickRange} onAdd={addRange} onLabel={(id, label) => setRanges(previous => previous.map(range => range.id === id ? { ...range, label } : range))} onDuplicate={duplicateSelected} onDelete={() => removeSelected(selectedRangeIds)} onDeleteOne={id => removeSelected([id])} onExport={() => goToStep(4)} />}
+      {step === 3 && source && <ClipLibrary ranges={ranges} selectedIds={selectedRangeIds} editedId={selectedId} revealId={revealId} onSelect={id => { setSelectedRangeIds(previous => previous.includes(id) ? previous.filter(value => value !== id) : [...previous, id]); setRevealId(id); }} onSelectAll={() => setSelectedRangeIds(exportRanges.length === ranges.length ? [] : ranges.map(range => range.id))} onEdit={pickRange} onAdd={addRange} onLabel={(id, label) => setRanges(previous => previous.map(range => range.id === id ? { ...range, label } : range))} onDuplicate={duplicateSelected} onDelete={() => removeSelected(selectedRangeIds)} onDeleteOne={id => removeSelected([id])} onRestore={snapshot => { setRanges(snapshot.ranges); setSelectedRangeIds(snapshot.selectedIds); setSelectedId(snapshot.editedId); setRevealId(snapshot.editedId); const active = snapshot.ranges.find(range => range.id === snapshot.editedId) ?? snapshot.ranges[0]; if (active) { setFields(active); setViewCenter((active.start_ms + active.end_ms) / 2); setSimpleView(simpleRangeView(duration, active)); } setNotice('Фрагменты восстановлены.'); }} onExport={() => goToStep(4)} />}
       {step === 4 && (source || job) && <div className="output-stage">
         {source && <div className="output-grid"><div className="output-overview"><section className="output-selection" aria-labelledby="output-selection-heading"><div className="output-source"><Icon name="file" size={20} /><span>{source.title}</span></div><h2 id="output-selection-heading">{t('Выбранные фрагменты')}</h2>{!exportRanges.length && <p className="field-hint">{t('Выберите хотя бы один фрагмент для экспорта.')}</p>}<ol>{exportRanges.map((range, index) => <li key={range.id}><span className="range-index">{index + 1}</span><div><strong>{range.label || `${t('Фрагмент')} ${ranges.findIndex(original => original.id === range.id) + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></div><span>{durationLabel(range.end_ms - range.start_ms, locale)}</span></li>)}</ol><button className="text-button" type="button" onClick={() => goToStep(3)}><Icon name="chevron" size={17} style={{ transform: 'rotate(180deg)' }} />{t('К списку фрагментов')}</button></section>{resultsPanel}</div>
         <section className="export-panel" aria-labelledby="export-heading"><form onSubmit={exportClips}>

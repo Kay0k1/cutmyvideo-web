@@ -5,6 +5,7 @@ Notable product changes are recorded here.
 ## Unreleased
 
 ### Added
+- Restore the last clip deletion with original order, labels, selection and boundaries; explain bulk-copy limits and associate upload errors with the chooser.
 - Compact, theme-aware encoding progress measured from actual processed media time, weighted across selected clips, with accessible labels, retry resets and backward compatibility for older jobs.
 - Show specific export failure reasons in Russian and English, with a retry action that retains the selected source and intervals.
 - Compact trim and overview controls with separate 44-pixel hit regions, boundary-time hints and keyboard navigation that reveals the focused boundary.
@@ -32,6 +33,9 @@ Notable product changes are recorded here.
 - GitHub checks against a pinned public-core revision, with real media and browser integration tests.
 
 ### Fixed
+- Isolate playback updates to the timeline, coalesce draft persistence with lifecycle flushes, retain one keyboard listener, and stop unused player polling and obsolete reads.
+- Keep source type controls consistent with an active import/export and localize request-body timeout feedback.
+- Harden API/worker deployment with a read-only root, dropped capabilities, bounded temporary storage and PID limits.
 - Validate saved clips independently and normalize restored export settings; malformed drafts no longer discard a usable source or submit invalid MP3/copy requests.
 - Reuse an unacknowledged export's idempotency key across retries and reloads, preventing duplicate jobs after a lost response.
 - Stop polling missing or expired jobs and release the export controls; retry the YouTube player library after a failed load.

@@ -29,6 +29,10 @@ Caddy obtains HTTPS certificates automatically. Only the edge publishes ports;
 PostgreSQL, media workers, and the API remain on the internal Compose network.
 The API and worker share the media volume. Resource limits prevent processing
 from using all of the machine's available CPU and memory.
+Both media services drop all Linux capabilities, have a read-only root filesystem
+and a 256-process ceiling, and use a private 128 MiB temporary filesystem with
+`noexec,nosuid,nodev`. Extractor caches live under that temporary filesystem;
+sources, exports and processing workspaces use the media volume.
 The API builds the core image once; the worker uses that same image without a
 second build targeting the same image tag.
 
@@ -54,6 +58,11 @@ of selected material per job, three active jobs per owner and thirty-two active
 jobs globally. Source preparation has four global slots and one slot per owner.
 Mutation admission is twenty requests per minute per client IP, including uploads,
 source imports, exports and cancellation. Shared networks also share that IP limit.
+All authenticated requests additionally share a 1,200-per-minute IP ceiling;
+the 180-per-minute per-owner ceiling still applies. Cookie rotation does not
+bypass IP admission or allocate owner entries for rejected mutations. JSON
+metadata must finish arriving within ten seconds; uploads retain their separate
+source preparation timeout.
 
 Sources and results have a 24-hour retention target. Cleanup runs in the worker
 every five minutes; active jobs pin their required resources. This is not an exact

@@ -1,5 +1,5 @@
 import { useLanguage } from './Language';
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, memo, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Source } from './types';
 import { Icon } from './Icons';
 import { providerName } from './sourceInput';
@@ -29,6 +29,7 @@ interface YoutubeInstance {
   disposed: boolean;
   pendingSeek: number | null;
   pendingPause: boolean;
+  syncPolling(): void;
   fail(): void;
 }
 declare global { interface Window { YT?: YTNamespace; onYouTubeIframeAPIReady?: () => void; } }
@@ -74,17 +75,20 @@ function embedId(url: string | null): string | null {
   } catch { return null; }
 }
 
-export const Player = forwardRef<PlayerControls, {
+export const Player = memo(forwardRef<PlayerControls, {
   source: Source | null;
+  active: boolean;
   onTime(ms: number): void;
   onAvailable(available: boolean): void;
-}>(({ source, onTime, onAvailable }, ref) => {
+}>(({ source, active, onTime, onAvailable }, ref) => {
   const { t } = useLanguage();
   const video = useRef<HTMLVideoElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const youtube = useRef<YoutubeInstance | null>(null);
   const callbacks = useRef({ onTime, onAvailable });
   callbacks.current = { onTime, onAvailable };
+  const pollingActive = useRef(active);
+  pollingActive.current = active;
   const [error, setError] = useState(false);
   const provider = providerName(source?.provider);
   const poster = source && source.thumbnail_url === `/api/v1/sources/${encodeURIComponent(source.id)}/thumbnail` ? source.thumbnail_url : undefined;
@@ -123,13 +127,25 @@ export const Player = forwardRef<PlayerControls, {
     },
   }), []);
 
+  useEffect(() => { youtube.current?.syncPolling(); }, [active]);
+
   useEffect(() => {
     setError(false);
     callbacks.current.onAvailable(false);
     const id = embedId(source?.embed_url ?? null);
     if (!id || source?.preview_url || !host.current) return;
     let timer: number | undefined;
-    const instance: YoutubeInstance = { player: null, ready: false, failed: false, disposed: false, pendingSeek: null, pendingPause: false, fail: () => {
+    const instance: YoutubeInstance = { player: null, ready: false, failed: false, disposed: false, pendingSeek: null, pendingPause: false, syncPolling: () => {
+      window.clearInterval(timer); timer = undefined;
+      if (!pollingActive.current || !instance.ready || instance.failed || instance.disposed) return;
+      timer = window.setInterval(() => {
+        if (!instance.ready || instance.failed || instance.disposed || youtube.current !== instance || !instance.player) return;
+        let seconds: number;
+        try { seconds = instance.player.getCurrentTime(); } catch { instance.fail(); return; }
+        if (!Number.isFinite(seconds) || seconds < 0) { instance.fail(); return; }
+        callbacks.current.onTime(Math.round(seconds * 1000));
+      }, 150);
+    }, fail: () => {
       if (instance.disposed || youtube.current !== instance) return;
       instance.failed = true; instance.ready = false; instance.pendingSeek = null; instance.pendingPause = false;
       window.clearInterval(timer); timer = undefined;
@@ -154,14 +170,7 @@ export const Player = forwardRef<PlayerControls, {
             if (!instance.ready) return;
             callbacks.current.onAvailable(true);
             if (!instance.ready || instance.failed || instance.disposed || youtube.current !== instance) return;
-            window.clearInterval(timer);
-            timer = window.setInterval(() => {
-              if (!instance.ready || instance.failed || instance.disposed || youtube.current !== instance || !instance.player) return;
-              let seconds: number;
-              try { seconds = instance.player.getCurrentTime(); } catch { instance.fail(); return; }
-              if (!Number.isFinite(seconds) || seconds < 0) { instance.fail(); return; }
-              callbacks.current.onTime(Math.round(seconds * 1000));
-            }, 150);
+            instance.syncPolling();
           },
           onError: event => { if (!instance.disposed && youtube.current === instance && (!instance.player || event.target === instance.player)) instance.fail(); },
         },
@@ -203,4 +212,4 @@ export const Player = forwardRef<PlayerControls, {
       </div>}
     {error && <div className="player-error" role="status">{t("Не удалось открыть плеер. Вы можете задать границы по таймкодам и вырезать фрагмент.")}</div>}
   </div>;
-});
+}));

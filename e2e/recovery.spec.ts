@@ -14,6 +14,8 @@ async function draft(page: Page) {
 test('malformed saved clips do not discard the valid source and remaining clips', async ({ page }) => {
   await draft(page)
   await page.evaluate(() => {
+    // Flush the live draft before deliberately replacing saved state.
+    window.dispatchEvent(new Event('pagehide'))
     const key = 'cutmy.workbench.v1'
     const saved = JSON.parse(localStorage.getItem(key)!)
     saved.ranges = [null, 42, {}, saved.ranges[0], { ...saved.ranges[0], start_ms: 4000, end_ms: 5000 }]
@@ -32,6 +34,8 @@ test('saved output settings normalize MP3 copy mode and omit unknown request fie
   await draft(page)
   await goToExport(page)
   await page.evaluate(() => {
+    // Flush the live draft before deliberately replacing saved state.
+    window.dispatchEvent(new Event('pagehide'))
     const key = 'cutmy.workbench.v1'
     const saved = JSON.parse(localStorage.getItem(key)!)
     saved.output = { format: 'mp3', quality: 'best', cut_mode: 'copy', old_setting: true }
@@ -84,6 +88,8 @@ test('an expired active job stops polling and releases the export controls', asy
     } }) : route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'Expired' } } })
   })
   await page.evaluate(() => {
+    // Flush the live draft before deliberately replacing saved state.
+    window.dispatchEvent(new Event('pagehide'))
     const key = 'cutmy.workbench.v1'
     const saved = JSON.parse(localStorage.getItem(key)!)
     saved.job_id = 'job_expired'; saved.step = 4

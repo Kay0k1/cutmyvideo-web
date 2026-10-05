@@ -269,6 +269,8 @@ test('a surviving completed download stays usable when source restoration return
 test('a legacy three-step draft restores its real completed export in the fourth step', async ({ page }, testInfo) => {
   const { job } = await completedExport(page)
   await page.evaluate(() => {
+    // Flush the live draft before deliberately replacing saved state.
+    window.dispatchEvent(new Event('pagehide'))
     const key = 'cutmy.workbench.v1'
     const draft = JSON.parse(localStorage.getItem(key) || '{}')
     delete draft.workflow_version

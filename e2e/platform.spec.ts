@@ -148,6 +148,7 @@ test('YouTube navigation and controls wait for readiness and ignore replaced or 
   await expect(preview).toBeEnabled()
 
   await page.evaluate(() => {
+    window.dispatchEvent(new Event('pagehide'))
     const saved = JSON.parse(localStorage.getItem('cutmy.workbench.v1')!)
     saved.current_ms = 8000
     localStorage.setItem('cutmy.workbench.v1', JSON.stringify(saved))
@@ -305,4 +306,65 @@ test('platform failures are actionable in both languages and preserve the existi
   await showExactTimes(page)
   await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:02.250')
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).duration)).toBeCloseTo(12, 1)
+})
+
+test('playback coalesces draft writes, flushes the latest position and suspends polling outside the editor', async ({ page }) => {
+  type ProbeWindow = Window & { __playbackProbe: { polls: number; writes: number } }
+  await page.clock.install()
+  await page.addInitScript(() => {
+    const probe = { polls: 0, writes: 0 }
+    const write = Storage.prototype.setItem
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'cutmy.workbench.v1') probe.writes++
+      return write.call(this, key, value)
+    }
+    class Player {
+      time = 0
+      playing = false
+      constructor(_element: HTMLElement, options: { events: { onReady(event: { target: Player }): void } }) {
+        queueMicrotask(() => options.events.onReady({ target: this }))
+      }
+      getCurrentTime() { probe.polls++; if (this.playing) this.time += 0.15; return this.time }
+      getPlayerState() { return this.playing ? 1 : 2 }
+      seekTo(seconds: number) { this.time = seconds }
+      playVideo() { this.playing = true }
+      pauseVideo() { this.playing = false }
+      destroy() {}
+    }
+    Object.assign(window, { __playbackProbe: probe, YT: { Player } })
+  })
+  const source = {
+    id: 'src_playback_budget', title: 'Playback budget', kind: 'youtube', duration_ms: 120000,
+    preview_url: null, embed_url: 'https://www.youtube-nocookie.com/embed/aqz-KE-bpKQ', thumbnail_url: null,
+  }
+  await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
+  await page.route(`**${api}/sources`, route => route.fulfill({ status: 201, json: source }))
+  await page.route(`**${api}/sources/${source.id}`, route => route.fulfill({ json: source }))
+  await page.goto('/')
+  await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://www.youtube.com/watch?v=aqz-KE-bpKQ')
+  await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
+  await showExactTimes(page)
+  await page.getByRole('button', { name: 'Посмотреть фрагмент', exact: true }).click()
+  await page.clock.runFor(1200)
+  await page.evaluate(() => { const probe = (window as ProbeWindow).__playbackProbe; probe.writes = 0; probe.polls = 0 })
+  await page.clock.runFor(15000)
+  const active = await page.evaluate(() => (window as ProbeWindow).__playbackProbe)
+  expect(active.polls).toBeGreaterThanOrEqual(99)
+  expect(active.writes).toBeGreaterThan(0)
+  expect(active.writes).toBeLessThanOrEqual(16)
+  await page.getByRole('button', { name: 'Остановить просмотр', exact: true }).click()
+  // The native range property snaps to its 100ms step; its value attribute
+  // retains the exact playback time supplied by React.
+  const current = Number(await page.locator('#overview').getAttribute('value'))
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).current_ms)).toBe(current)
+
+  await goToSource(page)
+  const inactivePolls = await page.evaluate(() => (window as ProbeWindow).__playbackProbe.polls)
+  await page.clock.runFor(3000)
+  expect(await page.evaluate(() => (window as ProbeWindow).__playbackProbe.polls)).toBe(inactivePolls)
+  await page.reload()
+  await stepButton(page, 2).click()
+  await showExactTimes(page)
+  expect(Number(await page.locator('#overview').getAttribute('value'))).toBe(current)
 })

@@ -70,3 +70,20 @@ describe('session initialization', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('read cancellation', () => {
+  it('passes an abort signal to in-flight polling and restoration reads', async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn().mockImplementation((_url: string, options: RequestInit) => new Promise((_resolve, reject) => {
+      options.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const results = Promise.allSettled([api.job('active_job', controller.signal), api.source('source', controller.signal)]);
+    controller.abort();
+    for (const result of await results) {
+      expect(result.status).toBe('rejected');
+      if (result.status === 'rejected') expect(result.reason.name).toBe('AbortError');
+    }
+    expect(fetchMock.mock.calls.every(([, options]) => options.signal === controller.signal)).toBe(true);
+  });
+});

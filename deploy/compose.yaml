@@ -4,6 +4,11 @@ x-core: &core
   image: cutmy-core:${RELEASE_TAG:-local}
   restart: unless-stopped
   init: true
+  read_only: true
+  cap_drop:
+    - ALL
+  tmpfs:
+    - /tmp:size=128m,mode=1777,noexec,nosuid,nodev
   environment: &core-env
     DATABASE_URL: postgres://cutmy:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/cutmy?sslmode=disable
     DATA_DIR: /data
@@ -11,6 +16,7 @@ x-core: &core
     PUBLIC_ORIGIN: https://${DOMAIN:-cutmy.video}
     COOKIE_SECURE: "true"
     TRUST_PROXY: "true"
+    XDG_CACHE_HOME: /tmp/cache
     MAX_STORAGE_BYTES: "10737418240"
     SOURCE_TTL: 24h
     ARTIFACT_TTL: 24h
@@ -59,6 +65,7 @@ services:
       start_period: 15s
     mem_limit: 512m
     cpus: 1
+    pids_limit: 256
 
   worker:
     <<: *core

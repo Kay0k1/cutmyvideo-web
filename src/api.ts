@@ -29,7 +29,7 @@ function session(): Promise<{ ok: boolean }> {
 
 export const api = {
   session,
-  source: (id: string) => request<Source>(`/sources/${encodeURIComponent(id)}`),
+  source: (id: string, signal?: AbortSignal) => request<Source>(`/sources/${encodeURIComponent(id)}`, { signal }),
   open: (url: string, signal: AbortSignal) => request<Source>('/sources', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }), signal,
   }),
@@ -41,7 +41,7 @@ export const api = {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
     body: JSON.stringify({ source_id, ranges: ranges.map(({ start_ms, end_ms, label }) => ({ start_ms, end_ms, label })), format: output.format, quality: output.quality, cut_mode: output.cut_mode }),
   }),
-  job: (id: string) => request<Job>(`/jobs/${encodeURIComponent(id)}`),
+  job: (id: string, signal?: AbortSignal) => request<Job>(`/jobs/${encodeURIComponent(id)}`, { signal }),
   cancel: (id: string) => request<Job>(`/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
 };
 
@@ -77,6 +77,7 @@ export function errorMessage(error: unknown): string {
     expired: 'Срок хранения файла закончился. Вырежьте фрагмент заново.',
     not_found: 'Источник или результат больше недоступен. Откройте видео заново.',
     invalid_request: 'Не удалось отправить настройки. Обновите страницу и попробуйте ещё раз.',
+    request_timeout: 'Не удалось передать настройки вовремя. Проверьте соединение и повторите действие.',
     internal: 'Не удалось выполнить действие. Попробуйте ещё раз через минуту.',
   };
   return Object.hasOwn(messages, error.code) ? messages[error.code] : 'Не удалось выполнить действие. Попробуйте ещё раз или загрузите видео файлом.';

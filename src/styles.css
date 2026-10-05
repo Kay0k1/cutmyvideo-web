@@ -627,6 +627,9 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 .clip-empty h3 { font-size: 17px; color: var(--ink); font-weight: 480; margin-top: 12px; }
 .clip-empty p { font-size: 12px; line-height: 1.8; margin-top: 7px; }
 .clip-empty .button { margin-top: 19px; }
+.clip-undo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-top: 15px; padding: 12px; border-radius: 10px; background: var(--soft); }
+.clip-undo p { color: var(--ink); font-size: 12px; line-height: 1.7; flex: 1 1 180px; }
+.clip-undo .button { flex-shrink: 0; }
 .clip-library-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 15px; }
 .clip-library-footer p { color: var(--muted); font-size: 11px; line-height: 1.7; }
 .clip-library-footer .button { flex-shrink: 0; }

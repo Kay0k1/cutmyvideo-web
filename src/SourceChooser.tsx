@@ -27,8 +27,8 @@ export function SourceChooser({ url, onUrl, onOpen, onFile, busy, processing, re
   return <section className="source-chooser" aria-labelledby="source-heading">
     <h2 id="source-heading" className="sr-only">{t('Открыть источник')}</h2>
     <div className="source-choice" role="group" aria-label={t('Откуда взять видео')}>
-      <button type="button" aria-pressed={mode === 'link'} onClick={() => { setMode('link'); onUrl(url); }}><Icon name="link" size={20} />{t('Ссылка')}</button>
-      <button type="button" aria-pressed={mode === 'file'} onClick={() => { setMode('file'); onUrl(url); }}><Icon name="file" size={19} />{t('MP4 файл')}</button>
+      <button type="button" aria-pressed={mode === 'link'} disabled={busy || processing} onClick={() => { setMode('link'); onUrl(url); }}><Icon name="link" size={20} />{t('Ссылка')}</button>
+      <button type="button" aria-pressed={mode === 'file'} disabled={busy || processing} onClick={() => { setMode('file'); onUrl(url); }}><Icon name="file" size={19} />{t('MP4 файл')}</button>
     </div>
     {mode === 'link' ? <form className="source-form" noValidate onSubmit={event => { event.preventDefault(); onOpen(); }}>
       <label htmlFor="source-url">{t('Ссылка на видео')}</label>
@@ -48,9 +48,9 @@ export function SourceChooser({ url, onUrl, onOpen, onFile, busy, processing, re
       </div>
     </form> : <div className={`file-dropzone${dragging ? ' dragging' : ''}`} onDragOver={event => { event.preventDefault(); if (!disabled) setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={event => { event.preventDefault(); setDragging(false); if (!disabled) { const file = event.dataTransfer.files[0]; if (file) onFile(file); } }}>
       <div className="upload-symbol"><Icon name="upload" size={27} /></div>
-      <p className="drop-label">{t('Перетащите видео сюда')}</p><p className="field-hint">{t('MP4 до 1 ГБ. Файл останется доступен на время работы.')}</p>
+      <p className="drop-label">{t('Перетащите видео сюда')}</p><p id="source-file-hint" className="field-hint">{t('MP4 до 1 ГБ. Файл останется доступен на время работы.')}</p>
       <input ref={fileInput} type="file" id="source-file" hidden tabIndex={-1} aria-label={t('Выбрать MP4')} accept="video/mp4,.mp4" disabled={disabled} onChange={event => { const file = event.target.files?.[0]; if (file) onFile(file); event.target.value = ''; }} />
-      <button type="button" className="button primary upload-button" disabled={disabled} onClick={() => fileInput.current?.click()}>{busy ? <><span className="spinner" />{t('Загружаем видео…')}</> : t('Выбрать MP4')}</button>
+      <button type="button" className="button primary upload-button" aria-describedby={error ? 'source-file-hint source-error' : 'source-file-hint'} disabled={disabled} onClick={() => fileInput.current?.click()}>{busy ? <><span className="spinner" />{t('Загружаем видео…')}</> : t('Выбрать MP4')}</button>
     </div>}
     {busy && <div className="source-progress" role="status"><p>{t('Проверяем видео. Это может занять немного времени.')}</p><button type="button" className="text-button" onClick={onCancel}>{t('Отменить')}</button></div>}
     {processing && <p className="source-lock-hint">{t('Сейчас идёт экспорт. Дождитесь его или отмените на последнем шаге.')}</p>}

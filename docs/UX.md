@@ -62,3 +62,25 @@ Russian is primary. English covers visible copy, errors, accessible names, provi
 - [yt-dlp supported sites](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md): extractor availability is distinct from verified runtime access.
 
 Executed browser checks and physical-device limitations are recorded in [QA.md](QA.md). Emulation checks browser behavior, viewport sizes and touch input; it does not claim access to physical Mac or phone hardware.
+
+## Audit refinements — 5 October 2026
+
+Deleting one or several clips now offers a visible, keyboard-accessible Restore
+clips action. It restores the exact previous order, names, selected clips and
+active interval. The bounded snapshot holds at most twelve ranges and lasts
+until the next collection edit or departure from Clips; it never replaces a
+new source or overwrites later label/selection changes. Feedback is available in
+both languages and announced as a status message. After restoration keyboard
+focus returns to Select all, whose mixed state reflects the restored selection.
+
+When a bulk duplicate would exceed twelve clips, the interface explains how to
+proceed by selecting fewer clips. Source type controls stay fixed while import
+or export is active, keeping the displayed operation consistent with the actual
+request. File selection associates its format hint and any error with the
+visible chooser button.
+
+These changes apply [Nielsen's user control, error prevention and system-status
+heuristics](https://www.nngroup.com/articles/ten-usability-heuristics/) and
+[W3C form feedback guidance](https://www.w3.org/WAI/tutorials/forms/notifications/).
+The checks cover browser semantics and keyboard behavior, not certification of
+all assistive technologies.

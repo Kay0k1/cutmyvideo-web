@@ -1,13 +1,14 @@
 import { useLanguage } from './Language';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import type { ClipRange } from './types';
 import { formatTimecode } from './timecode';
 import { keyboardTrimValue, pointerTrimValue } from './timelineControls';
+import type { PlaybackPosition } from './playbackPosition';
 
-export function Timeline({ duration, current, ranges, selected, view, showOverview = true, onSeek, onRange, onReveal }: {
+export function Timeline({ duration, position, ranges, selected, view, showOverview = true, onSeek, onRange, onReveal }: {
   duration: number;
-  current: number;
+  position: PlaybackPosition;
   ranges: ClipRange[];
   selected: ClipRange;
   view: [number, number];
@@ -17,6 +18,7 @@ export function Timeline({ duration, current, ranges, selected, view, showOvervi
   onReveal(ms: number): void;
 }) {
   const { t } = useLanguage();
+  const current = useSyncExternalStore(position.subscribe, position.getSnapshot);
   const track = useRef<HTMLDivElement>(null);
   const drag = useRef<{ which: 'start' | 'end'; pointer: number; x: number; value: number; width: number; span: number } | null>(null);
   const [dragging, setDragging] = useState<'start' | 'end' | null>(null);
