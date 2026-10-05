@@ -16,6 +16,15 @@ Set `POSTGRES_PASSWORD` to a random value, `DOMAIN` to the domain, and
 `RELEASE_TAG` to the release identifier. Do not print the expanded Compose config
 into public logs; it contains the database connection password.
 
+Since 5 October 2026 the active production host is `2.26.124.119` (Ubuntu 24.04,
+6 CPUs, 12 GB RAM, 150 GB disk). From the operator workspace use
+`ssh cutmy-production`; release settings are outside Git in
+`/root/.config/cutmy/deploy.env`. Both development checkouts are also available
+at `/root/video_cut` on that host. The previous host, `192.144.78.45`, retains
+the migration snapshot with its API and worker stopped; its HTTPS edge forwards
+requests to the new host while old DNS records expire. Future releases target
+the new host.
+
 ## Start and verify
 
 ```sh
@@ -67,8 +76,9 @@ source preparation timeout.
 Sources and results have a 24-hour retention target. Cleanup runs in the worker
 every five minutes; active jobs pin their required resources. This is not an exact
 deletion deadline. Owner storage admission covers staged sources and thumbnails
-(2 GiB by default); exported files count toward the 10 GiB global media admission
-limit. Source and individual output limits are 1 GiB. These are application
+(2 GiB by default); exported files count toward the global media admission
+limit configured by `MAX_STORAGE_BYTES` (10 GiB by default, 80 GiB on the new
+production host). Source and individual output limits are 1 GiB. These are application
 admission limits for one API and one worker, not a filesystem quota or a guarantee
 that the operating-system disk cannot fill. Keep capacity for database files,
 rotated logs, images and backups outside the media budget.
@@ -134,7 +144,14 @@ can be configured when choosing the hosting provider's backup service.
 Restore into a separate database and verify sources/jobs before replacing the
 active database. Never run `docker compose down -v` during a normal deployment.
 
-On the server inspected on 4 October 2026, the timezone was `Europe/Warsaw`.
+The new production server uses `Europe/Moscow`, so its daily backup runs at
+03:17 Moscow time. The migration restored the database with PostgreSQL error
+checking enabled and matched all 14 copied media files by SHA-256 before starting
+the API and worker. Private migration evidence is at
+`/opt/cutmy/migration-20261005`; an off-server snapshot is retained in the operator
+workspace outside Git.
+
+On the previous server inspected on 4 October 2026, the timezone was `Europe/Warsaw`.
 The cron expression therefore runs at 04:17 Moscow time while Warsaw uses summer
 time, and 05:17 Moscow time during winter time. Check `timedatectl show -p Timezone`
 before interpreting a missing scheduled backup. The inspection confirmed cron was

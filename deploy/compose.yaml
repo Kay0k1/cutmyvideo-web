@@ -17,7 +17,7 @@ x-core: &core
     COOKIE_SECURE: "true"
     TRUST_PROXY: "true"
     XDG_CACHE_HOME: /tmp/cache
-    MAX_STORAGE_BYTES: "10737418240"
+    MAX_STORAGE_BYTES: "${MAX_STORAGE_BYTES:-10737418240}"
     SOURCE_TTL: 24h
     ARTIFACT_TTL: 24h
   volumes:
