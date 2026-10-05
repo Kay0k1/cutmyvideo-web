@@ -21,6 +21,11 @@ class ServiceControlTest(unittest.TestCase):
         self.assertIn('TimeoutStartSec=480',contents)
         self.assertIn('TimeoutStopSec=60',contents)
         self.assertEqual(commands['ExecStop'][-5:],['stop','--timeout','20','api','worker'])
+        egress = Path(__file__).with_name('cutmy-egress.service').read_text()
+        start = shlex.split(next(line.split('=', 1)[1] for line in egress.splitlines() if line.startswith('ExecStart=')))
+        self.assertEqual(start[:5], ['/usr/bin/flock', '--exclusive', '--wait', '300', '/opt/cutmy/shared/deployment.lock'])
+        self.assertEqual(start[5:], ['/bin/bash', '/opt/cutmy/current/web/deploy/egress.sh', 'apply'])
+        self.assertIn('TimeoutStartSec=360', egress)
 
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="cutmy-service-control-")

@@ -7,8 +7,9 @@ PartOf=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash /opt/cutmy/current/web/deploy/egress.sh apply
+ExecStart=/usr/bin/flock --exclusive --wait 300 /opt/cutmy/shared/deployment.lock /bin/bash /opt/cutmy/current/web/deploy/egress.sh apply
 RemainAfterExit=yes
+TimeoutStartSec=360
 
 [Install]
 WantedBy=docker.service
