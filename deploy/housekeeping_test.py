@@ -104,7 +104,7 @@ class HousekeepingTest(unittest.TestCase):
         self.assertTrue((self.root / "shared/housekeeping-status.json").exists())
         self.assertEqual({p.name for p in (self.root / "releases").iterdir()}, {self.tags[0], self.tags[3]})
         calls = [call.args[0] for call in command.call_args_list]
-        self.assertEqual(calls[-1], ["docker", "buildx", "prune", "--force", "--all", "--max-used-space", "536870912"])
+        self.assertEqual(calls[-1], ["docker", "buildx", "prune", "--force", "--all", "--reserved-space", "0", "--max-used-space", "536870912"])
         self.assertTrue(all(call[:3] == ["docker", "image", "rm"] for call in calls[:-1]))
         self.assertNotIn("--force", str(calls[:-1]))
         self.assertNotIn("volume", str(calls))

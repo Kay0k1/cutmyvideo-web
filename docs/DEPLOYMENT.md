@@ -368,8 +368,9 @@ its additional rollback candidate. `CUTMY_RELEASES_KEEP` (minimum two),
 the private operations file.
 
 The dedicated production host uses Docker's default builder for this project.
-Housekeeping applies `docker buildx prune --all --max-used-space` with a default
-512 MiB target to that builder. This covers the builder's reclaimable cache, not
+Housekeeping applies `docker buildx prune --all --reserved-space=0 --max-used-space`
+with a default 512 MiB target to that builder. The explicit zero disables a
+conflicting builder reserve. This covers the builder's reclaimable cache, not
 just a release, and requires a Docker Buildx version supporting that option.
 Live images and in-use cache may keep the reported total above the target.
 Retained releases remain available for local rollback; another build may need to

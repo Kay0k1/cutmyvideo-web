@@ -105,7 +105,7 @@ def housekeeping(env, apply=False):
                 if path.is_symlink() or path.resolve().parent != install / "releases":
                     raise RuntimeError("Release path changed during housekeeping")
                 shutil.rmtree(path)
-            command(["docker", "buildx", "prune", "--force", "--all", "--max-used-space", str(result["build_cache_max_bytes"])],
+            command(["docker", "buildx", "prune", "--force", "--all", "--reserved-space", "0", "--max-used-space", str(result["build_cache_max_bytes"])],
                     timeout=300, stdout=subprocess.DEVNULL)
             result["completed_unix"] = time.time()
             atomic_json(shared / "housekeeping-status.json", result)
