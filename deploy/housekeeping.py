@@ -16,8 +16,8 @@ RELEASE = re.compile(r"[0-9a-f]{12}-[0-9a-f]{12}")
 PROJECT_IMAGES = {"cutmy-core", "cutmy-web"}
 
 
-def output(argv):
-    return command(argv, stdout=subprocess.PIPE).stdout.decode().strip()
+def output(argv, timeout=120):
+    return command(argv, timeout=timeout, stdout=subprocess.PIPE).stdout.decode().strip()
 
 
 def inventory():
@@ -43,11 +43,11 @@ def inventory():
     return images, used
 
 
-def reclaimable_build_cache():
+def reclaimable_build_cache(timeout=120):
     total = 0
     units = {"B": 1, "kB": 1000, "MB": 1000**2, "GB": 1000**3, "TB": 1000**4,
              "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
-    for line in output(["docker", "buildx", "du", "--format=json"]).splitlines():
+    for line in output(["docker", "buildx", "du", "--format=json"], timeout=timeout).splitlines():
         row = json.loads(line)
         if not row["Reclaimable"] or row["Shared"]:
             continue
@@ -62,7 +62,7 @@ def bound_build_cache(maximum):
     # BuildKit can retain newly unreferenced ancestors until the next prune.
     # Recheck its private reclaimable bytes, with bounded attempts and time.
     deadline = time.monotonic() + 120
-    used = reclaimable_build_cache()
+    used = reclaimable_build_cache(timeout=max(.001, deadline - time.monotonic()))
     passes = 0
     while used > maximum and passes < 4:
         remaining = deadline - time.monotonic()
@@ -71,7 +71,10 @@ def bound_build_cache(maximum):
         command(["docker", "buildx", "prune", "--force", "--all", "--reserved-space", "0", "--max-used-space", str(maximum)],
                 timeout=min(60, remaining), stdout=subprocess.DEVNULL)
         passes += 1
-        after = reclaimable_build_cache()
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        after = reclaimable_build_cache(timeout=remaining)
         if after >= used:
             used = after
             break

@@ -127,6 +127,17 @@ class HousekeepingTest(unittest.TestCase):
         with patch.object(h, "output", return_value="\n".join(json.dumps(row) for row in rows)):
             self.assertEqual(h.reclaimable_build_cache(), 100000000 + 3 * 1024**3 // 2)
 
+    def test_cache_inventory_shares_the_total_deadline(self):
+        with patch.object(h.time, "monotonic", side_effect=[0, 2, 3, 65]), patch.object(h, "reclaimable_build_cache", side_effect=[2**30, 10]) as usage, patch.object(h, "command") as command:
+            self.assertEqual(h.bound_build_cache(100), (10, 1))
+        self.assertEqual([call.kwargs["timeout"] for call in usage.call_args_list], [118, 55])
+        self.assertEqual(command.call_args.kwargs["timeout"], 60)
+
+    def test_cache_stops_before_rechecking_an_expired_deadline(self):
+        with patch.object(h.time, "monotonic", side_effect=[0, 0, 5, 121]), patch.object(h, "reclaimable_build_cache", return_value=2**30) as usage, patch.object(h, "command"):
+            self.assertEqual(h.bound_build_cache(100), (2**30, 1))
+        self.assertEqual(usage.call_count, 1)
+
     def test_inventory_is_scoped_to_project_images(self):
         self.created.stop()
         image_id = "sha256:" + "a" * 64
