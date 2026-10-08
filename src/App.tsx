@@ -225,9 +225,15 @@ export default function App() {
   useEffect(() => {
     if (!job || !activeJob(job) || cancelling) return;
     const id = job.id;
+    let snapshot = JSON.stringify(job);
     const stop = startVisiblePolling({
       read: signal => api.job(id, signal),
-      onResult: fresh => { setJob(fresh); setJobError(''); return activeJob(fresh); },
+      onResult: fresh => {
+        const nextSnapshot = JSON.stringify(fresh);
+        if (nextSnapshot !== snapshot) { snapshot = nextSnapshot; setJob(fresh); }
+        setJobError(''); return activeJob(fresh);
+      },
+      delay: fresh => fresh.status === 'waiting_storage' ? 10000 : fresh.status === 'queued' ? 5000 : 1500,
       onError: error => {
         setJobError(errorMessage(error));
         if (error instanceof ApiError && (error.httpStatus === 404 || error.httpStatus === 410 || ['not_found', 'expired', 'session_required'].includes(error.code))) { setJob(null); return false; }

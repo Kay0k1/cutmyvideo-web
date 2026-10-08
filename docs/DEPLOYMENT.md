@@ -346,3 +346,32 @@ restore drills do not establish a full-host recovery time or recover media bytes
 
 The source providers have independent limits. Do not describe an untested video
 platform as supported merely because yt-dlp recognizes its URL.
+
+## Retired releases and bounded build cache
+
+Successful activation records the exact previously active release in
+`/opt/cutmy/previous`. Daily housekeeping at 04:37 in the server's timezone keeps
+that version and the current release. It removes older managed release folders
+and only retired `cutmy-core`, `cutmy-web`, and `cutmy-audit-load` image tags after
+24 hours. Every existing container, including stopped containers and images
+started by ID or another alias, pins its project release. Unmanaged folders,
+media, database, certificates, migration evidence, and backups are excluded.
+Image removal never uses force, and no volume or container pruning occurs.
+
+Preview the plan with `python3 deploy/housekeeping.py`; apply it with `--apply`.
+The helper takes the exclusive deployment lock, validates the current link
+against the private operator configuration, and records successful cleanup in
+`shared/housekeeping-status.json`. Before the first activation that creates the
+previous link, it retains the newest complete release with both image tags as
+its additional rollback candidate. `CUTMY_RELEASES_KEEP` (minimum two),
+`CUTMY_CLEANUP_GRACE_HOURS`, and `CUTMY_BUILD_CACHE_MAX_BYTES` can be configured in
+the private operations file.
+
+The dedicated production host uses Docker's default builder for this project.
+Housekeeping applies `docker buildx prune --all --max-used-space` with a default
+512 MiB target to that builder. This covers the builder's reclaimable cache, not
+just a release, and requires a Docker Buildx version supporting that option.
+Live images and in-use cache may keep the reported total above the target.
+Retained releases remain available for local rollback; another build may need to
+download dependencies again after cache eviction. See
+[Docker Buildx cache retention](https://docs.docker.com/reference/cli/docker/buildx/prune/).

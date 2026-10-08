@@ -1,38 +1,49 @@
-import * as Select from '@radix-ui/react-select';
-import { useRef, useState } from 'react';
+import { Component, lazy, Suspense, useRef } from 'react';
+import type { ReactNode } from 'react';
+import type { SelectControlProps } from './RadixSelectControl';
 import { Icon } from './Icons';
-import { useLanguage } from './Language';
 
-export interface SelectOption { value: string; label: string; description?: string; disabled?: boolean; }
+export type { SelectOption } from './RadixSelectControl';
 
-export function SelectControl({ id, value, onChange, options, label, describedBy, disabled }: {
-  id: string;
-  value: string;
-  onChange(value: string): void;
-  options: SelectOption[];
-  label?: string;
-  describedBy?: string;
-  disabled?: boolean;
-}) {
-  const { locale } = useLanguage();
-  const trigger = useRef<HTMLButtonElement>(null);
-  const [container, setContainer] = useState<HTMLElement | undefined>();
-  return <Select.Root key={locale} value={value} onValueChange={onChange} disabled={disabled}
-    onOpenChange={open => { if (open) setContainer(trigger.current?.closest('dialog') ?? undefined); }}>
-    <Select.Trigger ref={trigger} id={id} className="select-control" aria-label={label} aria-describedby={describedBy}>
-      <Select.Value /><Select.Icon className="select-chevron"><Icon name="chevron" size={15} style={{ transform: 'rotate(90deg)' }} /></Select.Icon>
-    </Select.Trigger>
-    <Select.Portal container={container}>
-      <Select.Content className="select-popup" position="popper" sideOffset={6} collisionPadding={12}>
-        <Select.ScrollUpButton className="select-scroll"><Icon name="chevron" size={15} style={{ transform: 'rotate(-90deg)' }} /></Select.ScrollUpButton>
-        <Select.Viewport className="select-options">
-          {options.map(option => <Select.Item key={option.value} value={option.value} disabled={option.disabled} textValue={option.label} className="select-option">
-            <span className="select-option-text"><Select.ItemText>{option.label}</Select.ItemText>{option.description && <span className="select-description">{option.description}</span>}</span>
-            <Select.ItemIndicator className="select-check"><Icon name="check" size={17} /></Select.ItemIndicator>
-          </Select.Item>)}
-        </Select.Viewport>
-        <Select.ScrollDownButton className="select-scroll"><Icon name="chevron" size={15} style={{ transform: 'rotate(90deg)' }} /></Select.ScrollDownButton>
-      </Select.Content>
-    </Select.Portal>
-  </Select.Root>;
+// Select controls and their positioning library are fetched on first use.
+const RadixSelectControl = lazy(() => import('./RadixSelectControl').then(module => ({ default: module.RadixSelectControl })));
+
+// An already-open page may request an old chunk after a release replaces it.
+// Keep a working selector when that fetch fails rather than losing the editor.
+class SelectLoadBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  render() { return this.state.failed ? this.props.fallback : this.props.children; }
+}
+
+export function SelectControl(props: SelectControlProps) {
+  const { id, value, onChange, options, label, describedBy, disabled } = props;
+  const pendingInteraction = useRef({ focused: false, open: false });
+  const fallback = <select id={id} className="select-control" value={value} disabled={disabled}
+    ref={element => {
+      if (element && pendingInteraction.current.focused) { pendingInteraction.current.focused = false; element.focus(); }
+    }}
+    aria-label={label} aria-describedby={describedBy} onChange={event => onChange(event.target.value)}>
+    {options.map(option => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
+  </select>;
+  const loading = <button type="button" id={id} className="select-control" role="combobox" disabled={disabled}
+    aria-label={label} aria-describedby={describedBy} aria-haspopup="listbox" aria-expanded={false} aria-busy="true"
+    onFocus={() => { pendingInteraction.current.focused = true; }}
+    onBlur={() => { pendingInteraction.current.focused = false; pendingInteraction.current.open = false; }}
+    onPointerDown={event => {
+      if (event.button !== 0 || event.ctrlKey) return;
+      event.preventDefault(); event.currentTarget.focus(); pendingInteraction.current.open = true;
+    }}
+    onClick={() => { pendingInteraction.current.focused = true; pendingInteraction.current.open = true; }}
+    onKeyDown={event => {
+      if (event.ctrlKey || event.altKey || event.metaKey) return;
+      if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); pendingInteraction.current.open = true; }
+      else if (event.key === 'Escape' && pendingInteraction.current.open) {
+        event.preventDefault(); event.stopPropagation(); pendingInteraction.current.open = false;
+      }
+    }}>
+    <span>{options.find(option => option.value === value)?.label}</span>
+    <span className="select-chevron" aria-hidden="true"><Icon name="chevron" size={15} style={{ transform: 'rotate(90deg)' }} /></span>
+  </button>;
+  return <SelectLoadBoundary fallback={fallback}><Suspense fallback={loading}><RadixSelectControl {...props} pendingInteraction={pendingInteraction} /></Suspense></SelectLoadBoundary>;
 }

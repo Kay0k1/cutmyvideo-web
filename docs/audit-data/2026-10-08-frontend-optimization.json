@@ -1,0 +1,191 @@
+{
+  "date": "2026-10-08",
+  "method": "Clean production builds on the same dependency tree; gzip level9 with mtime0. Initial JS excludes controls fetched only when shown. Polling controlled clock uses instant fixture reads and is not a production load test.",
+  "before": {
+    "files": [
+      {
+        "path": "assets/geologica-cyrillic-ext-wght-normal-C8B9Chlh.woff2",
+        "bytes": 11488,
+        "gzip_bytes": 11511
+      },
+      {
+        "path": "assets/geologica-cyrillic-wght-normal-DbeVG3Ps.woff2",
+        "bytes": 16428,
+        "gzip_bytes": 16453
+      },
+      {
+        "path": "assets/geologica-greek-wght-normal-DPM5d9ub.woff2",
+        "bytes": 10928,
+        "gzip_bytes": 10951
+      },
+      {
+        "path": "assets/geologica-latin-ext-wght-normal-DZyYlgcm.woff2",
+        "bytes": 22404,
+        "gzip_bytes": 22432
+      },
+      {
+        "path": "assets/geologica-latin-wght-normal-BBL8hQxZ.woff2",
+        "bytes": 24944,
+        "gzip_bytes": 24972
+      },
+      {
+        "path": "assets/geologica-vietnamese-wght-normal-DcI17N1q.woff2",
+        "bytes": 8328,
+        "gzip_bytes": 8351
+      },
+      {
+        "path": "assets/index-CGWaCUpp.js",
+        "bytes": 452408,
+        "gzip_bytes": 137998
+      },
+      {
+        "path": "assets/index-aO2NE304.css",
+        "bytes": 52163,
+        "gzip_bytes": 10284
+      },
+      {
+        "path": "favicon.svg",
+        "bytes": 211,
+        "gzip_bytes": 177
+      },
+      {
+        "path": "index.html",
+        "bytes": 752,
+        "gzip_bytes": 459
+      },
+      {
+        "path": "licenses/geologica.txt",
+        "bytes": 4390,
+        "gzip_bytes": 1962
+      },
+      {
+        "path": "theme-init.js",
+        "bytes": 705,
+        "gzip_bytes": 387
+      }
+    ],
+    "total_bytes": 605149,
+    "total_gzip_bytes": 245937
+  },
+  "after": {
+    "files": [
+      {
+        "path": "assets/RadixSelectControl-DeW7oqyR.js",
+        "bytes": 86595,
+        "gzip_bytes": 29088
+      },
+      {
+        "path": "assets/geologica-cyrillic-ext-wght-normal-C8B9Chlh.woff2",
+        "bytes": 11488,
+        "gzip_bytes": 11511
+      },
+      {
+        "path": "assets/geologica-cyrillic-wght-normal-DbeVG3Ps.woff2",
+        "bytes": 16428,
+        "gzip_bytes": 16453
+      },
+      {
+        "path": "assets/geologica-greek-wght-normal-DPM5d9ub.woff2",
+        "bytes": 10928,
+        "gzip_bytes": 10951
+      },
+      {
+        "path": "assets/geologica-latin-ext-wght-normal-DZyYlgcm.woff2",
+        "bytes": 22404,
+        "gzip_bytes": 22432
+      },
+      {
+        "path": "assets/geologica-latin-wght-normal-BBL8hQxZ.woff2",
+        "bytes": 24944,
+        "gzip_bytes": 24972
+      },
+      {
+        "path": "assets/geologica-vietnamese-wght-normal-DcI17N1q.woff2",
+        "bytes": 8328,
+        "gzip_bytes": 8351
+      },
+      {
+        "path": "assets/index-D6celso9.js",
+        "bytes": 369432,
+        "gzip_bytes": 110112
+      },
+      {
+        "path": "assets/index-aO2NE304.css",
+        "bytes": 52163,
+        "gzip_bytes": 10284
+      },
+      {
+        "path": "favicon.svg",
+        "bytes": 211,
+        "gzip_bytes": 177
+      },
+      {
+        "path": "index.html",
+        "bytes": 752,
+        "gzip_bytes": 457
+      },
+      {
+        "path": "licenses/geologica.txt",
+        "bytes": 4390,
+        "gzip_bytes": 1962
+      },
+      {
+        "path": "theme-init.js",
+        "bytes": 705,
+        "gzip_bytes": 387
+      }
+    ],
+    "total_bytes": 608768,
+    "total_gzip_bytes": 247137
+  },
+  "polling": {
+    "measurement": "Requests over 60,000 ms of controlled time; instant fixture responses; first read scheduled at 500 ms",
+    "scenarios": [
+      {
+        "scenario": "running",
+        "before": 40,
+        "after": 40
+      },
+      {
+        "scenario": "queued",
+        "before": 40,
+        "after": 12
+      },
+      {
+        "scenario": "waiting_storage",
+        "before": 40,
+        "after": 6
+      },
+      {
+        "scenario": "transient_failure",
+        "before": 20,
+        "after": 5
+      },
+      {
+        "scenario": "offline",
+        "before": 40,
+        "after": 0
+      },
+      {
+        "scenario": "hidden",
+        "before": 0,
+        "after": 0
+      }
+    ]
+  },
+  "validation": {
+    "frontend_unit_tests": 91,
+    "typecheck": "passed",
+    "production_build": "passed",
+    "original_controls_browser_tests": 2,
+    "delayed_selector_actions": [
+      "Enter",
+      "pointer",
+      "focus",
+      "Tab",
+      "Escape"
+    ],
+    "selector_browser_tests_dev": 7,
+    "selector_browser_tests_production": 7
+  }
+}

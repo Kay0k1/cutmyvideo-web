@@ -123,6 +123,7 @@ exec /bin/mv "$@"
         self.assertEqual(self.cron.read_text(), NEW + " cron\n")
         self.assertEqual(self.monitor_cron.read_text(), NEW + " monitor\n")
         self.assertEqual((self.current / "release.env").read_text(), "CORE_COMMIT=" + CORE + "\nWEB_COMMIT=" + WEB + "\n")
+        self.assertEqual((self.root / "previous").resolve(), self.root / "releases" / OLD)
         self.assert_no_snapshots()
 
     def test_build_failure_keeps_previous_installation(self):

@@ -152,6 +152,14 @@ physical device.
 Start the real core API on port 8080 with its PostgreSQL database and worker,
 then start the frontend on port 5173. Install FFmpeg and ffprobe on the test host.
 
+Use a disposable database and media directory for the complete suite. Its
+twelve-fragment cancellation checks reserve the configured output ceiling for
+every fragment: use `MAX_OUTPUT_BYTES=16777216`, `MAX_SOURCE_BYTES=67108864`,
+`MAX_STORAGE_BYTES=2147483648`, `MAX_OWNER_BYTES=268435456`, and
+`MUTATIONS_PER_MINUTE=10000` on both test services. Keep at least the storage
+safety margin plus the simultaneous reservations free. These reduced fixture
+ceilings and relaxed mutation rate are for isolated tests, not production.
+
 ```sh
 npm ci
 npx playwright install --with-deps chromium firefox webkit

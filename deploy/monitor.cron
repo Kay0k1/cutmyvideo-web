@@ -5,3 +5,5 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 * * * * * root python3 /opt/cutmy/current/web/deploy/operations.py monitor > /dev/null 2>&1
 # Independent expiry/orphan cleanup keeps running while the worker is down.
 */5 * * * * root python3 /opt/cutmy/current/web/deploy/operations.py maintain > /dev/null 2>&1
+# Keep current + previous releases, retired project images and a bounded builder.
+37 4 * * * root python3 /opt/cutmy/current/web/deploy/housekeeping.py --apply > /dev/null 2>&1

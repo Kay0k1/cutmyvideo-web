@@ -110,6 +110,7 @@ cleanup() {
   if [[ "$keep_snapshot" != true ]]; then rm -f "$env_snapshot" "$cron_snapshot" "$monitor_snapshot"; rm -rf "$service_snapshot"; fi
   [[ -z "$env_next" ]] || rm -f "$env_next"
   rm -f "$current_link.next"
+  rm -f "$install_dir/previous.next"
   exit "$status"
 }
 trap cleanup EXIT
@@ -155,6 +156,11 @@ ln -sfn "$release_dir" "$current_link.next"
 mv -Tf "$current_link.next" "$current_link"
 services_changed=true
 python3 web/deploy/service-control.py install "$release_dir/web/deploy"
+if [[ -n "$previous_dir" && "$previous_dir" != "$release_dir" ]]; then
+  # Retention pins the exact previously active version for a local rollback.
+  ln -sfn "$previous_dir" "$install_dir/previous.next"
+  mv -Tf "$install_dir/previous.next" "$install_dir/previous"
+fi
 # Units are enabled but never started while deployment.lock is held. Docker
 # restarts start the stack after egress; the operator can start units after this
 # helper exits to register the already running healthy stack with systemd.

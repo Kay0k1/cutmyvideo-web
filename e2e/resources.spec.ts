@@ -9,6 +9,84 @@ const source = {
 const items = [{ id: 'item_resources', label: '', start_ms: 0, end_ms: 3000, status: 'queued', artifact: null }]
 const job = { id: 'job_resources', status: 'queued', stage: 'queued', message: '', items }
 
+test('resource lifecycle: selector code is downloaded only when a selector is first shown', async ({ page }) => {
+  const selectorRequests: string[] = []
+  page.on('request', request => {
+    if (/\/RadixSelectControl(?:-[^/]+)?\.(?:js|tsx)$/.test(new URL(request.url()).pathname)) selectorRequests.push(request.url())
+  })
+  await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled()
+  expect(selectorRequests).toEqual([])
+  await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+  await expect(page.locator('button#theme-preference')).toBeVisible()
+  expect(selectorRequests).toHaveLength(1)
+  await page.keyboard.press('Escape')
+  await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+  await expect(page.locator('button#theme-preference')).toBeVisible()
+  expect(selectorRequests).toHaveLength(1)
+})
+
+for (const action of ['Enter', 'pointer', 'focus', 'Tab', 'Escape'] as const) {
+  test(`resource lifecycle: a delayed selector preserves ${action} intent and focus`, async ({ page }) => {
+    await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
+    let release!: () => void, received!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    const intercepted = new Promise<void>(resolve => { received = resolve })
+    await page.route(/\/RadixSelectControl(?:-[^/]+)?\.(?:js|tsx)(?:\?.*)?$/, async route => {
+      received(); await gate; await route.continue()
+    })
+    try {
+      await page.goto('/?lang=en')
+      await page.getByRole('button', { name: 'Settings', exact: true }).click()
+      await intercepted
+      const dialog = page.getByRole('dialog')
+      const theme = dialog.getByRole('combobox', { name: 'Appearance', exact: true })
+      await expect(theme).toHaveAttribute('aria-busy', 'true')
+      await theme.focus()
+      if (action === 'pointer') await theme.click()
+      else if (action !== 'focus') {
+        await theme.press('Enter')
+        if (action !== 'Enter') await page.keyboard.press(action)
+      }
+      release()
+      await expect(dialog.locator('#theme-preference')).not.toHaveAttribute('aria-busy', 'true')
+      if (action === 'Enter' || action === 'pointer') {
+        await expect(dialog.getByRole('listbox')).toBeVisible()
+        await expect(dialog.locator('#theme-preference')).toHaveAttribute('aria-expanded', 'true')
+        await page.keyboard.press('Escape')
+        await expect(theme).toBeFocused()
+      } else {
+        await expect(dialog.getByRole('listbox')).not.toBeVisible()
+        await expect(dialog).toBeVisible()
+        await expect(action === 'Tab' ? dialog.locator('#default-format') : theme).toBeFocused()
+      }
+    } finally { release() }
+  })
+}
+
+test('resource lifecycle: a missing lazy selector chunk keeps native settings usable and persists changes', async ({ page }) => {
+  await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
+  let rejected = 0
+  await page.route(/\/RadixSelectControl(?:-[^/]+)?\.(?:js|tsx)(?:\?.*)?$/, route => { rejected++; return route.abort('failed') })
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+  await expect.poll(() => rejected).toBe(1)
+  await page.locator('select#theme-preference').selectOption('dark')
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.locator('select#default-format').selectOption('mp3')
+  await expect(page.locator('#default-quality')).toBeDisabled()
+  await page.getByRole('button', { name: 'Сохранить настройки', exact: true }).click()
+  await expect(page.getByRole('dialog').getByRole('status')).toContainText('Настройки сохранены.')
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeVisible()
+  await page.reload()
+  await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+  await expect(page.locator('select#default-format')).toHaveValue('mp3')
+  await expect(page.locator('select#theme-preference')).toHaveValue('dark')
+})
+
 async function prepare(page: Page, saved: Record<string, unknown> = {}) {
   await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
   await page.route(`**${api}/sources/${source.id}`, route => route.request().method() === 'GET' ? route.fulfill({ json: source }) : route.fallback())
