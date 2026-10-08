@@ -2,6 +2,7 @@
 """Bound retired cutmy releases/images and build cache; default is a dry run."""
 import argparse
 import datetime as dt
+from decimal import Decimal
 import json
 from pathlib import Path
 import re
@@ -40,6 +41,42 @@ def inventory():
     # An image ID or a different alias still pins every matching project tag.
     used.update(ref for ref, row in images.items() if row["ID"] in used_ids)
     return images, used
+
+
+def reclaimable_build_cache():
+    total = 0
+    units = {"B": 1, "kB": 1000, "MB": 1000**2, "GB": 1000**3, "TB": 1000**4,
+             "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
+    for line in output(["docker", "buildx", "du", "--format=json"]).splitlines():
+        row = json.loads(line)
+        if not row["Reclaimable"] or row["Shared"]:
+            continue
+        size = re.fullmatch(r"(\d+(?:\.\d+)?)(B|kB|MB|GB|TB|KiB|MiB|GiB|TiB)", row["Size"])
+        if not size:
+            raise RuntimeError("Invalid build cache size")
+        total += int(Decimal(size[1]) * units[size[2]])
+    return total
+
+
+def bound_build_cache(maximum):
+    # BuildKit can retain newly unreferenced ancestors until the next prune.
+    # Recheck its private reclaimable bytes, with bounded attempts and time.
+    deadline = time.monotonic() + 120
+    used = reclaimable_build_cache()
+    passes = 0
+    while used > maximum and passes < 4:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        command(["docker", "buildx", "prune", "--force", "--all", "--reserved-space", "0", "--max-used-space", str(maximum)],
+                timeout=min(60, remaining), stdout=subprocess.DEVNULL)
+        passes += 1
+        after = reclaimable_build_cache()
+        if after >= used:
+            used = after
+            break
+        used = after
+    return used, passes
 
 
 def plan(install, images, used, env, now):
@@ -105,8 +142,9 @@ def housekeeping(env, apply=False):
                 if path.is_symlink() or path.resolve().parent != install / "releases":
                     raise RuntimeError("Release path changed during housekeeping")
                 shutil.rmtree(path)
-            command(["docker", "buildx", "prune", "--force", "--all", "--reserved-space", "0", "--max-used-space", str(result["build_cache_max_bytes"])],
-                    timeout=300, stdout=subprocess.DEVNULL)
+            used, passes = bound_build_cache(result["build_cache_max_bytes"])
+            result["build_cache_reclaimable_bytes"] = used
+            result["build_cache_prune_passes"] = passes
             result["completed_unix"] = time.time()
             atomic_json(shared / "housekeeping-status.json", result)
         return result

@@ -369,8 +369,10 @@ the private operations file.
 
 The dedicated production host uses Docker's default builder for this project.
 Housekeeping applies `docker buildx prune --all --reserved-space=0 --max-used-space`
-with a default 512 MiB target to that builder. The explicit zero disables a
-conflicting builder reserve. This covers the builder's reclaimable cache, not
+with a default 512 MiB target to that builder. The explicit zero removes a
+reserved-cache floor. It verifies private reclaimable bytes after pruning and
+retries newly unreferenced ancestors up to four times within two minutes, stopping
+when no progress is possible. This covers the builder's reclaimable cache, not
 just a release, and requires a Docker Buildx version supporting that option.
 Live images and in-use cache may keep the reported total above the target.
 Retained releases remain available for local rollback; another build may need to

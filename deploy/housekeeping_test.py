@@ -98,7 +98,7 @@ class HousekeepingTest(unittest.TestCase):
         self.assertEqual(len(list((self.root / "releases").iterdir())), 4)
 
     def test_apply_only_removes_planned_tags_dirs_and_bounds_cache(self):
-        with patch.object(h, "inventory", return_value=(self.images, set())), patch.object(h, "command") as command:
+        with patch.object(h, "inventory", return_value=(self.images, set())), patch.object(h, "command") as command, patch.object(h, "reclaimable_build_cache", side_effect=[2**30, 10]):
             p = h.housekeeping(self.env, True)
         self.assertTrue(p["applied"])
         self.assertTrue((self.root / "shared/housekeeping-status.json").exists())
@@ -108,6 +108,24 @@ class HousekeepingTest(unittest.TestCase):
         self.assertTrue(all(call[:3] == ["docker", "image", "rm"] for call in calls[:-1]))
         self.assertNotIn("--force", str(calls[:-1]))
         self.assertNotIn("volume", str(calls))
+
+    def test_cache_retries_newly_unreferenced_ancestors(self):
+        with patch.object(h, "reclaimable_build_cache", side_effect=[3 * 2**30, 2**30, 128]), patch.object(h, "command") as command:
+            self.assertEqual(h.bound_build_cache(512 * 1024**2), (128, 2))
+        self.assertEqual(command.call_count, 2)
+
+    def test_cache_stops_without_progress_and_skips_under_limit(self):
+        with patch.object(h, "reclaimable_build_cache", side_effect=[2**30, 2**30]), patch.object(h, "command") as command:
+            self.assertEqual(h.bound_build_cache(512 * 1024**2), (2**30, 1))
+        self.assertEqual(command.call_count, 1)
+        with patch.object(h, "reclaimable_build_cache", return_value=10), patch.object(h, "command") as command:
+            self.assertEqual(h.bound_build_cache(100), (10, 0))
+        command.assert_not_called()
+
+    def test_cache_usage_excludes_shared_and_in_use_entries(self):
+        rows = [{"Size": "100MB", "Reclaimable": True, "Shared": False}, {"Size": "1.5GiB", "Reclaimable": True, "Shared": False}, {"Size": "2GB", "Reclaimable": False, "Shared": False}, {"Size": "3GB", "Reclaimable": True, "Shared": True}]
+        with patch.object(h, "output", return_value="\n".join(json.dumps(row) for row in rows)):
+            self.assertEqual(h.reclaimable_build_cache(), 100000000 + 3 * 1024**3 // 2)
 
     def test_inventory_is_scoped_to_project_images(self):
         self.created.stop()
