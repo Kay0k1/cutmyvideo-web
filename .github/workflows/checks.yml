@@ -137,7 +137,7 @@ jobs:
           cat /tmp/cutmy-server.log /tmp/cutmy-web.log
           exit 1
       - name: Run browser checks with a virtual display
-        run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed --project=desktop --project=mobile --project=layout-chromium --project=layout-firefox
+        run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed --project=desktop --project=mobile --project=layout-chromium --project=layout-firefox --project=usability-chromium --project=usability-firefox
         working-directory: web
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
@@ -259,7 +259,7 @@ jobs:
           trap restore_keyboard_mode EXIT
           defaults write org.webkit.Playwright AppleKeyboardUIMode -int 2
           [[ $(defaults read org.webkit.Playwright AppleKeyboardUIMode) == 2 ]]
-          npm run test:e2e -- --project=layout-webkit
+          npm run test:e2e -- --project=layout-webkit --project=usability-webkit
         working-directory: web
       - name: Stop only owned backend and website
         if: always()

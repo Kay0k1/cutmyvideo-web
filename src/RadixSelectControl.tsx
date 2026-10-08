@@ -30,7 +30,11 @@ export function RadixSelectControl({ id, value, onChange, options, label, descri
     trigger.current.focus();
     if (open) { setContainer(trigger.current.closest('dialog') ?? undefined); trigger.current.click(); }
   }, [pendingInteraction]);
-  return <Select.Root key={locale} value={value} onValueChange={onChange} disabled={disabled}
+  return <Select.Root key={locale} value={value} onValueChange={next => {
+    // The hidden native form control can emit an empty reset while a dialog
+    // reopens with a restored draft. Only a real available option is a choice.
+    if (options.some(option => option.value === next && !option.disabled)) onChange(next);
+  }} disabled={disabled}
     onOpenChange={open => { if (open) setContainer(trigger.current?.closest('dialog') ?? undefined); }}>
     <Select.Trigger ref={trigger} id={id} className="select-control" aria-label={label} aria-describedby={describedBy}>
       <Select.Value /><Select.Icon className="select-chevron"><Icon name="chevron" size={15} style={{ transform: 'rotate(90deg)' }} /></Select.Icon>

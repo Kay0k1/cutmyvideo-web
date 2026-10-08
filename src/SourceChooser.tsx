@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLanguage } from './Language';
 import { Icon } from './Icons';
 import type { UploadProgress } from './types';
@@ -25,19 +25,38 @@ export function SourceChooser({ url, onUrl, onOpen, onFile, busy, progress, maxi
   const [mode, setMode] = useState<'link' | 'file'>('link');
   const [showProviders, setShowProviders] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const urlInput = useRef<HTMLInputElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const uploadButton = useRef<HTMLButtonElement>(null);
+  const focusMode = useRef<'link' | 'file' | null>(null);
+  const dragDepth = useRef(0);
   const disabled = !ready || busy || processing || blocked;
   const detected = videoProvider(url);
+
+  function focusChoice(next: 'link' | 'file') {
+    if (next === 'link') urlInput.current?.focus();
+    else uploadButton.current?.focus();
+  }
+  function chooseMode(next: 'link' | 'file') {
+    onUrl(url);
+    if (next === mode) { focusChoice(next); return; }
+    focusMode.current = next; setMode(next);
+  }
+  useLayoutEffect(() => {
+    if (focusMode.current !== mode) return;
+    focusMode.current = null; focusChoice(mode);
+  }, [mode]);
+  useEffect(() => { dragDepth.current = 0; setDragging(false); }, [mode, disabled]);
 
   return <section className="source-chooser" aria-labelledby="source-heading">
     <h2 id="source-heading" className="sr-only">{t('Открыть источник')}</h2>
     <div className="source-choice" role="group" aria-label={t('Откуда взять видео')}>
-      <button type="button" aria-pressed={mode === 'link'} disabled={busy || processing || blocked} onClick={() => { setMode('link'); onUrl(url); }}><Icon name="link" size={20} />{t('Ссылка')}</button>
-      <button type="button" aria-pressed={mode === 'file'} disabled={busy || processing || blocked} onClick={() => { setMode('file'); onUrl(url); }}><Icon name="file" size={19} />{t('MP4 файл')}</button>
+      <button type="button" aria-pressed={mode === 'link'} disabled={busy || processing || blocked} onClick={() => chooseMode('link')}><Icon name="link" size={20} />{t('Ссылка')}</button>
+      <button type="button" aria-pressed={mode === 'file'} disabled={busy || processing || blocked} onClick={() => chooseMode('file')}><Icon name="file" size={19} />{t('MP4 файл')}</button>
     </div>
-    {mode === 'link' ? <form className="source-form" noValidate onSubmit={event => { event.preventDefault(); onOpen(); }}>
+    {mode === 'link' ? <form className="source-form" noValidate aria-busy={busy} onSubmit={event => { event.preventDefault(); if (!disabled) onOpen(); }}>
       <label htmlFor="source-url">{t('Ссылка на видео')}</label>
-      <div className="source-input-wrap"><Icon name="link" size={20} /><input id="source-url" type="text" inputMode="url" placeholder={t('Вставьте ссылку «Поделиться»')} value={url} onChange={event => onUrl(event.target.value)} disabled={busy || processing || blocked} aria-invalid={!!error} aria-describedby={error ? 'source-error source-hint' : 'source-hint'} autoComplete="off" spellCheck={false} /></div>
+      <div className="source-input-wrap"><Icon name="link" size={20} /><input ref={urlInput} id="source-url" type="text" inputMode="url" enterKeyHint="go" autoCapitalize="none" autoCorrect="off" placeholder={t('Вставьте ссылку «Поделиться»')} value={url} onChange={event => onUrl(event.target.value)} disabled={busy || processing || blocked} aria-invalid={!!error} aria-describedby={error ? 'source-error source-hint' : 'source-hint'} autoComplete="off" spellCheck={false} /></div>
       <div className="source-link-context">
         <p id="source-hint" className="field-hint">{t('YouTube, Twitch, Rutube, TikTok и другие сервисы.')}</p>
         {detected && <span className="source-provider-tag" role="status">{t(detected.name)}</span>}
@@ -51,11 +70,15 @@ export function SourceChooser({ url, onUrl, onOpen, onFile, busy, progress, maxi
           <p>{t('Видео должно открываться без входа. Ссылки на каналы, плейлисты и прямые эфиры пока не подойдут.')}</p>
         </div>}
       </div>
-    </form> : <div className={`file-dropzone${dragging ? ' dragging' : ''}`} onDragOver={event => { event.preventDefault(); if (!disabled) setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={event => { event.preventDefault(); setDragging(false); if (!disabled) { const file = event.dataTransfer.files[0]; if (file) onFile(file); } }}>
+    </form> : <div className={`file-dropzone${dragging ? ' dragging' : ''}`} aria-busy={busy}
+      onDragEnter={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); dragDepth.current++; if (!disabled) setDragging(true); } }}
+      onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = disabled || !event.dataTransfer.types.includes('Files') ? 'none' : 'copy'; }}
+      onDragLeave={event => { event.preventDefault(); dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragging(false); }}
+      onDrop={event => { event.preventDefault(); dragDepth.current = 0; setDragging(false); if (!disabled) { const file = event.dataTransfer.files[0]; if (file) onFile(file); } }}>
       <div className="upload-symbol"><Icon name="upload" size={27} /></div>
-      <p className="drop-label">{t('Перетащите видео сюда')}</p><p id="source-file-hint" className="field-hint">{t('MP4 до {limit}. Файл останется доступен на время работы.', { limit: formatBytes(maximumBytes, locale) })}</p>
+      <p className="drop-label">{t('Выберите видео с устройства')}</p><p id="source-file-hint" className="field-hint">{t('MP4 до {limit}. Файл останется доступен на время работы.', { limit: formatBytes(maximumBytes, locale) })}</p>
       <input ref={fileInput} type="file" id="source-file" hidden tabIndex={-1} aria-label={t('Выбрать MP4')} accept="video/mp4,.mp4" disabled={disabled} onChange={event => { const file = event.target.files?.[0]; if (file) onFile(file); event.target.value = ''; }} />
-      <button type="button" className="button primary upload-button" aria-describedby={error ? 'source-file-hint source-error' : 'source-file-hint'} disabled={disabled} onClick={() => fileInput.current?.click()}>{busy ? <><span className="spinner" />{t('Загружаем видео…')}</> : t('Выбрать MP4')}</button>
+      <button ref={uploadButton} type="button" className="button primary upload-button" aria-describedby={error ? 'source-file-hint source-error' : 'source-file-hint'} disabled={disabled} onClick={() => fileInput.current?.click()}>{busy ? <><span className="spinner" />{t('Загружаем видео…')}</> : t('Выбрать MP4')}</button>
     </div>}
     {busy && <div className="source-progress" role="status">{progress && <div className="upload-progress" aria-live="off"><progress max={progress.total ?? undefined} value={progress.total ? progress.loaded : undefined} aria-label={t('Загрузка видео')} />{progress.total && <p>{t('Передано {loaded} из {total}', { loaded: formatBytes(progress.loaded, locale), total: formatBytes(progress.total, locale) })}</p>}</div>}<p>{t(progress && (!progress.total || progress.loaded < progress.total) ? 'Передаём файл на сервер…' : 'Проверяем видео. Это может занять немного времени.')}</p><button type="button" className="text-button" onClick={onCancel}>{t('Отменить')}</button></div>}
     {processing && <p className="source-lock-hint">{t('Сейчас идёт экспорт. Дождитесь его или отмените на последнем шаге.')}</p>}

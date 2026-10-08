@@ -4,22 +4,22 @@ cutmyvideo helps someone take a few moments out of a long video. Inputs are publ
 
 ## Plan, critique and structure
 
-The compact three-stage workbench still mixed watching a video, editing exact boundaries, managing a list and naming clips. This update gives each screen one primary task: **Video → Moment → Clips → Export**. The first screen offers a link or an MP4 file, with the provider catalog behind an explicit disclosure. The Moment screen holds the player, the trim rail and preview. Precision fields, keyboard hints and zoom are disclosed only when requested; sources without a controllable preview expose manual timing directly. The Clips screen manages labels and export selection. Export holds format, quality, cut mode and actual files.
+The main path is **Video → Moment → Export**, with an optional **Clips** screen for several moments. The first screen offers a link or an MP4 file, with the provider catalog behind an explicit disclosure. Moment holds the real player, trim rail and preview. Its primary Continue to download action includes the current moment; Clip list validates the edit and opens the existing collection without changing export selection. Time values can be tapped to edit; precision fields and zoom remain available in their disclosure, and sources without a controllable preview expose manual timing directly. Clips manages labels and checked export selection. Export begins with video/audio choice and the cut action; quality and precision use a native details disclosure. Completed files lead the Export screen.
 
-The critique rejected moving every old control to a new full-height card. Adding one step is useful only if the Moment screen actually removes the list, clip-name field and export settings. It also rejected decorative controls that mimic a waveform or unavailable player. The defining visual remains the trim rail: amber boundary handles clearly differ from green playback controls, while surrounding controls stay quiet and use the existing soft theme.
+The visual critique rejected shrinking text to force every control above the fold. Readable type, clear groups and ordinary scrolling take priority. A single editing surface and separators explain real groups; decorative card shadows and obsolete competing CSS rules were removed. Amber boundary handles clearly differ from green playback controls. The same quiet identity works on a phone and a large monitor without fabricated waveforms or unavailable players.
 
 ```text
-Video        Moment               Clips                 Export
-Link / MP4 → Player + trim rail  → Checked clip list    → Format + quality
-             Preview              Edit / add / rename   Actual job status
-             Precision disclosure Bulk actions          Download each file
+Video        Moment                       Export
+Link / MP4 → Player + trim rail          → Video / audio + Cut
+             Preview + editable time      Quality / precision disclosure
+             Optional Clip list           Job status + Download
 ```
 
-The tokens remain intentional and consistent: light page #f4f6f5, white surface #ffffff, ink #203431, muted text #5c7067, action #35645b and amber trim #eac389. Dark appearance uses page #18201f, surface #222c29, ink #e7eeea, muted text #a4b7ac and action #a8cbb9. Self-hosted Geologica Variable covers Cyrillic and Latin; restrained weights explain hierarchy, and timecodes use tabular numerals. No new typeface, decorative hero or unrelated illustration is introduced.
+The tokens remain intentional and consistent: light page #f4f6f5, white surface #ffffff, ink #203431, muted text #5c7067, action #35645b and amber trim #eac389. Dark appearance uses page #18201f, surface #222c29, ink #e7eeea, muted text #a4b7ac and action #a8cbb9. Self-hosted Geologica Variable covers Cyrillic and Latin; restrained weights explain hierarchy, and timecodes use tabular numerals. Core text uses relative font units; supporting copy generally starts at14px, with16px text inputs to preserve comfortable phone editing. No new typeface, decorative hero or unrelated illustration is introduced.
 
 ## Selection and state
 
-A checkbox means that a clip is included in export. Editing a clip is a separate action and does not silently change which clips will be exported. Select all reflects the actual checked subset; duplicate and delete act on that subset. Added and duplicated clips receive new IDs and respect the server's twelve-range limit. An empty list offers Add clip and prevents export with a clear reason.
+A checkbox means that a clip is included in export. Editing a clip and opening Clip list do not change export selection. Continue to download explicitly includes the moment being edited while preserving other checked clips. Select all reflects the actual checked subset; duplicate and delete act on that subset. Added and duplicated clips receive new IDs and respect the server's twelve-range limit. An empty list offers Add clip and prevents export with a clear reason.
 
 Backward navigation retains the source, ranges, checked IDs, playhead and completed downloads. The draft records its schema version so the previous three-stage Export screen restores as the fourth stage rather than becoming Clips. Saved IDs are intersected with valid ranges; an old draft without explicit selection includes all its ranges. A replacement source is committed only after it opens successfully, preserving the old draft on rejected files or links.
 
@@ -29,7 +29,7 @@ Files from the previous job are labelled as the last export, so changing checkbo
 
 Menus use Radix Select for managed keyboard focus, arrow/Home/End navigation, typeahead, Escape and dismissal. Styling belongs to cutmyvideo: the same surface, selection, border and focus tokens appear in both themes. Menu content is constrained to the available viewport and rendered inside a native dialog when opened from Settings, so it remains in the dialog's top layer and focus scope.
 
-Trim handles keep a stable tab sequence, enforce opposite-boundary limits and expose meaningful time values. Pointer capture supports dragging beyond a handle's starting area. Exact text fields provide a touch and assistive-technology alternative, accept millisecond precision, and preserve invalid input while explaining the correction. The overview and zoomed timeline remain useful for finding short moments inside long recordings.
+The main trim track is a separate keyboard slider, so both boundary handles remain independently accessible. Tapping or dragging seeks within the actual zoom window; vertical touch gestures scroll the page without seeking. Trim handles keep a stable tab sequence, enforce opposite-boundary limits and expose meaningful time values. Pointer capture supports dragging beyond a handle's starting area. Exact text fields provide a touch and assistive-technology alternative, accept millisecond precision, and preserve invalid input while explaining the correction. The overview and zoomed timeline remain useful for finding short moments inside long recordings.
 
 The player stays mounted while its stage is hidden, leaves the accessibility and tab order through the native hidden attribute, and pauses when leaving Moment. Returning preserves position. Reload restores the saved position after player readiness. YouTube has a controllable embed; compatible files use native media controls. Other sources show their genuine metadata, owner-protected thumbnail where available, an original-page link and manual timing when there is no controllable preview.
 
@@ -45,7 +45,9 @@ Original quality avoids re-encoding but may shift boundaries and requires compat
 
 ## Navigation and language
 
-Progress, headings and document titles identify all four stages. Examples, defaults and support preserve the editing draft. Native dialogs provide Escape dismissal, a focus loop and focus returned to the trigger. Long wallet addresses wrap within the support dialog. The four supplied network addresses remain unchanged; copy is local and no transfer is initiated.
+Progress, headings and document titles identify all four stages. Browser Back and Forward move between stages and dialogs while preserving the editing draft. The first visit keeps the ordinary browser exit; opening a dialog adds an entry and closing it returns to its editor entry. A directly opened or refreshed dialog closes in place. Invalid timing stays visible for correction, and expired sources or empty collections cannot restore an unavailable stage. History stores bounded stage and panel metadata without media IDs or owner state; language changes preserve it.
+
+Examples, defaults and support preserve the editing draft. Native dialogs provide Escape dismissal, a focus loop and focus returned to the trigger. Their sticky header keeps Close reachable on short screens. Settings hold appearance and other defaults in one draft; Save applies everything, closing cancels unsaved changes, and Reset includes system appearance. Long wallet addresses wrap within the support dialog. The four supplied network addresses remain unchanged; copy is local and no transfer is initiated.
 
 Russian is primary. English covers visible copy, errors, accessible names, provider labels and help. Changing language or theme does not recreate the source or job. User titles and filenames stay unchanged. Preferences, language and appearance are browser-local; server credentials are not stored there. Appearance initializes before first paint using a same-origin script compatible with the production CSP.
 
@@ -68,8 +70,9 @@ Executed browser checks and physical-device limitations are recorded in [QA.md](
 Deleting one or several clips now offers a visible, keyboard-accessible Restore
 clips action. It restores the exact previous order, names, selected clips and
 active interval. The bounded snapshot holds at most twelve ranges and lasts
-until the next collection edit or departure from Clips; it never replaces a
-new source or overwrites later label/selection changes. Feedback is available in
+until the next collection content edit or departure from Clips; it never replaces a
+new source or overwrites later label changes. Checkbox changes preserve Undo;
+restoration keeps the current selection of surviving clips. Feedback is available in
 both languages and announced as a status message. After restoration keyboard
 focus returns to Select all, whose mixed state reflects the restored selection.
 
@@ -96,7 +99,7 @@ coalesced, avoiding a React update for every network callback. Cancel aborts the
 request and invalidates late progress/results from that attempt.
 
 The Video step exposes a bounded list of the current session's twenty retained
-sources. Replacing a source does not make old uploads and results impossible to
+sources. The list can reopen an earlier video after a fresh owner-protected metadata read; resuming the current video preserves its intervals and playhead. Replacing a source does not make old uploads and results impossible to
 remove. A user can free older sources while another job is waiting for storage.
 Deletion always requires a native confirmation that explicitly includes the
 source, all its jobs and output files. Active work cannot be deleted; the core

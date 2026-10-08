@@ -20,7 +20,8 @@ const phoneSizes = [
 const labels = {
   preview: /^(Посмотреть фрагмент|Preview clip)$/,
   add: /^(Добавить фрагмент|Add a clip)$/,
-  save: /^(Сохранить фрагмент|Save clip)$/,
+  save: /^(Список фрагментов|Clip list)$/,
+  continue: /^(К скачиванию|Continue to download)$/,
   precision: /^(Точное время и шкала|Exact time and timeline)$/,
   next: /^(К настройкам экспорта|Export settings)$/,
   download: /^(Скачать|Download)$/,
@@ -47,9 +48,29 @@ async function withinFirstViewport(locator: Locator, description: string) {
   return bounds
 }
 
+async function reachableByScrolling(locator: Locator, description: string) {
+  await expect(locator, description).toBeVisible()
+  await locator.scrollIntoViewIfNeeded()
+  const bounds = await locator.evaluate(element => {
+    const rect = element.getBoundingClientRect()
+    return { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, height: rect.height, viewport: innerHeight, width: innerWidth }
+  })
+  expect(bounds.left, `${description}: left edge`).toBeGreaterThanOrEqual(-1)
+  expect(bounds.right, `${description}: right edge`).toBeLessThanOrEqual(bounds.width + 1)
+  expect(bounds.bottom, `${description}: reachable by ordinary scrolling`).toBeGreaterThan(0)
+  expect(bounds.top, `${description}: reachable by ordinary scrolling`).toBeLessThan(bounds.viewport)
+  // Bounded collections can be taller than short viewports; individual actions
+  // must fit when brought into view, rather than reducing font sizes to fit all.
+  if (bounds.height <= bounds.viewport) {
+    expect(bounds.top, `${description}: scroll reveals the complete control`).toBeGreaterThanOrEqual(-1)
+    expect(bounds.bottom, `${description}: scroll reveals the complete control`).toBeLessThanOrEqual(bounds.viewport + 1)
+  }
+  return bounds
+}
+
 async function collectLayout(page: Page, touch: boolean) {
   return page.evaluate(touch => {
-    const controls = [...document.querySelectorAll<HTMLElement>('button, input:not([type=file]), select, a[href]')]
+    const controls = [...document.querySelectorAll<HTMLElement>('button, input:not([type=file]), select, a[href], summary, [role=slider]')]
       .filter(element => {
         const target = element.matches('input[type="checkbox"]') ? element.closest('label') ?? element : element
         const rect = target.getBoundingClientRect()
@@ -85,20 +106,24 @@ async function checkLayout(page: Page, stage: 1 | 2 | 3 | 4, touch: boolean, des
     expect(video!.height, `${description}: unnecessarily tall landscape player`).toBeLessThanOrEqual(result.height * .7 + 1)
     expect(video!.height, `${description}: readable native controls`).toBeGreaterThanOrEqual(140)
   }
-  if (!touch || (stage === 1 && result.width <= 430 && result.height >= 640)) {
+  if (stage !== 1 || !touch || (result.width <= 430 && result.height >= 640)) {
     const controls = stage === 1
       ? [page.locator('.source-choice'), page.locator('.source-form input'), page.locator('.source-open')]
       : stage === 2
         ? [page.locator('video'), page.locator('.trim-handle.start'), page.locator('.trim-handle.end'),
           page.getByRole('button', { name: /^(Начало по позиции плеера|Set start at player position)$/ }),
           page.getByRole('button', { name: /^(Конец по позиции плеера|Set end at player position)$/ }),
-          page.getByRole('button', { name: labels.preview }), page.getByRole('button', { name: labels.precision }), page.getByRole('button', { name: labels.save })]
+          page.getByRole('button', { name: labels.preview }), page.getByRole('button', { name: labels.precision }), page.getByRole('button', { name: labels.continue })]
         : stage === 3
           ? [page.getByRole('button', { name: labels.add }), page.locator('.clip-bulkbar'), page.locator('.range-list'), page.getByRole('button', { name: labels.next })]
-          : [page.locator('.format-picker'), page.locator('#quality'), page.locator('#cut-mode'),
+          : [page.locator('.format-picker'), page.locator('details.export-options > summary'),
           page.getByRole('button', { name: labels.cut }), ...await page.getByRole('link', { name: labels.download }).all()]
-    for (let i = 0; i < controls.length; i++) await withinFirstViewport(controls[i], `${description}: primary control ${i + 1}`)
+    for (let i = 0; i < controls.length; i++) {
+      if (stage === 1) await withinFirstViewport(controls[i], `${description}: primary control ${i + 1}`)
+      else await reachableByScrolling(controls[i], `${description}: primary control ${i + 1}`)
+    }
   }
+  await page.evaluate(() => scrollTo(0, 0))
   return result
 }
 
@@ -109,9 +134,10 @@ async function screen(page: Page, testInfo: TestInfo, name: string) {
 }
 
 test('real clips remain usable across laptop, desktop, tablet and touch viewport matrix', async ({ page, browser, browserName, headless }, testInfo) => {
-  // The measured headed WebKit matrix needs time for every saved-draft reload
-  // and screenshot; individual behavior assertions retain their 15-second limit.
-  test.setTimeout(browserName === 'webkit' ? 600_000 : 300_000)
+  // Every engine visits 280 layouts, reloads saved drafts and reveals controls
+  // by scrolling. The matrix budget is separate from each behavior assertion's
+  // 15-second limit and does not impose a compact, smaller-font layout.
+  test.setTimeout(900_000)
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
   await diagnoseNativePreview(page, testInfo, { browserName, headless, context: 'desktop' }, async () => {
@@ -211,7 +237,15 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
               await expect(target.getByLabel(/^(Начало|Start)$/, { exact: true })).not.toBeVisible()
             }
             if (stage === 3) await goToClips(target)
-            if (stage === 4) await goToExport(target)
+            if (stage === 4) {
+              await goToExport(target)
+              // The ordinary export view keeps advanced settings disclosed on
+              // request. Their keyboard/touch behavior has separate coverage.
+              const advanced = target.locator('details.export-options')
+              if (await advanced.evaluate(element => (element as HTMLDetailsElement).open)) await advanced.locator('summary').click()
+              await expect(target.locator('#quality')).not.toBeVisible()
+              await expect(target.locator('#cut-mode')).not.toBeVisible()
+            }
             const key = `${browserName}-${size.width}x${size.height}-${locale}-${theme}-stage-${stage}`
             evidence.push({ key, stage, locale, theme, touch, ...await checkLayout(target, stage, touch, key) })
             if (stage === 1) {
@@ -292,8 +326,8 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
     await download.saveAs(testInfo.outputPath(`${browserName}-touch-download.mp4`))
   } finally { await touchContext.close() }
 
-  // A full collection uses its own scroll area and reveals the newest clip,
-  // leaving the collection actions and Continue on a short laptop viewport.
+  // A full collection uses its own scroll area and reveals the newest clip.
+  // Its actions stay reachable with natural page scrolling on a short laptop.
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await setTheme(page, 'light')

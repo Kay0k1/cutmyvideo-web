@@ -1,14 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useLanguage } from './Language';
 import { Icon } from './Icons';
 import { countLabel } from './locales';
 import { displayTimecode, durationLabel } from './timecode';
 import type { ClipRange } from './types';
 
-function ClipCheckbox({ checked, mixed, label, onChange, disabled }: { checked: boolean; mixed?: boolean; label: string; onChange(): void; disabled?: boolean }) {
+function ClipCheckbox({ id, checked, mixed, label, onChange, disabled }: { id?: string; checked: boolean; mixed?: boolean; label: string; onChange(): void; disabled?: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => { if (input.current) input.current.indeterminate = !!mixed; }, [mixed]);
-  return <label className="clip-checkbox"><input ref={input} type="checkbox" checked={checked} aria-label={label} onChange={onChange} disabled={disabled} /><span aria-hidden="true">{mixed ? '−' : checked && <Icon name="check" size={15} />}</span></label>;
+  return <label className="clip-checkbox"><input ref={input} id={id} type="checkbox" checked={checked} aria-label={label} onChange={onChange} disabled={disabled} /><span aria-hidden="true">{mixed ? '−' : checked && <Icon name="check" size={15} />}</span></label>;
 }
 
 export type ClipSnapshot = { ranges: ClipRange[]; selectedIds: string[]; editedId: string };
@@ -22,6 +22,7 @@ export function ClipLibrary({ limit, ranges, selectedIds, editedId, revealId, on
   const section = useRef<HTMLElement>(null);
   const list = useRef<HTMLOListElement>(null);
   const [deleted, setDeleted] = useState<ClipSnapshot | null>(null);
+  const selectAllID = useId();
   const selected = new Set(selectedIds);
   const included = ranges.filter(range => selected.has(range.id));
   const duplicateLimit = included.length > 0 && ranges.length + included.length > limit;
@@ -57,22 +58,27 @@ export function ClipLibrary({ limit, ranges, selectedIds, editedId, revealId, on
   };
   const undoDeletion = () => {
     if (!deleted) return;
-    onRestore(deleted);
+    // Selection changes do not discard Undo or overwrite surviving row choices.
+    const survivors = new Set(ranges.map(range => range.id));
+    const previousSelection = new Set(deleted.selectedIds);
+    onRestore({ ...deleted, selectedIds: deleted.ranges.filter(range => survivors.has(range.id) ? selected.has(range.id) : previousSelection.has(range.id)).map(range => range.id) });
     setDeleted(null);
     window.requestAnimationFrame(() => section.current?.querySelector<HTMLInputElement>('.clip-select-all input')?.focus({ preventScroll: true }));
   };
+  const undoPanel = deleted && <div className="clip-undo"><p role="status">{t('Фрагменты удалены. Можно восстановить последнее удаление.')}</p><button className="button secondary" type="button" onClick={undoDeletion}>{t('Восстановить фрагменты')}</button></div>;
   return <section ref={section} className="clip-library" aria-label={t('Фрагменты')}>
     <div className="clip-library-heading"><div><h2>{countLabel(ranges.length, 'clip', locale)}</h2><p>{t('Отметьте фрагменты для экспорта. Остальные останутся в списке.')}</p></div>{ranges.length > 0 && <button className="button secondary" type="button" onClick={onAdd} disabled={ranges.length >= limit}><Icon name="plus" size={17} />{t('Добавить фрагмент')}</button>}</div>
     {ranges.length > 0 ? <>
-      <div className="clip-bulkbar"><div className="clip-select-all"><ClipCheckbox checked={included.length === ranges.length} mixed={included.length > 0 && included.length < ranges.length} label={t('Выбрать все фрагменты')} onChange={() => mutate(onSelectAll)} /><span>{t('Выбрать все')}</span></div><span className="clip-selected-count" role="status">{t('Выбрано: {count} из {total}', { count: included.length, total: ranges.length })}</span><div className="clip-bulk-actions"><button className="text-button" type="button" onClick={() => mutate(onDuplicate)} disabled={!included.length || duplicateLimit} aria-describedby={duplicateLimit ? 'clip-limit-hint' : undefined}><Icon name="duplicate" size={17} />{t('Дублировать выбранные')}</button><button className="text-button danger-button" type="button" onClick={deleteIncluded} disabled={!included.length}><Icon name="trash" size={17} />{t('Удалить выбранные')}</button></div></div>
+      <div className="clip-bulkbar"><div className="clip-select-all"><ClipCheckbox id={selectAllID} checked={included.length === ranges.length} mixed={included.length > 0 && included.length < ranges.length} label={t('Выбрать все фрагменты')} onChange={onSelectAll} /><label htmlFor={selectAllID}>{t('Выбрать все')}</label></div><span className="clip-selected-count" role="status">{t('Выбрано: {count} из {total}', { count: included.length, total: ranges.length })}</span><div className="clip-bulk-actions"><button className="text-button" type="button" onClick={() => mutate(onDuplicate)} disabled={!included.length || duplicateLimit} aria-describedby={duplicateLimit ? 'clip-limit-hint' : undefined}><Icon name="duplicate" size={17} />{t('Дублировать выбранные')}</button><button className="text-button danger-button" type="button" onClick={deleteIncluded} disabled={!included.length}><Icon name="trash" size={17} />{t('Удалить выбранные')}</button></div></div>
+      {undoPanel}
       <ol ref={list} className="range-list clip-list">{ranges.map((range, index) => <li key={range.id} data-range-id={range.id} className={range.id === editedId ? 'editing' : ''}>
-        <ClipCheckbox checked={selected.has(range.id)} label={t('Выбрать фрагмент {index}', { index: index + 1 })} onChange={() => mutate(() => onSelect(range.id))} />
-        <div className="clip-row-body"><input className="clip-row-name" type="text" value={range.label} maxLength={50} placeholder={`${t('Фрагмент')} ${index + 1}`} aria-label={t('Название фрагмента {index}', { index: index + 1 })} onChange={event => mutate(() => onLabel(range.id, event.target.value))} /><div className="clip-row-times"><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span><span>{durationLabel(range.end_ms - range.start_ms, locale)}</span></div></div>
+        <ClipCheckbox checked={selected.has(range.id)} label={t('Выбрать фрагмент {index}', { index: index + 1 })} onChange={() => onSelect(range.id)} />
+        <div className="clip-row-body"><label className="clip-row-title"><input className="clip-row-name" type="text" value={range.label} maxLength={50} placeholder={`${t('Фрагмент')} ${index + 1}`} aria-label={t('Название фрагмента {index}', { index: index + 1 })} onChange={event => mutate(() => onLabel(range.id, event.target.value))} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }} /><Icon name="edit" size={14} /></label><div className="clip-row-times"><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span><span>{durationLabel(range.end_ms - range.start_ms, locale)}</span></div></div>
         <button className="button secondary clip-edit" type="button" aria-label={t('Редактировать фрагмент {index}', { index: index + 1 })} onClick={() => onEdit(range)}><Icon name="edit" size={16} /><span>{t('Редактировать')}</span></button>
         <button className="icon-button delete-range" type="button" aria-label={t('Удалить фрагмент {index}', { index: index + 1 })} onClick={() => deleteOne(range.id, index)}><Icon name="trash" size={17} /></button>
       </li>)}</ol>
     </> : <div className="clip-empty"><Icon name="cut" size={27} /><h3>{t('Пока нет фрагментов')}</h3><p>{t('Добавьте момент, который хотите сохранить.')}</p><button className="button primary" type="button" onClick={onAdd}><Icon name="plus" size={17} />{t('Добавить первый фрагмент')}</button></div>}
-    {deleted && <div className="clip-undo"><p role="status">{t('Фрагменты удалены. Можно восстановить последнее удаление.')}</p><button className="button secondary" type="button" onClick={undoDeletion}>{t('Восстановить фрагменты')}</button></div>}
+    {ranges.length === 0 && undoPanel}
     <div className="clip-library-footer"><p id="clip-limit-hint">{duplicateLimit && ranges.length < limit ? t('Для копий не хватает места. Выберите меньше фрагментов: в списке может быть до {limit}.', { limit }) : ranges.length >= limit ? t('В одном задании — до {limit} фрагментов.', { limit }) : !included.length && ranges.length ? t('Выберите хотя бы один фрагмент для экспорта.') : t('Каждый выбранный фрагмент будет отдельным файлом.')}</p><button className="button primary" type="button" disabled={!included.length} onClick={onExport}>{t('К настройкам экспорта')}<Icon name="chevron" size={17} /></button></div>
   </section>;
 }

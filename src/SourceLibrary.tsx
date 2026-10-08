@@ -7,8 +7,8 @@ import { formatTimecode } from './timecode';
 import type { Source } from './types';
 
 /** Fetch only on disclosure; retained sources remain manageable after replacement. */
-export function SourceLibrary({ currentID, disabled, currentBusy, onDeleted, onBusy }: {
-  currentID?: string; disabled: boolean; currentBusy: boolean; onDeleted(id: string): void; onBusy(busy: boolean): void;
+export function SourceLibrary({ currentID, disabled, currentBusy, onOpen, onDeleted, onBusy }: {
+  currentID?: string; disabled: boolean; currentBusy: boolean; onOpen(source: Source): void; onDeleted(id: string): void; onBusy(busy: boolean): void;
 }) {
   const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
@@ -19,7 +19,12 @@ export function SourceLibrary({ currentID, disabled, currentBusy, onDeleted, onB
   const [revision, setRevision] = useState(0);
   const pending = useRef(false);
   const disposed = useRef(false);
+  const returnFocus = useRef(false);
   const heading = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!returnFocus.current || disabled || deleting !== null) return;
+    returnFocus.current = false; heading.current?.focus();
+  }, [disabled, deleting]);
   useEffect(() => { disposed.current = false; return () => { disposed.current = true; }; }, []);
   useEffect(() => {
     if (!expanded) return;
@@ -45,13 +50,13 @@ export function SourceLibrary({ currentID, disabled, currentBusy, onDeleted, onB
     } catch (error) {
       if (error instanceof ApiError && error.code === 'not_found') { onDeleted(id); if (!disposed.current) setSources(previous => previous.filter(source => source.id !== id)); }
       else if (!disposed.current) setError(errorMessage(error));
-    } finally { pending.current = false; onBusy(false); if (!disposed.current) { setDeleting(null); window.requestAnimationFrame(() => heading.current?.focus()); } }
+    } finally { pending.current = false; returnFocus.current = true; onBusy(false); if (!disposed.current) setDeleting(null); }
   }
 
   return <section className="source-library" aria-label={t('Сохранённые видео')}>
     <button ref={heading} type="button" className="text-button source-library-toggle" aria-expanded={expanded} aria-controls="saved-sources" disabled={disabled} onClick={() => setExpanded(value => !value)}>{t('Мои видео на сервере')}<Icon name="chevron" size={15} /></button>
-    {expanded && <div id="saved-sources"><p className="field-hint">{t('Здесь можно удалить прежние видео и их результаты, чтобы освободить место.')}</p>
-      {loading ? <p role="status">{t('Загружаем список…')}</p> : sources.length === 0 ? <p className="field-hint">{t('Сохранённых видео нет.')}</p> : <ul>{sources.map(source => <li key={source.id}><div><h3>{source.title}</h3><span>{formatTimecode(source.duration_ms)}</span><RetentionNotice expiresAt={source.expires_at} blocked={source.retention_blocked} kind="source" /></div><button type="button" className="text-button danger-button" aria-label={t('Удалить видео «{title}» и файлы', { title: source.title })} disabled={disabled || deleting !== null || source.id === currentID && currentBusy} onClick={() => void remove(source.id)}>{deleting === source.id ? t('Удаляем…') : t('Удалить')}</button></li>)}</ul>}
+    {expanded && <div id="saved-sources"><p className="field-hint">{t('Откройте прежнее видео или удалите его вместе с готовыми файлами.')}</p>
+      {loading ? <p role="status">{t('Загружаем список…')}</p> : sources.length === 0 ? <p className="field-hint">{t('Сохранённых видео нет.')}</p> : <ul>{sources.map(source => <li key={source.id}><div><h3>{source.title}</h3><span>{formatTimecode(source.duration_ms)}</span><RetentionNotice expiresAt={source.expires_at} blocked={source.retention_blocked} kind="source" /></div><div className="source-library-actions"><button type="button" className="button secondary" aria-label={t(source.id === currentID ? 'Продолжить редактирование «{title}»' : 'Открыть видео «{title}»', { title: source.title })} disabled={disabled || deleting !== null || currentBusy && source.id !== currentID} onClick={() => onOpen(source)}><Icon name="play" size={16} />{t(source.id === currentID ? 'Продолжить' : 'Открыть видео')}</button><button type="button" className="text-button danger-button" aria-label={t('Удалить видео «{title}» и файлы', { title: source.title })} disabled={disabled || deleting !== null || source.id === currentID && currentBusy} onClick={() => void remove(source.id)}>{deleting === source.id ? t('Удаляем…') : t('Удалить')}</button></div></li>)}</ul>}
       {error && <p className="error-message" role="alert">{t(error)}<button type="button" className="text-button" disabled={disabled || deleting !== null} onClick={() => setRevision(value => value + 1)}>{t('Повторить')}</button></p>}
     </div>}
   </section>;

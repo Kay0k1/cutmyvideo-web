@@ -115,3 +115,48 @@ test('touch selectors and clip selection remain usable without native select pop
   await expect(popup).not.toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1)
 })
+
+test('touch timeline permits page scrolling and horizontal scrubbing without moving clip boundaries', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 480 })
+  await page.goto('/')
+  await uploadThroughUI(page)
+  const scrubber = page.getByRole('slider', { name: 'Позиция плеера', exact: true })
+  await expect(scrubber).toBeVisible()
+  await scrubber.scrollIntoViewIfNeeded()
+  const bounds = await scrubber.boundingBox()
+  expect(bounds).not.toBeNull()
+  const x = bounds!.x + bounds!.width * .25, y = bounds!.y + bounds!.height / 2
+  const session = await page.context().newCDPSession(page)
+  const touch = async (type: 'touchStart' | 'touchMove' | 'touchEnd', touchX = x, touchY = y) => {
+    await session.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x: touchX, y: touchY }] })
+  }
+  const beforePosition = await scrubber.getAttribute('aria-valuenow')
+  const scroll = await page.evaluate(() => ({ top: scrollY, remaining: document.documentElement.scrollHeight - innerHeight - scrollY }))
+  const direction = scroll.remaining > 80 ? -1 : 1
+  await touch('touchStart')
+  for (let step = 1; step <= 5; step++) await touch('touchMove', x, y + direction * step * 15)
+  await touch('touchEnd')
+  if (direction === -1) await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(scroll.top + 10)
+  else await expect.poll(() => page.evaluate(() => scrollY)).toBeLessThan(scroll.top - 10)
+  await expect(scrubber).toHaveAttribute('aria-valuenow', beforePosition!)
+  await scrubber.scrollIntoViewIfNeeded()
+  const nextBounds = await scrubber.boundingBox()
+  expect(nextBounds).not.toBeNull()
+  const nextX = nextBounds!.x + nextBounds!.width * .25, nextY = nextBounds!.y + nextBounds!.height / 2
+  await touch('touchStart', nextX, nextY)
+  for (let step = 1; step <= 5; step++) await touch('touchMove', nextX + nextBounds!.width * .06 * step, nextY)
+  await touch('touchEnd')
+  await expect.poll(async () => Number(await scrubber.getAttribute('aria-valuenow'))).toBeGreaterThan(6000)
+  const start = page.getByRole('slider', { name: 'Начало фрагмента на шкале', exact: true })
+  await expect(start).toHaveAttribute('aria-valuenow', '0')
+  await expect(page.getByRole('slider', { name: 'Конец фрагмента на шкале', exact: true })).toHaveAttribute('aria-valuenow', '12000')
+  const startBounds = await start.boundingBox()
+  expect(startBounds).not.toBeNull()
+  const startX = startBounds!.x + startBounds!.width / 2, startY = startBounds!.y + startBounds!.height / 2
+  await touch('touchStart', startX, startY)
+  for (let step = 1; step <= 5; step++) await touch('touchMove', startX + nextBounds!.width * .02 * step, startY)
+  await touch('touchEnd')
+  await expect(start).toHaveAttribute('aria-valuenow', '1200')
+  await expect(page.getByRole('slider', { name: 'Конец фрагмента на шкале', exact: true })).toHaveAttribute('aria-valuenow', '12000')
+  await session.detach()
+})

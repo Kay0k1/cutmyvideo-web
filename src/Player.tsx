@@ -172,6 +172,8 @@ export const Player = memo(forwardRef<PlayerControls, {
           onReady: event => {
             if (instance.disposed || instance.failed || youtube.current !== instance || (instance.player && event.target !== instance.player)) return;
             instance.player = event.target; instance.ready = true;
+            const iframe = host.current?.querySelector('iframe');
+            if (iframe && source?.title) iframe.title = source.title;
             const pendingSeek = instance.pendingSeek;
             if (pendingSeek !== null) readyCommand(player => player.seekTo(pendingSeek / 1000, true));
             if (instance.pendingPause) readyCommand(player => player.pauseVideo());
@@ -205,7 +207,7 @@ export const Player = memo(forwardRef<PlayerControls, {
   </div>;
 
   return <div className="player-frame">
-    {source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata"
+    {source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
       onLoadedMetadata={() => callbacks.current.onAvailable(true)}
       onTimeUpdate={() => callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000))}
       onError={() => { setError(true); callbacks.current.onAvailable(false); }} />

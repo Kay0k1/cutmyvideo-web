@@ -2,6 +2,21 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  "Для одного момента нажмите «К скачиванию». Для нескольких откройте «Список фрагментов».": "For one clip, choose “Continue to download”. For several, open “Clip list”.",
+  "Изменить время начала: {time}": "Edit start time: {time}",
+  "Изменить время конца: {time}": "Edit end time: {time}",
+  "Часть фрагментов не удалось обработать. Готовые файлы уже можно скачать.": "Some clips could not be processed. The completed files are ready to download.",
+  "Список фрагментов": "Clip list",
+  "К скачиванию": "Continue to download",
+  "Качество и точность": "Quality and precision",
+  "Изменить время начала": "Edit start time",
+  "Изменить время конца": "Edit end time",
+  "Выберите видео с устройства": "Choose a video from your device",
+  "Продолжить": "Continue",
+  "Продолжить редактирование «{title}»": "Continue editing “{title}”",
+  "Открыть видео «{title}»": "Open video “{title}”",
+  "Откройте прежнее видео или удалите его вместе с готовыми файлами.": "Open a previous video or delete it together with its output files.",
+  "Нажмите на шкалу или двигайте указатель, чтобы перемотать. Стрелки — 0,1 секунды, Shift — секунда; Home и End — начало и конец видео.": "Tap or drag the timeline to seek. Arrow keys move by 0.1 seconds, or one second with Shift; Home and End go to the video’s start and end.",
   "Ждём свободного места": "Waiting for storage",
   "Задание сохранено и продолжится автоматически, когда освободится место.": "The job is saved and will continue automatically when storage becomes available.",
   "Видео используется активным заданием. Дождитесь завершения или отмените обработку перед удалением.": "The video is used by an active job. Wait for it to finish or cancel processing before deleting it.",

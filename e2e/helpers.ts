@@ -32,6 +32,12 @@ export async function goToExport(page: Page) {
   await expect(button).toBeEnabled()
   await button.click()
   await expect(button).toHaveAttribute('aria-current', 'step')
+  // Existing export-setting scenarios explicitly request the optional controls.
+  // The ordinary single-clip journey is separately tested with this closed.
+  const advanced = page.locator('details.export-options')
+  if (await advanced.count() && !await advanced.evaluate(element => (element as HTMLDetailsElement).open)) {
+    await advanced.locator('summary').click()
+  }
 }
 
 export async function goToClips(page: Page) {
@@ -55,7 +61,7 @@ export async function showExactTimes(page: Page) {
 }
 
 export async function saveClip(page: Page) {
-  await page.getByRole('button', { name: /^(Сохранить фрагмент|Save clip)$/ }).click()
+  await page.getByRole('button', { name: /^(Список фрагментов|Clip list)$/ }).click()
   await expect(stepButton(page, 3)).toHaveAttribute('aria-current', 'step')
 }
 

@@ -21,7 +21,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     try { localStorage.setItem('cutmyvideo.language', value); } catch { /* Optional persistence. */ }
     const url = new URL(window.location.href);
     url.searchParams.delete('lang');
-    history.replaceState(null, '', url);
+    history.replaceState(history.state, '', url);
   };
   useEffect(() => {
     try { localStorage.setItem('cutmyvideo.language', locale); } catch { /* Optional persistence. */ }

@@ -1,5 +1,56 @@
 # MVP acceptance and UX review
 
+## UX refinement — 8 October 2026
+
+The primary journey is Video → Moment → Export. Continue to download validates
+and includes the edited clip while retaining other checked clips; the optional
+Clip list does not change selection. Completed downloads precede the next
+export's settings. Quality and precision use a native disclosure. Settings keep
+appearance and output defaults in one draft; Save applies it and dismissal
+discards unsaved changes.
+
+The production build and all 111 frontend unit tests pass, including 18 history
+coordinator regressions. Native Back/Forward covers stages, dialogs, refreshed
+deep links and browser exit. Fragment links retain their normal history entries;
+four focused desktop/mobile regressions verify keyboard Skip to editor followed
+by Settings Close/Back/Forward, anchors within a dialog, and rejection of a
+multi-entry Back with invalid timing. The marker contains bounded stage/panel
+positions without source IDs or session state.
+
+Seven selector lifecycle checks also pass against the built production assets:
+loading only when shown, delayed keyboard/pointer/focus intent, and a working
+native fallback when the chunk fails. No dependencies, backend revision or
+production storage/cache policy changed.
+
+Responsive checks require readable relative text, 44-pixel targets, no horizontal
+overflow or clipped controls, and access through ordinary vertical scrolling.
+They do not force every editing control into the first viewport. Extra reflow
+checks double text without changing viewport width, including 320 pixels,
+collapsed time controls, source metadata, timeline labels and ready downloads.
+Browser emulation does not establish certification for all physical devices or
+screen readers. Before/after screenshot geometry is not a human timing study.
+
+The final clean desktop/mobile run passed 111 scenarios. Four optional scenarios
+were skipped: public direct media, real YouTube/provider inputs and the separate
+three-hour fixture. Real MP4/MP3 exports, decoded frames, durations, session
+isolation, cancellation, retry, source deletion, selection and restoration pass.
+The strengthened usability suite passed 30 cases across Chromium, Firefox and
+WebKit, checking that all visible text actually doubles before measuring the
+collapsed uploaded Moment and the other stages.
+
+Each engine completed the real-media matrix: fourteen viewport sizes, both
+languages and appearances, four stages and the MP4 chooser, yielding 280
+measurements per engine and 840 total. Touch playback/download, first-frame
+matching, media probes and a twelve-clip list also pass. There was no measured
+horizontal overflow, clipped control or undersized touch target.
+
+One Firefox attempt reached the ten-minute whole-matrix budget during its final
+collection loop under concurrent test load. A final isolated run passed in
+3.7 minutes with tracing disabled and the complete measurements/media evidence.
+The matrix budget is now fifteen minutes; individual behavior assertions retain
+their fifteen-second deadline. This changes the test runner's budget only.
+The CI jobs now include all three usability projects alongside their matrices.
+
 The MVP is a working manual media tool. Reviews must exercise the real Go API
 and real FFmpeg outputs; screenshots or mocked API responses alone are not proof.
 

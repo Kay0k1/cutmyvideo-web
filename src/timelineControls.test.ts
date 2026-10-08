@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { keyboardTrimValue, pointerTrimValue } from './timelineControls';
+import { keyboardTrimValue, pointerSeekValue, pointerTrimValue } from './timelineControls';
 
 describe('compact timeline controls', () => {
   it('retains exact time and moves by the pointer delta anywhere in the hit area', () => {
@@ -23,5 +23,18 @@ describe('compact timeline controls', () => {
     expect(keyboardTrimValue('PageUp', 1250, 0, 60000)).toBe(6250);
     expect(keyboardTrimValue('PageDown', 1250, 0, 60000)).toBe(0);
     expect(keyboardTrimValue(' ', 1250, 0, 60000)).toBeNull();
+  });
+
+  it('seeks inside a zoomed middle section rather than multiplying its offset', () => {
+    expect(pointerSeekValue(350, 100, 500, [4_990_000, 5_050_000])).toBe(5_020_000);
+    expect(pointerSeekValue(100, 100, 500, [4_990_000, 5_050_000])).toBe(4_990_000);
+    expect(pointerSeekValue(600, 100, 500, [4_990_000, 5_050_000])).toBe(5_050_000);
+  });
+
+  it('keeps scrubbing at the visible edges and preserves non-rounded endpoints', () => {
+    expect(pointerSeekValue(0, 100, 500, [1250, 3750])).toBe(1250);
+    expect(pointerSeekValue(900, 100, 500, [1250, 3750])).toBe(3750);
+    expect(pointerSeekValue(350, 100, 500, [1250, 3750])).toBe(2500);
+    expect(pointerSeekValue(350, 100, 0, [1250, 3750])).toBe(1250);
   });
 });

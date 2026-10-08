@@ -1,6 +1,6 @@
 import { useLanguage } from './Language';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { api, ApiError, errorMessage } from './api';
 import { Icon } from './Icons';
 import { Player } from './Player';
@@ -28,6 +28,8 @@ import { startVisiblePolling } from './visiblePolling';
 import { defaultLimits, maxClientRanges, readPublicLimits } from './limits';
 import { SourceLibrary } from './SourceLibrary';
 import { RetentionNotice } from './RetentionNotice';
+import { useWorkflowHistory } from './workflowHistory';
+import type { WorkbenchPanel, WorkflowRoute } from './workflowHistory';
 
 const activeJob = (job: Job | null) => job?.status === 'queued' || job?.status === 'running' || job?.status === 'waiting_storage';
 const stageNames: Record<string, string> = {
@@ -43,7 +45,7 @@ function jobDescription(job: Job, t: (text: string, values?: Record<string, stri
   if (job.status === 'cancelled') return t(job.items.some(item => item.artifact) ? 'Новые фрагменты не создаются. Готовые файлы можно скачать.' : 'Обработка отменена. Можно изменить моменты или настройки и вырезать снова.');
   if (job.status === 'succeeded') return t('Все фрагменты готовы к скачиванию.');
   if (job.status === 'failed') return t(job.items.some(item => item.artifact)
-    ? 'Часть фрагментов не удалось обработать. Готовые файлы доступны ниже.'
+    ? 'Часть фрагментов не удалось обработать. Готовые файлы уже можно скачать.'
     : 'Не удалось создать фрагменты. Причина указана ниже.');
   const position = job.items.findIndex(item => item.status === 'running');
   if (position >= 0) return t('Фрагмент {index} из {total}.', { index: position + 1, total: job.items.length });
@@ -64,6 +66,10 @@ export default function App() {
   const [limits, setLimits] = useState<PublicLimits>(defaultLimits);
   const [preferences, setPreferences] = useState<Preferences>(readPreferences);
   const [step, setStep] = useState<WorkbenchStep>(1);
+  const [panel, setPanel] = useState<WorkbenchPanel>(() => {
+    const requested = new URLSearchParams(window.location.search).get('panel');
+    return requested === 'examples' || requested === 'settings' || requested === 'support' ? requested : null;
+  });
   const [source, setSource] = useState<Source | null>(null);
   const currentSourceID = useRef<string | undefined>(undefined);
   currentSourceID.current = source?.id;
@@ -99,6 +105,7 @@ export default function App() {
   const deletionPending = useRef(false);
   const [jobError, setJobError] = useState('');
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [advancedOutputOpen, setAdvancedOutputOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const player = useRef<PlayerControls>(null);
   const previewEnd = useRef<number | null>(null);
@@ -109,6 +116,7 @@ export default function App() {
   const restored = useRef(false);
   const stageHeading = useRef<HTMLHeadingElement>(null);
   const previousStep = useRef(step);
+  const previousJobState = useRef<{ id: string; status: Job['status'] } | null>(null);
   const restoredPosition = useRef<number | null>(null);
   const draftWriter = useRef<ReturnType<typeof coalescedTask> | null>(null);
   const selected = ranges.find(range => range.id === selectedId) ?? ranges[0];
@@ -121,6 +129,7 @@ export default function App() {
   const invalidDraft = !!selected && !!validateRange(parseTimecode(startText), parseTimecode(endText), duration, limits.max_range_ms);
   const exportLimitError = exportRanges.length > limits.max_ranges ? t('Можно экспортировать не больше {limit} фрагментов за один раз.', { limit: limits.max_ranges }) : exportRanges.some(range => range.end_ms - range.start_ms > limits.max_range_ms) ? t('Фрагмент превышает лимит сервиса. Сократите его.') : totalDuration > limits.max_job_ms ? t('Общая длительность выбранных фрагментов превышает лимит сервиса. Выберите меньше фрагментов или сократите их.') : '';
   const preserveLocalQuality = output.cut_mode === 'copy' && (source?.kind === 'upload' || source?.kind === 'direct');
+  const navigation = useWorkflowHistory({ ready: sessionReady, step, panel, onNavigate: navigateHistory });
 
   const playbackPosition = useCallback((ms: number) => {
     position.set(Math.min(duration, ms));
@@ -267,6 +276,25 @@ export default function App() {
     setStep(next);
   }
 
+  function navigateHistory(requested: WorkflowRoute): WorkflowRoute | null {
+    let next = requested.step;
+    if (next > 1 && !source && !(next === 4 && job)) next = 1;
+    if (next === 2 && !selected) next = source ? 3 : 1;
+    if (next === 4 && !exportRanges.length && !job) next = source ? 3 : 1;
+    if (next !== step) {
+      if (sourceBusy || deletingSource || submitting) return null;
+      if (step === 2 && source && selected) {
+        const range = validateFields(true);
+        if (!range) return null;
+        setRanges(previous => previous.map(item => item.id === range.id ? range : item));
+      }
+      if (next === 3 && selected) setRevealId(selected.id);
+      setStep(next);
+    }
+    setPanel(requested.panel);
+    return { step: next, panel: requested.panel };
+  }
+
   function changeBounds(start: number, end: number) {
     if (!selected) return;
     const updated = { ...selected, start_ms: start, end_ms: end };
@@ -296,13 +324,14 @@ export default function App() {
     return { ...selected, start_ms: start!, end_ms: end! };
   }
 
-  function commitFields() {
+  function commitFields(): boolean {
     const range = validateFields();
     if (range) {
       setRanges(previous => previous.map(item => item.id === range.id ? range : item));
       setViewCenter((range.start_ms + range.end_ms) / 2);
       setSimpleView(simpleRangeView(duration, range));
     }
+    return !!range;
   }
 
   function seek(ms: number) {
@@ -322,7 +351,7 @@ export default function App() {
 
   const handleShortcut = useEffectEvent((event: KeyboardEvent) => {
     if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || document.querySelector('dialog[open]')) return;
-    if ((event.target as HTMLElement).closest('input, textarea, select, button, a, [contenteditable], [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"]')) return;
+    if ((event.target as HTMLElement).closest('input, textarea, select, button, a, video, [role="slider"], [contenteditable], [role="combobox"], [role="listbox"], [role="option"], [role="menu"], [role="menuitem"]')) return;
     if (step !== 2 || !source || !selected) return;
     if (event.code === 'KeyI') { event.preventDefault(); marker('start'); }
     if (event.code === 'KeyO') { event.preventDefault(); marker('end'); }
@@ -352,18 +381,55 @@ export default function App() {
       const opened = file ? await api.upload(file, controller.signal, progress => { if (sourceController.current === controller && !controller.signal.aborted) setUploadProgress(progress); }) : await api.open(candidateUrl!, controller.signal);
       if (controller.signal.aborted) return;
       if (file && (!opened.width || !opened.height)) { setSourceError('В MP4 не найдено видео. Выберите файл с видеодорожкой.'); setStep(1); return; }
-      const range = newRange(opened.duration_ms, 0, limits);
-      player.current?.pause(); previewEnd.current = null; restoredPosition.current = null;
-      setSource(opened); setRanges([range]); setSelectedId(range.id); setFields(range);
-      setSelectedRangeIds([range.id]); setRevealId(range.id); setSimpleView(simpleRangeView(opened.duration_ms, range)); setPrecisionOpen(opened.preview_kind === 'none' || (!opened.preview_url && !opened.embed_url));
-      position.set(0); setViewCenter((range.start_ms + range.end_ms) / 2); setSpan(Math.min(opened.duration_ms, preferences.timeline_span)); setOutput(preferences.output);
-      exportAttempt.current = null;
-      setJob(null); setJobRangeNumbers([]); setJobError(''); setPreviewing(false); setPlayerAvailable(false); setStep(2);
+      activateSource(opened);
       if (!file) setUrl(candidateUrl!);
       setNotice('Источник открыт. Укажите границы фрагмента.');
     } catch (error) {
       if (!controller.signal.aborted) setSourceError(errorMessage(error));
     } finally { if (sourceController.current === controller) { sourceController.current = null; setSourceBusy(false); setUploadProgress(null); } }
+  }
+
+  function activateSource(opened: Source) {
+    const range = newRange(opened.duration_ms, 0, limits);
+    player.current?.pause(); previewEnd.current = null; restoredPosition.current = null;
+    setSource(opened); setRanges([range]); setSelectedId(range.id); setFields(range);
+    setSelectedRangeIds([range.id]); setRevealId(range.id); setSimpleView(simpleRangeView(opened.duration_ms, range)); setPrecisionOpen(opened.preview_kind === 'none' || (!opened.preview_url && !opened.embed_url));
+    position.set(0); setViewCenter((range.start_ms + range.end_ms) / 2); setSpan(Math.min(opened.duration_ms, preferences.timeline_span)); setOutput(preferences.output);
+    exportAttempt.current = null;
+    setJob(null); setJobRangeNumbers([]); setJobError(''); setPreviewing(false); setPlayerAvailable(false); setStep(2);
+    setAdvancedOutputOpen(false);
+  }
+
+  async function reopenSource(previous: Source) {
+    if (sourceBusy || deletingSource || submitting) return;
+    if (previous.id === source?.id) { goToStep(selected ? 2 : 3); return; }
+    if (busy || sourceController.current) return;
+    const controller = new AbortController(); sourceController.current = controller;
+    setSourceBusy(true); setSourceError('');
+    try {
+      const fresh = await api.source(previous.id, controller.signal);
+      if (!controller.signal.aborted) { activateSource(fresh); setNotice('Источник открыт. Укажите границы фрагмента.'); }
+    } catch (error) { if (!controller.signal.aborted) setSourceError(errorMessage(error)); }
+    finally { if (sourceController.current === controller) { sourceController.current = null; setSourceBusy(false); } }
+  }
+
+  function finishMoment(next: 3 | 4) {
+    const range = validateFields(true);
+    if (!range) return;
+    setRanges(previous => previous.map(item => item.id === range.id ? range : item));
+    if (next === 4) setSelectedRangeIds(previous => previous.includes(range.id) ? previous : [...previous, range.id]);
+    setRevealId(range.id); setStep(next);
+  }
+
+  function timeFieldKey(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.nativeEvent.isComposing) return;
+    if (event.key === 'Enter') { event.preventDefault(); if (commitFields()) event.currentTarget.blur(); }
+    if (event.key === 'Escape' && selected) { event.preventDefault(); setFields(selected); }
+  }
+
+  function editTime(which: 'start' | 'end') {
+    setPrecisionOpen(true);
+    window.requestAnimationFrame(() => { const field = which === 'start' ? startField.current : endField.current; field?.focus(); field?.select(); });
   }
 
   function pickRange(range: ClipRange) {
@@ -486,6 +552,17 @@ export default function App() {
   }
 
   const files = job?.items.filter(item => item.artifact) ?? [];
+  useEffect(() => {
+    const previous = previousJobState.current;
+    previousJobState.current = job ? { id: job.id, status: job.status } : null;
+    if (!job || !previous || previous.id !== job.id || !['queued', 'running', 'waiting_storage'].includes(previous.status) || activeJob(job) || !files.length || step !== 4 || document.hidden || document.querySelector('dialog[open]')) return;
+    const frame = window.requestAnimationFrame(() => {
+      const heading = document.getElementById('results-heading');
+      heading?.closest('.results-panel')?.scrollIntoView({ block: 'start', behavior: 'instant' });
+      heading?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [job?.id, job?.status]);
   const failedItems = job?.items.filter(item => item.status === 'failed') ?? [];
   const repeatExport = repeatsFailedExport(job, exportRanges);
   const jobHeading = job?.status === 'failed' && files.length > 0 ? 'Часть фрагментов готова' : stageNames[job?.status === 'running' ? job.stage : job?.status ?? ''] ?? 'Обрабатываем фрагменты';
@@ -494,7 +571,7 @@ export default function App() {
 
   const jobProgress = job && <section className={`job-status ${job.status}`} aria-label={t("Состояние экспорта")} aria-live="polite"><p className="job-history-label">{t("Последний экспорт")}</p><div className="job-status-heading">{activeJob(job) ? <span className="spinner" /> : <Icon name={job.status === 'succeeded' ? 'check' : 'file'} size={20} />}<h3>{t(jobHeading)}</h3></div><p>{jobDescription(job, t)}</p>{job.status === 'waiting_storage' && <RetentionNotice expiresAt={job.storage_wait_until} kind="wait" />}<ExportProgress job={job} /><p className="job-file-count">{t('Готово: {count} из {total}', { count: files.length, total: job.items.length })}</p>{failedItems.length > 0 && <div className="failed-items"><ul>{failedItems.map(item => <li key={item.id}><strong>{item.label || `${t('Фрагмент')} ${jobRangeNumbers[job.items.indexOf(item)] ?? job.items.indexOf(item) + 1}`}</strong><span>{t(exportFailureReason(item, job.message))}</span></li>)}</ul>{source && <p className="job-recovery-note">{t('Выбранные моменты сохранены. Настройки можно изменить перед повтором.')}</p>}</div>}{activeJob(job) && <button type="button" className="button secondary cancel-button" disabled={cancelling} onClick={() => void cancelJob()}>{cancelling ? t("Отменяем…") : t("Отменить обработку")}</button>}</section>;
 
-  const resultsPanel = files.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading">{t("Файлы последнего экспорта")}</h2><p>{t("Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(files.length, 'file', locale)}</span></div><ul className="file-list">{files.map((item, index) => {
+  const resultsPanel = files.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading" tabIndex={-1}>{t("Файлы последнего экспорта")}</h2><p>{t("Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(files.length, 'file', locale)}</span></div><ul className="file-list">{files.map((item, index) => {
         const artifact = item.artifact!;
         const itemNumber = jobRangeNumbers[job?.items.indexOf(item) ?? index] ?? (job?.items.indexOf(item) ?? index) + 1;
         const adjusted = Math.abs(artifact.actual_start_ms - item.start_ms) > 100 || Math.abs(artifact.actual_end_ms - item.end_ms) > 100;
@@ -508,22 +585,22 @@ export default function App() {
     <a className="skip-link" href="#editor">{t('К выбору фрагмента')}</a>
     <header className="site-header"><div className="header-inner">
       <a className="brand" href="/" aria-label={t('cutmyvideo — главная')}><span className="brand-symbol"><Icon name="cut" size={20} /></span><span>cutmy<span className="brand-suffix">video</span></span></a>
-      <WorkspaceNav preferences={preferences} onSave={applyPreferences} busy={!sessionReady || sourceBusy || busy} onExample={value => { setUrl(value); setStep(1); void openSource(undefined, value); }} />
+      <WorkspaceNav panel={panel} onOpen={setPanel} onClose={navigation.closePanel} preferences={preferences} onSave={applyPreferences} busy={!sessionReady || sourceBusy || busy} onExample={value => { setUrl(value); setStep(1); void openSource(undefined, value); }} />
       <div className="header-actions"><LanguageSwitch /><ThemeToggle /></div>
     </div></header>
     <main id="editor" className={`stage-page stage-${step}`}>
       <nav className="steps-nav" aria-label={t('Шаги работы')}><ol>{(['Видео', 'Момент', 'Фрагменты', 'Экспорт'] as const).map((label, index) => <li key={label}><button type="button" disabled={sourceBusy || (index > 0 && !source && !(index === 3 && job)) || (index === 3 && !exportRanges.length && !job) || (index === 1 && !ranges.length)} aria-current={step === index + 1 ? 'step' : undefined} onClick={() => goToStep((index + 1) as WorkbenchStep)}><span className="step-number">{index + 1}</span><span>{t(label)}</span></button>{index < 3 && <span className="step-connector" aria-hidden="true" />}</li>)}</ol></nav>
       <div className="page-heading"><div><p className="step-caption">{t('Шаг {current} из 4', { current: step })}</p><h1 ref={stageHeading} tabIndex={-1}>{t(stageTitles[step - 1])}</h1><p>{t(stageDescriptions[step - 1])}</p></div>{step > 2 && <button className="text-button change-source" type="button" onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button>}</div>
       {step === 1 && <SourceChooser url={url} onUrl={value => { setUrl(value); setSourceError(''); }} onOpen={() => void openSource()} onFile={file => void openSource(file)} busy={sourceBusy} progress={uploadProgress} maximumBytes={limits.max_source_bytes} blocked={deletingSource} processing={activeJob(job) || submitting} ready={sessionReady} error={sourceError} onCancel={() => { sourceController.current?.abort(); sourceController.current = null; setSourceBusy(false); setUploadProgress(null); }} onReconnect={() => { setSourceError(''); setSessionAttempt(n => n + 1); }} />}
-      {step === 1 && sessionReady && <SourceLibrary currentID={source?.id} disabled={sourceBusy || submitting || deletingSource} currentBusy={busy} onBusy={setDeletingSource} onDeleted={id => { if (id === currentSourceID.current) clearDeletedSource(); else setNotice('Видео и связанные файлы удалены.'); }} />}
+      {step === 1 && sessionReady && <SourceLibrary currentID={source?.id} disabled={sourceBusy || submitting || deletingSource} currentBusy={busy} onBusy={setDeletingSource} onOpen={value => void reopenSource(value)} onDeleted={id => { if (id === currentSourceID.current) clearDeletedSource(); else setNotice('Видео и связанные файлы удалены.'); }} />}
       {source && step === 1 && <section className="source-retention" aria-label={t('Хранение видео')}><RetentionNotice expiresAt={source.expires_at} blocked={source.retention_blocked} kind="source" /><button type="button" className="text-button danger-button" disabled={busy || sourceBusy} onClick={() => void deleteSource()}>{deletingSource ? t('Удаляем…') : t('Удалить видео и файлы')}</button></section>}
       {source && <section className="moments-stage" hidden={step !== 2} aria-label={t('Выбор одного момента')}>
         <div className="editing-panel">
-          <div className="media-heading"><div className="source-title"><Icon name="file" size={18} /><span>{source.title}</span>{sourceProvider && <span className="source-provider">{t(sourceProvider)}</span>}</div><span className="source-meta">{qualityLabel && <>{qualityLabel}<span className="meta-separator"> / </span></>}{formatTimecode(duration)}</span></div>
+          <div className="media-heading"><div className="source-title"><Icon name="file" size={18} /><span title={source.title}>{source.title}</span>{sourceProvider && <span className="source-provider">{t(sourceProvider)}</span>}</div><span className="source-meta">{qualityLabel && <>{qualityLabel}<span className="meta-separator"> / </span></>}{formatTimecode(duration)}</span></div>
           <div className="moment-layout">
           <Player ref={player} source={source} active={step === 2} onAvailable={playerAvailability} onTime={playbackPosition} />
           {selected && <div className="moment-controls">
-            <div className="moment-boundaries"><div><label htmlFor="range-start">{t('Начало')}</label><strong hidden={precisionOpen}>{displayTimecode(selected.start_ms)}</strong><input ref={startField} id="range-start" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitFields(); } }} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span>{t('Начало здесь')}<kbd>I</kbd></button></div><div><label htmlFor="range-end">{t('Конец')}</label><strong hidden={precisionOpen}>{displayTimecode(selected.end_ms)}</strong><input ref={endField} id="range-end" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" value={endText} onChange={event => { setEndText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commitFields(); } }} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span>{t('Конец здесь')}<kbd>O</kbd></button></div><div className="moment-duration"><span>{t('Длительность')}</span><strong>{durationLabel(selected.end_ms - selected.start_ms, locale)}</strong></div></div>
+            <div className="moment-boundaries"><div><label htmlFor="range-start">{t('Начало')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время начала: {time}', { time: displayTimecode(selected.start_ms) })} onClick={() => editTime('start')}>{displayTimecode(selected.start_ms)}<Icon name="edit" size={14} /></button><input ref={startField} id="range-start" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span>{t('Начало здесь')}<kbd>I</kbd></button></div><div><label htmlFor="range-end">{t('Конец')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время конца: {time}', { time: displayTimecode(selected.end_ms) })} onClick={() => editTime('end')}>{displayTimecode(selected.end_ms)}<Icon name="edit" size={14} /></button><input ref={endField} id="range-end" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={endText} onChange={event => { setEndText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span>{t('Конец здесь')}<kbd>O</kbd></button></div><div className="moment-duration"><span>{t('Длительность')}</span><strong>{durationLabel(selected.end_ms - selected.start_ms, locale)}</strong></div></div>
             <Timeline duration={duration} position={position} ranges={ranges} selected={selected} view={precisionOpen ? view : simpleView} showOverview={precisionOpen} onSeek={seek} onRange={changeBounds} onReveal={revealBoundary} />
             <div className="moment-preview"><button className="button secondary" type="button" disabled={!playerAvailable} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} />{previewing ? t('Остановить просмотр') : t('Посмотреть фрагмент')}</button><button className="text-button precision-toggle" type="button" aria-expanded={precisionOpen} aria-controls="range-start range-end precision-controls" onClick={() => { if (precisionOpen && invalidDraft) { validateFields(true); return; } if (precisionOpen) setSimpleView(simpleRangeView(duration, selected)); setPrecisionOpen(!precisionOpen); setViewCenter((selected.start_ms + selected.end_ms) / 2); }}>{t('Точное время и шкала')}<Icon name="chevron" size={15} style={{ transform: precisionOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button></div>
             <div id="precision-controls" className="precision-controls" hidden={!precisionOpen}>
@@ -534,18 +611,21 @@ export default function App() {
           </div>}
           </div>
         </div>
-        <div className="stage-actions"><div className="moment-secondary-actions"><button className="text-button change-source" type="button" onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button><button className="text-button" type="button" onClick={() => setShowShortcuts(!showShortcuts)} aria-expanded={showShortcuts}><span className="keycap">?</span>{t('Горячие клавиши')}</button></div><button className="button primary" type="button" onClick={() => goToStep(3)} disabled={sourceBusy || !selected}>{t('Сохранить фрагмент')}<Icon name="check" size={17} /></button></div>
+        <div className="stage-actions"><div className="moment-secondary-actions"><button className="text-button change-source" type="button" onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button><button className="text-button" type="button" onClick={() => setShowShortcuts(!showShortcuts)} aria-expanded={showShortcuts}><span className="keycap">?</span>{t('Горячие клавиши')}</button></div><div className="moment-next-actions"><button className="button primary" type="button" onClick={() => finishMoment(4)} disabled={sourceBusy || !selected}>{t('К скачиванию')}<Icon name="download" size={17} /></button><button className="button secondary" type="button" onClick={() => finishMoment(3)} disabled={sourceBusy || !selected}>{t('Список фрагментов')}</button></div></div>
         {showShortcuts && <div className="shortcut-guide"><span><kbd>I</kbd>{t('начало по позиции плеера')}</span><span><kbd>O</kbd>{t('конец')}</span><span><kbd>{t('Пробел')}</kbd>{t('пауза / воспроизведение')}</span><span><kbd>←</kbd><kbd>→</kbd>{t('на ручке: 0,1 с;')}<kbd>Shift</kbd>{t(': 1 с')}</span><p>{t('Клавиши I, O и пробел работают вне полей ввода. В плеере действуют его собственные клавиши.')}</p></div>}
       </section>}
       {step === 3 && source && <ClipLibrary limit={limits.max_ranges} ranges={ranges} selectedIds={selectedRangeIds} editedId={selectedId} revealId={revealId} onSelect={id => { setSelectedRangeIds(previous => previous.includes(id) ? previous.filter(value => value !== id) : [...previous, id]); setRevealId(id); }} onSelectAll={() => setSelectedRangeIds(exportRanges.length === ranges.length ? [] : ranges.map(range => range.id))} onEdit={pickRange} onAdd={addRange} onLabel={(id, label) => setRanges(previous => previous.map(range => range.id === id ? { ...range, label } : range))} onDuplicate={duplicateSelected} onDelete={() => removeSelected(selectedRangeIds)} onDeleteOne={id => removeSelected([id])} onRestore={snapshot => { setRanges(snapshot.ranges); setSelectedRangeIds(snapshot.selectedIds); setSelectedId(snapshot.editedId); setRevealId(snapshot.editedId); const active = snapshot.ranges.find(range => range.id === snapshot.editedId) ?? snapshot.ranges[0]; if (active) { setFields(active); setViewCenter((active.start_ms + active.end_ms) / 2); setSimpleView(simpleRangeView(duration, active)); } setNotice('Фрагменты восстановлены.'); }} onExport={() => goToStep(4)} />}
       {step === 4 && (source || job) && <div className="output-stage">
-        {source && <div className="output-grid"><div className="output-overview"><section className="output-selection" aria-labelledby="output-selection-heading"><div className="output-source"><Icon name="file" size={20} /><span>{source.title}</span></div><h2 id="output-selection-heading">{t('Выбранные фрагменты')}</h2>{!exportRanges.length && <p className="field-hint">{t('Выберите хотя бы один фрагмент для экспорта.')}</p>}<ol>{exportRanges.map((range, index) => <li key={range.id}><span className="range-index">{index + 1}</span><div><strong>{range.label || `${t('Фрагмент')} ${ranges.findIndex(original => original.id === range.id) + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></div><span>{durationLabel(range.end_ms - range.start_ms, locale)}</span></li>)}</ol><button className="text-button" type="button" onClick={() => goToStep(3)}><Icon name="chevron" size={17} style={{ transform: 'rotate(180deg)' }} />{t('К списку фрагментов')}</button></section>{resultsPanel}</div>
+        {resultsPanel}
+        {source && <div className="output-grid"><div className="output-overview"><section className="output-selection" aria-labelledby="output-selection-heading"><div className="output-source"><Icon name="file" size={20} /><span>{source.title}</span></div><h2 id="output-selection-heading">{t('Выбранные фрагменты')}</h2>{!exportRanges.length && <p className="field-hint">{t('Выберите хотя бы один фрагмент для экспорта.')}</p>}<ol>{exportRanges.map((range, index) => <li key={range.id}><span className="range-index">{index + 1}</span><div><strong>{range.label || `${t('Фрагмент')} ${ranges.findIndex(original => original.id === range.id) + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></div><span>{durationLabel(range.end_ms - range.start_ms, locale)}</span></li>)}</ol><button className="text-button" type="button" onClick={() => goToStep(3)}><Icon name="chevron" size={17} style={{ transform: 'rotate(180deg)' }} />{t('К списку фрагментов')}</button></section></div>
         <section className="export-panel" aria-labelledby="export-heading"><form onSubmit={exportClips}>
           <div className="export-heading"><Icon name="download" size={20} /><h2 id="export-heading">{t("Экспорт")}</h2></div>
-          <fieldset disabled={!source || submitting}><legend className="sr-only">{t("Настройки экспорта")}</legend>
+          <fieldset disabled={!source || submitting || activeJob(job)}><legend className="sr-only">{t("Настройки экспорта")}</legend>
             <div className="format-picker" role="group" aria-label={t("Формат файла")}><button type="button" className={output.format === 'mp4' ? 'active' : ''} onClick={() => setOutput(previous => ({ ...previous, format: 'mp4' }))} aria-pressed={output.format === 'mp4'}><strong>MP4</strong><span>{t("Видео")}</span></button><button type="button" className={output.format === 'mp3' ? 'active' : ''} onClick={() => setOutput(previous => ({ ...previous, format: 'mp3', cut_mode: 'accurate' }))} aria-pressed={output.format === 'mp3'}><strong>MP3</strong><span>{t("Аудио")}</span></button></div>
+            <details className="export-options" open={advancedOutputOpen} onToggle={event => setAdvancedOutputOpen(event.currentTarget.open)}><summary>{t('Качество и точность')}<Icon name="chevron" size={15} /></summary><div className="export-option-fields">
             {output.format === 'mp4' && <div className="export-field"><label htmlFor="quality">{t("Качество видео")}</label><SelectControl id="quality" value={output.quality} disabled={preserveLocalQuality} onChange={value => setOutput(previous => ({ ...previous, quality: value as OutputSettings['quality'] }))} options={preserveLocalQuality ? [{ value: output.quality, label: t('Исходное качество') }] : [{ value: '1080p', label: t('До 1080p') }, { value: '720p', label: t('До 720p') }, { value: 'best', label: t('Лучшее доступное') }]} /><p className="field-hint">{t(preserveLocalQuality ? 'Видео сохраняется без перекодирования, в качестве исходного файла.' : 'Качество выше исходного не создаётся.')}</p></div>}
             <div className="export-field"><label htmlFor="cut-mode">{t("Границы и качество")}</label><SelectControl id="cut-mode" value={output.cut_mode} disabled={output.format === 'mp3'} onChange={value => setOutput(previous => ({ ...previous, cut_mode: value as OutputSettings['cut_mode'] }))} options={[{ value: 'accurate', label: t('Точные границы') }, { value: 'copy', label: t('Исходное качество') }]} /><p className="mode-hint">{output.format === 'mp3' ? t("Аудио будет преобразовано в MP3.") : output.cut_mode === 'accurate' ? t("Видео будет перекодировано. Начало и конец — по выбранным таймкодам.") : t("Без перекодирования. Границы могут сдвинуться; некоторые кодеки несовместимы с MP4.")}</p></div>
+            </div></details>
           </fieldset>
           <p className="field-hint export-limits">{t('Один фрагмент — до {range}; весь экспорт — до {total}.', { range: durationLabel(limits.max_range_ms, locale), total: durationLabel(limits.max_job_ms, locale) })}</p>{exportLimitError && <p className="error-message" role="alert">{exportLimitError}</p>}<div className="export-summary"><span>{source ? countLabel(exportRanges.length, 'clip', locale) : t("Фрагменты не выбраны")}</span>{source && <strong>{durationLabel(totalDuration, locale)}</strong>}</div>
           <button className="button primary export-submit" type="submit" disabled={!source || !exportRanges.length || busy || sourceBusy || invalidDraft || !!exportLimitError}>{submitting ? <><span className="spinner" />{t("Создаём задание…")}</> : activeJob(job) ? <><span className="spinner" />{t("Идёт обработка…")}</> : <><Icon name="cut" size={18} />{repeatExport ? t('Повторить экспорт') : exportRanges.length > 1 ? t("Вырезать фрагменты") : t("Вырезать фрагмент")}</>}</button>
@@ -557,7 +637,6 @@ export default function App() {
         </section>
         </div>}
         {!source && <section className="export-panel orphan-results"><p className="field-hint">{t(files.length > 0 ? 'Видео больше недоступно, но результат экспорта сохранился. Чтобы вырезать новые моменты, откройте видео заново.' : 'Задание экспорта сохранилось, но видео больше недоступно. Чтобы вырезать новые моменты, откройте его заново.')}</p><button className="text-button" type="button" onClick={() => goToStep(1)}>{t('Открыть другое видео')}</button>{jobProgress}{jobError && <p className="error-message" role="alert">{t(jobError)}</p>}</section>}
-      {!source && resultsPanel}
 
       </div>}
       <footer className="page-footer"><span>cutmyvideo <span className="footer-dot">·</span> {t('Ссылки на видео и MP4')}</span><a href="https://github.com/Kay0k1/cutmyvideo-core" target="_blank" rel="noreferrer">{t('Открытое ядро на GitHub')}</a></footer>

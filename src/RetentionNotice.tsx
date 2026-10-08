@@ -19,5 +19,7 @@ export function RetentionNotice({ expiresAt, blocked = false, kind }: {
     dateStyle: 'short', timeStyle: 'short',
   }).format(timestamp);
   const text = retentionMessage(kind, timestamp);
-  return <p className="retention-note">{t(text, { date })}</p>;
+  const message = t(text);
+  const marker = message.indexOf('{date}');
+  return <p className="retention-note">{marker < 0 ? message : <>{message.slice(0, marker)}<time dateTime={new Date(timestamp).toISOString()}>{date}</time>{message.slice(marker + 6)}</>}</p>;
 }

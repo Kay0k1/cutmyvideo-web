@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import type { ClipRange } from './types';
 import { formatTimecode } from './timecode';
-import { keyboardTrimValue, pointerTrimValue } from './timelineControls';
+import { keyboardTrimValue, pointerSeekValue, pointerTrimValue } from './timelineControls';
 import type { PlaybackPosition } from './playbackPosition';
 
 export function Timeline({ duration, position, ranges, selected, view, showOverview = true, onSeek, onRange, onReveal }: {
@@ -21,7 +21,9 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
   const current = useSyncExternalStore(position.subscribe, position.getSnapshot);
   const track = useRef<HTMLDivElement>(null);
   const drag = useRef<{ which: 'start' | 'end'; pointer: number; x: number; value: number; width: number; span: number } | null>(null);
+  const scrub = useRef<{ pointer: number; x: number; y: number; started: boolean } | null>(null);
   const [dragging, setDragging] = useState<'start' | 'end' | null>(null);
+  const [scrubbing, setScrubbing] = useState(false);
   const [trackWidth, setTrackWidth] = useState(0);
   const span = view[1] - view[0];
   useEffect(() => {
@@ -35,13 +37,14 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
   const pct = (ms: number) => Math.max(0, Math.min(100, (ms - view[0]) / span * 100));
   const valueAt = (event: PointerEvent) => {
     const rect = track.current!.getBoundingClientRect();
-    return Math.round((view[0] + Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * span) / 100) * 100;
+    return pointerSeekValue(event.clientX, rect.left, rect.width, view);
   };
   const move = (which: 'start' | 'end', value: number) => {
     if (which === 'start') onRange(Math.max(0, Math.min(selected.end_ms - 100, value)), selected.end_ms);
     else onRange(selected.start_ms, Math.min(duration, Math.max(selected.start_ms + 100, value)));
   };
   const onKey = (event: KeyboardEvent, which: 'start' | 'end') => {
+    if (event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
     const value = which === 'start' ? selected.start_ms : selected.end_ms;
     const min = which === 'start' ? 0 : selected.start_ms + 100;
     const max = which === 'start' ? selected.end_ms - 100 : duration;
@@ -51,6 +54,9 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
   };
   const endDrag = (which: 'start' | 'end', pointer: number) => {
     if (drag.current?.which === which && drag.current.pointer === pointer) { drag.current = null; setDragging(null); }
+  };
+  const endScrub = (pointer: number) => {
+    if (scrub.current?.pointer === pointer) { scrub.current = null; setScrubbing(false); }
   };
   const closeHandles = (pct(selected.end_ms) - pct(selected.start_ms)) / 100 * trackWidth < 18;
 
@@ -64,7 +70,7 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
       aria-valuenow={value} aria-valuetext={formatTimecode(value, true)} aria-orientation="horizontal" aria-describedby="trim-hint"
       onKeyDown={event => onKey(event, which)}
       onPointerDown={event => {
-        if (event.button !== 0 || drag.current) return;
+        if (event.button !== 0 || drag.current || scrub.current) return;
         event.stopPropagation(); event.currentTarget.focus({ preventScroll: true });
         drag.current = { which, pointer: event.pointerId, x: event.clientX, value, width: track.current!.getBoundingClientRect().width, span };
         setDragging(which); event.currentTarget.setPointerCapture(event.pointerId);
@@ -83,13 +89,48 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
       <div className="overview-selections" aria-hidden="true">{ranges.map(range => <span key={range.id} style={{ left: `${range.start_ms / duration * 100}%`, width: `${Math.max(.3, (range.end_ms - range.start_ms) / duration * 100)}%` }} />)}</div>
       <input id="overview" type="range" min={0} max={duration} step={100} value={current} aria-valuetext={formatTimecode(current, true)} onChange={event => onSeek(Number(event.target.value))} />
     </div>}
-    <div className="trim-track" ref={track} onPointerDown={event => { if (event.button === 0 && !(event.target as HTMLElement).closest('.trim-handle')) onSeek(Math.min(duration, valueAt(event))); }}>
+    <div className="trim-track" ref={track}>
       <div className="trim-ticks" aria-hidden="true">{Array.from({ length: 21 }, (_, i) => <i key={i} />)}</div>
       <div className="trim-selection" style={{ left: `${pct(selected.start_ms)}%`, width: `${Math.max(0, pct(selected.end_ms) - pct(selected.start_ms))}%` }} aria-hidden="true" />
+      <div className="track-scrubber" role="slider" tabIndex={0} aria-label={t('Позиция плеера')}
+        aria-valuemin={0} aria-valuemax={duration} aria-valuenow={Math.min(duration, current)} aria-valuetext={formatTimecode(current, true)} aria-orientation="horizontal" aria-describedby="seek-hint"
+        data-scrubbing={scrubbing || undefined}
+        onKeyDown={event => {
+          if (event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
+          const next = keyboardTrimValue(event.key, current, 0, duration, event.shiftKey);
+          if (next === null) return;
+          event.preventDefault(); onSeek(next); onReveal(next);
+        }}
+        onPointerDown={event => {
+          if (event.button !== 0 || drag.current || scrub.current) return;
+          const touch = event.pointerType === 'touch';
+          scrub.current = { pointer: event.pointerId, x: event.clientX, y: event.clientY, started: !touch };
+          event.currentTarget.setPointerCapture(event.pointerId);
+          if (!touch) { event.preventDefault(); event.currentTarget.focus({ preventScroll: true }); setScrubbing(true); onSeek(Math.min(duration, valueAt(event))); }
+        }}
+        onPointerMove={event => {
+          const original = scrub.current;
+          if (!original || original.pointer !== event.pointerId) return;
+          if (!original.started) {
+            const x = Math.abs(event.clientX - original.x), y = Math.abs(event.clientY - original.y);
+            // Let a vertical gesture scroll the page without changing playback.
+            if (y > 6 && y > x) { endScrub(event.pointerId); event.currentTarget.releasePointerCapture(event.pointerId); return; }
+            if (x < 6) return;
+            original.started = true; setScrubbing(true); event.currentTarget.focus({ preventScroll: true });
+          }
+          onSeek(Math.min(duration, valueAt(event)));
+        }}
+        onPointerUp={event => {
+          if (scrub.current?.pointer !== event.pointerId) return;
+          event.currentTarget.focus({ preventScroll: true }); onSeek(Math.min(duration, valueAt(event))); endScrub(event.pointerId);
+        }}
+        onPointerCancel={event => endScrub(event.pointerId)} onLostPointerCapture={event => endScrub(event.pointerId)}
+      />
       {handle('start')}{handle('end')}
       {current >= view[0] && current <= view[1] && <div className="playhead" style={{ left: `${pct(current)}%` }} aria-hidden="true" />}
     </div>
     <div className="tick-labels" aria-hidden="true"><span>{formatTimecode(view[0])}</span><span>{formatTimecode((view[0] + view[1]) / 2)}</span><span>{formatTimecode(view[1])}</span></div>
     <p id="trim-hint" className="sr-only">{t('Двигайте ручки начала и конца. Стрелки меняют время на 0,1 секунды, Shift — на секунду.')}</p>
+    <p id="seek-hint" className="sr-only">{t('Нажмите на шкалу или двигайте указатель, чтобы перемотать. Стрелки — 0,1 секунды, Shift — секунда; Home и End — начало и конец видео.')}</p>
   </div>;
 }

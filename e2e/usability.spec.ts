@@ -1,0 +1,283 @@
+import { readFile } from 'node:fs/promises'
+import { expect, test, type Page } from '@playwright/test'
+import { chooseOption, goToClips, goToExport, goToMoment, goToSource, showExactTimes, stepButton, uploadThroughUI } from './helpers'
+
+// Text-only resizing leaves the viewport and layout media queries unchanged.
+// It complements the 320 CSS-pixel reflow matrix; device scale is not text zoom.
+async function resizeText(page: Page, scale = 2) {
+  return page.evaluate(scale => {
+    for (const element of document.querySelectorAll<HTMLElement>('[data-qa-text-resize]')) {
+      element.style.fontSize = element.dataset.qaTextResize ?? ''
+      delete element.dataset.qaTextResize
+      delete element.dataset.qaTextResizeComputed
+    }
+    const elements = [...document.querySelectorAll<HTMLElement>('body, body *')]
+      .filter(element => element instanceof HTMLElement)
+    const sizes = elements.map(element => parseFloat(getComputedStyle(element).fontSize))
+    for (const [index, element] of elements.entries()) {
+      element.dataset.qaTextResize = element.style.fontSize
+      element.dataset.qaTextResizeComputed = `${sizes[index]}`
+      element.style.fontSize = `${sizes[index] * scale}px`
+    }
+    return { viewportWidth: innerWidth, scale }
+  }, scale)
+}
+
+async function assertReflow(page: Page, description: string, textScale?: number) {
+  await page.evaluate(async () => {
+    await document.fonts.ready
+    await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  })
+  const result = await page.evaluate(textScale => {
+    const visible = (element: HTMLElement) => {
+      const style = getComputedStyle(element)
+      return element.getClientRects().length > 0 && style.visibility !== 'hidden'
+        && !element.closest('[hidden],dialog:not([open])') && !element.classList.contains('skip-link')
+    }
+    const controls = [...document.querySelectorAll<HTMLElement>('button,input:not([type=file]),select,a[href],summary')]
+      .filter(visible)
+      .filter(element => !(element as HTMLButtonElement).disabled)
+      .map(element => {
+        const target = element.matches('input[type=checkbox]') ? element.closest('label') ?? element : element
+        const bounds = target.getBoundingClientRect()
+        return { label: element.getAttribute('aria-label') || element.textContent?.trim().slice(0, 100) || element.id,
+          left: bounds.left, right: bounds.right, width: bounds.width, height: bounds.height,
+          textOverflow: element.matches('button,summary') && [...element.childNodes].some(node =>
+            node.nodeType === Node.TEXT_NODE ? !!node.textContent?.trim()
+              : node instanceof HTMLElement && node.getAttribute('aria-hidden') !== 'true' && !!node.textContent?.trim())
+            && element.scrollWidth > element.clientWidth + 1 }
+      })
+    const clippedStepNumbers = [...document.querySelectorAll<HTMLElement>('.step-number')]
+      .filter(visible)
+      .filter(element => element.scrollHeight > element.clientHeight + 1 || element.scrollWidth > element.clientWidth + 1)
+      .map(element => element.textContent)
+    const clippedSupportingText = [...document.querySelectorAll<HTMLElement>('.source-meta,.tick-labels > span')]
+      .filter(visible)
+      .filter(element => {
+        const bounds = element.getBoundingClientRect()
+        return element.scrollWidth > element.clientWidth + 1 || bounds.left < -1 || bounds.right > innerWidth + 1
+      })
+      .map(element => element.textContent)
+    const unscaledText = textScale ? [...document.querySelectorAll<HTMLElement>('h1,h2,h3,p,button,a[href],label,summary,time,.source-meta,.tick-labels > span')]
+      .filter(visible)
+      .filter(element => !element.dataset.qaTextResizeComputed || Math.abs(parseFloat(getComputedStyle(element).fontSize) - Number(element.dataset.qaTextResizeComputed) * textScale) > .2)
+      .map(element => ({ text: element.textContent?.trim().slice(0, 80), actual: getComputedStyle(element).fontSize,
+        expected: element.dataset.qaTextResizeComputed ? Number(element.dataset.qaTextResizeComputed) * textScale : null })) : []
+    return { width: innerWidth, overflow: document.documentElement.scrollWidth - innerWidth, controls, clippedStepNumbers, clippedSupportingText, unscaledText }
+  }, textScale)
+  expect(result.overflow, `${description}: horizontal page overflow`).toBeLessThanOrEqual(1)
+  expect(result.controls.filter(control => control.left < -1 || control.right > result.width + 1),
+    `${description}: interactive controls outside the viewport`).toEqual([])
+  expect(result.controls.filter(control => control.textOverflow), `${description}: clipped button text`).toEqual([])
+  expect(result.clippedStepNumbers, `${description}: clipped stage numbers`).toEqual([])
+  expect(result.clippedSupportingText, `${description}: clipped source metadata or timeline labels`).toEqual([])
+  expect(result.unscaledText, `${description}: all visible text received the requested font scaling`).toEqual([])
+  return result
+}
+
+for (const width of [320, 390, 1280]) {
+  test(`200% text remains readable through all steps at ${width}px without changing the viewport`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: width < 600 ? 844 : 800 })
+    await page.goto('/')
+    await page.getByRole('button', { name: 'English', exact: true }).click()
+    const measurements: unknown[] = []
+    const measure = async (stage: string) => {
+      expect((await resizeText(page)).viewportWidth).toBe(width)
+      measurements.push({ stage, ...await assertReflow(page, `${stage} at 200% text`, 2) })
+      await testInfo.attach(`${stage}-${width}-200-percent-text`, {
+        body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
+      })
+    }
+    await measure('source')
+    await uploadThroughUI(page)
+    await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+    await expect(page.locator('.moment-controls')).toBeVisible()
+    await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(1)
+    // The simplified clickable boundary values are the default Moment view;
+    // checking only the disclosed inputs would miss overlapping large text.
+    await measure('moment-collapsed')
+    await showExactTimes(page)
+    await measure('moment')
+    const start = page.getByLabel('Start', { exact: true })
+    await start.fill('1.250'); await start.press('Tab')
+    const end = page.getByLabel('End', { exact: true })
+    await end.fill('4.750'); await end.press('Tab')
+    await goToClips(page)
+    await measure('clips')
+    await page.getByRole('textbox', { name: 'Clip 1 name', exact: true }).fill('Birthday 🎂 — family memories')
+    await goToExport(page)
+    await measure('export')
+    await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled()
+    await expect(page.locator('.output-selection')).toContainText('Birthday 🎂 — family memories')
+    await testInfo.attach('text-resize-measurements', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' })
+  })
+}
+
+test('long Unicode source and clip names keep actions reachable on a narrow phone', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 720 })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'English', exact: true }).click()
+  const filename = `${'🎬'.repeat(35)}семейное-видео.mp4`
+  await page.getByRole('button', { name: 'MP4 file', exact: true }).click()
+  await expect(page.locator('.upload-button')).toBeEnabled()
+  await page.locator('input[type=file]').setInputFiles({ name: filename, mimeType: 'video/mp4', buffer: await readFile(process.env.CUTMY_E2E_MEDIA!) })
+  await expect(page.locator('video')).toBeVisible()
+  await expect(page.locator('.source-title')).toContainText(filename)
+  await assertReflow(page, 'Long source filename')
+  await goToClips(page)
+  const clipName = `${'🎂'.repeat(15)} Семейный праздник`
+  await page.getByRole('textbox', { name: 'Clip 1 name', exact: true }).fill(clipName)
+  await assertReflow(page, 'Long editable clip name')
+  await goToExport(page)
+  await assertReflow(page, 'Long export clip name')
+  await expect(page.locator('.output-selection')).toContainText(clipName)
+  await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled()
+  await testInfo.attach('narrow-phone-long-names', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' })
+})
+
+test('Russian ready downloads remain readable at 200% text on a 320px phone', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 720 })
+  await page.goto('/')
+  await uploadThroughUI(page)
+  await goToExport(page)
+  await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
+  const download = page.getByRole('link', { name: 'Скачать', exact: true })
+  await expect(download).toBeVisible({ timeout: 60_000 })
+  await resizeText(page)
+  const result = await assertReflow(page, 'Russian ready downloads at 200% text', 2)
+  await expect(page.locator('.results-panel time[datetime]')).toBeVisible()
+  await download.scrollIntoViewIfNeeded()
+  const pending = page.waitForEvent('download')
+  await download.click()
+  expect(await (await pending).failure()).toBeNull()
+  await testInfo.attach('russian-ready-download-320-200-percent-text', {
+    body: await page.screenshot({ fullPage: true }), contentType: 'image/png',
+  })
+  await testInfo.attach('ready-download-text-resize-measurements', {
+    body: JSON.stringify(result, null, 2), contentType: 'application/json',
+  })
+})
+
+test('keyboard stage navigation identifies the destination and preserves exact edits', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'English', exact: true }).click()
+  await page.waitForFunction(() => Boolean(history.state?.cutmyWorkflow))
+  // The native skip link creates a hash history entry. It must remain a valid
+  // destination for closing a dialog, Back, and Forward in every engine.
+  await page.locator('.skip-link').focus(); await page.keyboard.press('Enter')
+  const settings = page.getByRole('button', { name: 'Settings', exact: true })
+  await settings.click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click()
+  await expect(dialog).not.toBeVisible(); await expect(settings).toBeFocused()
+  await page.goForward(); await expect(dialog).toBeVisible()
+  await page.keyboard.press('Escape'); await expect(dialog).not.toBeVisible()
+  await expect(settings).toBeFocused()
+  await uploadThroughUI(page)
+  await showExactTimes(page)
+  await page.getByLabel('Start', { exact: true }).fill('1.250')
+  await page.getByLabel('End', { exact: true }).fill('4.750')
+  for (const stage of [3, 4, 1, 2] as const) {
+    const control = stepButton(page, stage)
+    await control.focus(); await page.keyboard.press('Enter')
+    await expect(control).toHaveAttribute('aria-current', 'step')
+    await expect(page.locator('.page-heading h1')).toBeFocused()
+    const next = page.waitForFunction(() => document.activeElement?.tagName !== 'H1')
+    await page.keyboard.press('Tab'); await next
+    expect(await page.evaluate(() => !!document.activeElement?.closest('#editor'))).toBe(true)
+  }
+  await showExactTimes(page)
+  await expect(page.getByLabel('Start', { exact: true })).toHaveValue('1.250')
+  await expect(page.getByLabel('End', { exact: true })).toHaveValue('4.750')
+  await expect(page.locator('.trim-handle.start')).toHaveAttribute('aria-valuenow', '1250')
+  await expect(page.locator('.trim-handle.end')).toHaveAttribute('aria-valuenow', '4750')
+})
+
+test('settings stay dismissible and keep native focus containment on short screens', async ({ page }) => {
+  await page.setViewportSize({ width: 844, height: 390 })
+  await page.goto('/')
+  await page.getByRole('button', { name: 'English', exact: true }).click()
+  const settings = page.getByRole('button', { name: 'Settings', exact: true })
+  await settings.click()
+  const dialog = page.getByRole('dialog')
+  const close = dialog.getByRole('button', { name: 'Close', exact: true })
+  await close.focus(); await page.keyboard.press('Shift+Tab')
+  await expect(dialog.getByRole('button', { name: 'Reset defaults', exact: true })).toBeFocused()
+  await page.keyboard.press('Tab'); await expect(close).toBeFocused()
+  const theme = dialog.getByRole('combobox', { name: 'Appearance', exact: true })
+  await chooseOption(page, theme, 'Dark')
+  await dialog.getByRole('button', { name: 'Save settings', exact: true }).scrollIntoViewIfNeeded()
+  const bounds = await close.boundingBox()
+  expect(bounds).not.toBeNull()
+  expect(bounds!.y, 'Close remains in the visible viewport after scrolling settings').toBeGreaterThanOrEqual(0)
+  expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(390)
+  await dialog.getByRole('button', { name: 'Save settings', exact: true }).click()
+  if (await dialog.isVisible()) await page.keyboard.press('Escape')
+  await expect(settings).toBeFocused()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.reload()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.setViewportSize({ width: 320, height: 480 })
+  await settings.click(); await assertReflow(page, 'Narrow short settings')
+  await page.keyboard.press('Escape'); await expect(settings).toBeFocused()
+})
+
+test('rotating touch layout preserves the selected interval and player position', async ({ browser }, testInfo) => {
+  const context = await browser.newContext({ baseURL: process.env.CUTMY_E2E_URL || 'http://127.0.0.1:5173', hasTouch: true, viewport: { width: 390, height: 844 } })
+  const page = await context.newPage()
+  try {
+    await page.goto('/')
+    await uploadThroughUI(page)
+    await showExactTimes(page)
+    await page.getByLabel('Начало', { exact: true }).fill('00:00:01.250')
+    await page.getByLabel('Начало', { exact: true }).press('Tab')
+    await page.getByLabel('Конец', { exact: true }).fill('00:00:04.750')
+    await page.getByLabel('Конец', { exact: true }).press('Tab')
+    const video = page.locator('video')
+    await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(1)
+    await video.evaluate(element => { (element as HTMLVideoElement).currentTime = 2.5 })
+    await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).seeking)).toBe(false)
+    for (const viewport of [{ width: 844, height: 390 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport)
+      await assertReflow(page, `${viewport.width}×${viewport.height} after rotation`)
+      await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:01.250')
+      await expect(page.getByLabel('Конец', { exact: true })).toHaveValue('00:00:04.750')
+      expect(await video.evaluate(element => (element as HTMLVideoElement).currentTime)).toBeCloseTo(2.5, 1)
+      expect(await video.evaluate(element => (element as HTMLVideoElement).paused)).toBe(true)
+    }
+    await testInfo.attach('rotation-restored', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' })
+  } finally { await context.close() }
+})
+
+test('reduced-motion preference removes nonessential transitions without blocking import', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await page.goto('/')
+  const motion = await page.evaluate(() => ({
+    requested: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    transitions: [...document.querySelectorAll<HTMLElement>('button,input,a,main')]
+      .filter(element => element.getClientRects().length > 0)
+      .flatMap(element => getComputedStyle(element).transitionDuration.split(',').map(value => parseFloat(value)))
+  }))
+  expect(motion.requested).toBe(true)
+  expect(motion.transitions.every(duration => duration === 0)).toBe(true)
+  await uploadThroughUI(page)
+  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await goToSource(page); await goToMoment(page)
+  await expect(page.locator('.page-heading h1')).toBeFocused()
+})
+
+test('single-clip export keeps advanced options behind a native disclosure', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'English', exact: true }).click()
+  await uploadThroughUI(page)
+  await stepButton(page, 4).click()
+  const details = page.locator('details.export-options')
+  await expect(details).not.toHaveAttribute('open', '')
+  await expect(page.locator('#quality')).not.toBeVisible()
+  await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled()
+  await details.locator('summary').focus(); await page.keyboard.press('Enter')
+  await expect(details).toHaveAttribute('open', '')
+  await expect(page.getByRole('combobox', { name: 'Video quality', exact: true })).toBeVisible()
+  await details.locator('summary').press('Space')
+  await expect(page.locator('#quality')).not.toBeVisible()
+})
