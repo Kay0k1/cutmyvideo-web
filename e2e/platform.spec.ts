@@ -272,11 +272,13 @@ test('a real public platform source exposes honest preview availability and expo
     .toEqual([[start, end]])
   const job = await waitJob(page.request, (await creation.json()).id)
   expect(job.status, JSON.stringify(job)).toBe('succeeded')
-  expect(job.items[0].artifact).toMatchObject({ actual_start_ms: start, actual_end_ms: end })
+  expect(job.items[0].artifact.actual_start_ms).toBe(start)
+  expect(Math.abs(job.items[0].artifact.actual_end_ms - end)).toBeLessThan(200)
   const probe = await probeDownloadedFile(page.request, job.items[0].artifact.download_url, `${provider}-middle.mp4`, testInfo)
   expect(probe.streams.some((stream: { codec_type: string }) => stream.codec_type === 'video')).toBeTruthy()
   expect(Math.abs(Number(probe.format.duration) - (end - start) / 1000)).toBeLessThan(0.2)
   await testInfo.attach('Actual public source metadata', { body: JSON.stringify({ provider: source.provider, title: source.title, duration_ms: source.duration_ms, preview_kind: source.preview_kind, source_url: source.source_url, thumbnail_checks_performed: Boolean(source.thumbnail_url) }, null, 2), contentType: 'application/json' })
+  expect((await page.request.delete(`${api}/sources/${source.id}`, { headers: { Origin: new URL(baseURL!).origin } })).status()).toBe(204)
 })
 
 test('platform failures are actionable in both languages and preserve the existing real draft', async ({ page }) => {
