@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { displayTimecode, formatTimecode, parseTimecode, validateRange, zoomWindow } from './timecode';
+import { displayTimecode, durationLabel, formatTimecode, parseTimecode, validateRange, zoomWindow } from './timecode';
 
 describe('source timeline values', () => {
+  it('shows hours for long selections without losing fractional seconds', () => {
+    expect(durationLabel(12 * 3600000)).toBe('12 ч');
+    expect(durationLabel(35270274)).toBe('9 ч 47 мин 50.3 с');
+    expect(durationLabel(3600000, 'en')).toBe('1 h');
+  });
   it('accepts multi-hour times, total minutes and decimal seconds', () => {
     expect(parseTimecode('03:12:08.125')).toBe(11528125);
     expect(parseTimecode('83:10')).toBe(4990000);

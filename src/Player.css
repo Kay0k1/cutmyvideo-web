@@ -1,5 +1,18 @@
-.window-player { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; background: #111; }
-.window-player video { flex: 1; min-height: 0; width: 100%; object-fit: contain; }
-.window-player-status { position: absolute; inset: 0 0 60px; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 20px; color: white; background: #111d; text-align: center; }
-.window-player-seek { display: grid; gap: 5px; padding: 8px 14px; color: white; font-size: .75rem; }
-.window-player-seek input { width: 100%; accent-color: var(--accent); }
+.window-player { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; background: #111; color: #fff; }
+.window-player-screen { position: relative; display: flex; flex: 1; min-height: 0; }
+.window-player-screen video { min-height: 0; width: 100%; height: 100%; object-fit: contain; }
+.window-player-status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 20px; color: white; background: #111d; text-align: center; }
+.window-player-navigation { flex-shrink: 0; padding: 9px 14px 10px; }
+.window-player-seek { display: grid; gap: 2px; font-size: .75rem; }
+.window-player-position { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 3px 12px; font-variant-numeric: tabular-nums; }
+.window-player-rail { position: relative; display: grid; align-items: center; min-height: 28px; }
+.window-player-rail input { appearance: none; width: 100%; height: 28px; padding: 0; margin: 0; cursor: pointer; background: transparent; z-index: 1; }
+.window-player-rail input::-webkit-slider-runnable-track { height: 4px; background: transparent; }
+.window-player-rail input::-moz-range-track { height: 4px; background: transparent; }
+.window-player-rail input::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; border: 2px solid #111; border-radius: 50%; background: #fff; margin-top: -5px; box-shadow: 0 0 0 1px #fff; }
+.window-player-rail input::-moz-range-thumb { width: 10px; height: 10px; border: 2px solid #111; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px #fff; }
+.window-player-rail input:focus-visible { outline: 2px solid #a8cbb9; outline-offset: 2px; border-radius: 3px; }
+.window-player-buffered { position: absolute; height: 4px; inset-inline: 7px; top: 12px; background: #58655f; border-radius: 2px; overflow: hidden; pointer-events: none; }
+.window-player-buffered > span { position: absolute; top: 0; bottom: 0; min-width: 2px; background: #a8cbb9; }
+.window-player-buffer-status { display: block; min-height: 1.3em; color: #c2d0c8; font-size: .6875rem; line-height: 1.3; }
+@media (pointer: coarse) { .window-player-rail { min-height: 36px; } .window-player-rail input { height: 36px; } .window-player-buffered { top: 16px; } }

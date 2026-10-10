@@ -54,7 +54,7 @@ export interface Job {
   }[];
 }
 
-export interface UploadProgress { loaded: number; total: number | null; }
+export interface UploadProgress { bytesPerSecond?: number; loaded: number; total: number | null; }
 
 export interface OutputSettings {
   format: 'mp4' | 'mp3';
@@ -62,5 +62,7 @@ export interface OutputSettings {
   cut_mode: 'accurate' | 'copy';
 }
 
-export interface PublicLimits { max_source_bytes: number; max_ranges: number; max_range_ms: number; max_job_ms: number; }
+export interface PublicLimits { max_output_bytes?: number; max_fetch_bytes?: number; max_source_bytes: number; max_ranges: number; max_range_ms: number; max_job_ms: number; }
 export interface SessionResponse { ok: boolean; limits?: Partial<PublicLimits>; }
+
+export interface JobSummary { id: string; source_id: string; title: string; status: JobStatus; stage: string; created_at: string; total: number; files: Artifact[]; }

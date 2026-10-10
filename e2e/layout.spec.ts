@@ -249,12 +249,12 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
             const key = `${browserName}-${size.width}x${size.height}-${locale}-${theme}-stage-${stage}`
             evidence.push({ key, stage, locale, theme, touch, ...await checkLayout(target, stage, touch, key) })
             if (stage === 1) {
-              await target.getByRole('button', { name: /^(MP4 файл|MP4 file)$/ }).click()
+              await target.getByRole('button', { name: /^(Файл|File)$/ }).click()
               await settle(target)
               const uploadLayout = await collectLayout(target, touch)
               expect(uploadLayout.overflow, `${key}: MP4 chooser overflow`).toBeLessThanOrEqual(1)
               expect(uploadLayout.controls.filter(control => control.clippedHorizontally || control.smallTouchTarget), `${key}: MP4 controls`).toEqual([])
-              if (!touch) await withinFirstViewport(target.locator('.upload-button'), `${key}: Choose MP4`)
+              if (!touch) await withinFirstViewport(target.locator('.upload-button'), `${key}: Choose video`)
               evidence.push({ key: `${key}-upload`, ...uploadLayout })
             }
             // JSON records every combination. Images cover every size on the

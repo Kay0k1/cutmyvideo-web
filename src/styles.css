@@ -441,3 +441,31 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
   *, *::before, *::after { transition-duration: 0s !important; scroll-behavior: auto !important; }
   .spinner { animation: none; }
 }
+
+.moment-selection-tools { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 10px; color: var(--muted); font-size: .8125rem; }
+.moment-selection-tools .text-button { font-size: inherit; min-height: 36px; }
+.long-export-choice { margin: 16px 0; padding: 14px 0 14px 14px; border-left: 3px solid var(--accent); }
+.long-export-choice strong { font-size: .9375rem; font-weight: 500; }
+.long-export-choice p { margin: 6px 0; color: var(--muted); font-size: .8125rem; line-height: 1.65; max-width: 60ch; }
+.long-export-choice .button { margin-top: 8px; font-size: .8125rem; }
+
+.job-library { margin: 18px 0; border-top: 1px solid var(--line); padding-top: 10px; }
+.job-library > .text-button { gap: 10px; }
+.job-library > .text-button svg { transform: rotate(90deg); }
+.job-library > .text-button[aria-expanded='true'] svg { transform: rotate(-90deg); }
+.job-library-list, .job-library-files { list-style: none; padding: 0; margin: 0; }
+.job-library-list > li { padding: 16px 0; border-bottom: 1px solid var(--line); }
+.job-library-heading { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.job-library-heading > div, .job-library-files > li > div { min-width: 0; }
+.job-library-heading h3 { font-size: .9375rem; font-weight: 480; overflow-wrap: anywhere; }
+.job-library-heading p { margin-top: 4px; font-size: .8125rem; color: var(--muted); }
+.job-library-heading button { flex-shrink: 0; font-size: .8125rem; }
+.job-active-label { color: var(--accent); }
+.job-library-files > li { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: .8125rem; }
+.job-library-files a { display: inline-flex; gap: 8px; align-items: center; min-height: 36px; overflow-wrap: anywhere; }
+.job-library-files > li > span { color: var(--muted); flex-shrink: 0; padding-top: 8px; }
+.background-source { display: flex; margin-top: 8px; font-size: .8125rem; }
+@media (max-width: 500px) { .job-library-heading { flex-wrap: wrap; } }
+.precision-zoom .zoom-controls { flex: 1 0 195px; }
+.precision-zoom .select-control { min-width: 108px; }
+.precision-zoom .select-control > span:first-child { overflow-wrap: normal; white-space: nowrap; }

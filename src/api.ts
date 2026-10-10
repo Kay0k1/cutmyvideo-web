@@ -1,4 +1,4 @@
-import type { Job, Source, ClipRange, OutputSettings, UploadProgress, SessionResponse } from './types';
+import type { Job, Source, ClipRange, OutputSettings, UploadProgress, SessionResponse, JobSummary } from './types';
 
 const base = '/api/v1';
 
@@ -40,6 +40,8 @@ function upload(file: File, signal: AbortSignal, onProgress?: (progress: UploadP
     const xhr = new XMLHttpRequest();
     let settled = false;
     let lastPercent = -1;
+    let lastUpdate = 0;
+    const startedAt = performance.now();
     const finish = (error?: unknown, value?: Source) => {
       if (settled) return;
       settled = true; signal.removeEventListener('abort', abort);
@@ -57,8 +59,11 @@ function upload(file: File, signal: AbortSignal, onProgress?: (progress: UploadP
       const total = event.lengthComputable && event.total > 0 ? event.total : null;
       const loaded = Math.max(0, total === null ? event.loaded : Math.min(total, event.loaded));
       const percent = total === null ? Math.floor(loaded / (1024 * 1024)) : Math.floor(loaded * 100 / total);
-      if (percent === lastPercent) return;
-      lastPercent = percent; onProgress?.({ loaded, total });
+      const now = performance.now();
+      if (percent === lastPercent && now - lastUpdate < 500) return;
+      lastPercent = percent; lastUpdate = now;
+      const elapsed = (now - startedAt) / 1000;
+      onProgress?.({ loaded, total, ...(elapsed >= 2 && loaded > 0 ? { bytesPerSecond: loaded / elapsed } : {}) });
     };
     xhr.onload = () => {
       if (xhr.status < 200 || xhr.status >= 300) {
@@ -85,6 +90,7 @@ function session(): Promise<SessionResponse> {
 
 export const api = {
   session,
+  jobs: (signal?: AbortSignal) => request<{ jobs: JobSummary[] }>('/jobs', { signal }),
   sources: (signal?: AbortSignal) => request<{ sources: Source[] }>('/sources', { signal }),
   source: (id: string, signal?: AbortSignal) => request<Source>(`/sources/${encodeURIComponent(id)}`, { signal }),
   open: (url: string, signal: AbortSignal) => request<Source>('/sources', {
@@ -127,10 +133,10 @@ export function errorMessage(error: unknown, action: 'source' | 'export' = 'sour
     unsupported_media: 'В файле не найдено поддерживаемое видео или аудио. Выберите другой файл.',
     source_timeout: 'Видео слишком долго отвечает. Попробуйте ещё раз или загрузите MP4.',
     unsupported_source: 'Этот источник не поддерживает обработку. Загрузите видео файлом.',
-    invalid_upload: 'Не удалось загрузить файл. Выберите одно видео MP4 и попробуйте ещё раз.',
+    invalid_upload: 'Не удалось загрузить файл. Выберите один видеофайл и попробуйте ещё раз.',
     preview_unavailable: 'Предпросмотр недоступен. Используйте поля начала и конца.',
     invalid_export: 'Проверьте интервалы и настройки экспорта. Границы должны находиться внутри видео.',
-    job_limit: 'Дождитесь текущего экспорта или отмените его.',
+    job_limit: 'Очередь экспорта заполнена. Дождитесь завершения одного задания или отмените его в списке «Экспорты и файлы».',
     expired: 'Срок хранения файла закончился. Вырежьте фрагмент заново.',
     not_found: 'Источник или результат больше недоступен. Откройте видео заново.',
     invalid_request: 'Не удалось отправить настройки. Обновите страницу и попробуйте ещё раз.',

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { canonicalSourceUrl, canonicalYouTubeUrl, validateMP4, videoProvider, videoProviders } from './sourceInput';
+import { canonicalSourceUrl, canonicalYouTubeUrl, validateVideo, videoProvider, videoProviders } from './sourceInput';
 
 describe('website source boundaries', () => {
   it('normalizes common YouTube sharing links without carrying playlist or tracking data', () => {
@@ -11,11 +11,11 @@ describe('website source boundaries', () => {
     for (const url of ['https://youtube.com.evil.test/watch?v=aqz-KE-bpKQ', 'https://media.w3.org/trailer.mp4', 'https://user:pass@youtube.com/watch?v=aqz-KE-bpKQ', 'https://youtube.com:8081/watch?v=aqz-KE-bpKQ', 'https://youtube.com/playlist?list=123', 'https://youtu.be/aqz-KE-bpKQ/extra', 'youtube.com/shorts/aqz-KE-bpKQ/extra', 'https://youtube.com/watch?v=aqz-KE-bpKQ&v=other123456', 'https://@youtube.com/watch?v=aqz-KE-bpKQ', 'https://:@youtube.com/watch?v=aqz-KE-bpKQ']) expect(canonicalYouTubeUrl(url)).toBeNull();
   });
   it('rejects renamed non-MP4 files before uploading them', async () => {
-    expect(await validateMP4(new File(['RIFFfakewav'], 'renamed.mp4', { type: 'video/mp4' }))).not.toBeNull();
-    expect(await validateMP4(new File([new Uint8Array([0, 0, 0, 8, 102, 116, 121, 112])], 'fake.mp4', { type: 'video/mp4' }))).not.toBeNull();
+    expect(await validateVideo(new File(['RIFFfakewav'], 'renamed.mp4', { type: 'video/mp4' }))).not.toBeNull();
+    expect(await validateVideo(new File([new Uint8Array([0, 0, 0, 8, 102, 116, 121, 112])], 'fake.mp4', { type: 'video/mp4' }))).not.toBeNull();
     const box = new Uint8Array([0, 0, 0, 20, 102, 116, 121, 112, 105, 115, 111, 109, 0, 0, 0, 0, 105, 115, 111, 109]);
-    expect(await validateMP4(new File([box], 'video.mp4', { type: 'video/mp4' }))).toBeNull();
-    expect(await validateMP4(new File([box], 'video.webm', { type: 'video/webm' }))).not.toBeNull();
+    expect(await validateVideo(new File([box], 'video.mp4', { type: 'video/mp4' }))).toBeNull();
+    expect(await validateVideo(new File([box], 'video.webm', { type: 'video/webm' }))).not.toBeNull();
   });
 
   it('recognizes fifteen services and normalizes copied platform links', () => {
@@ -71,10 +71,16 @@ describe('website source boundaries', () => {
 });
 
 describe('live upload byte limits', () => {
+  it('accepts supported containers with generic MIME types and rejects renamed documents', async () => {
+    const mp4 = new Uint8Array([0, 0, 0, 20, 102, 116, 121, 112, 105, 115, 111, 109, 0, 0, 0, 0, 105, 115, 111, 109]);
+    for (const ext of ['mp4', 'mov']) await expect(validateVideo(new File([mp4], `recording.${ext}`, { type: 'application/octet-stream' }))).resolves.toBeNull();
+    for (const ext of ['mkv', 'webm']) await expect(validateVideo(new File([new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0, 0])], `recording.${ext}`))).resolves.toBeNull();
+    for (const ext of ['mp4', 'mov', 'mkv', 'webm']) await expect(validateVideo(new File(['<html>Not a video</html>'], `recording.${ext}`))).resolves.not.toBeNull();
+  });
   it('rejects a file exceeding the session policy before inspecting its bytes', async () => {
     const inspect = vi.fn();
     const file = { size: 1025, name: 'video.mp4', type: 'video/mp4', slice: inspect } as unknown as File;
-    await expect(validateMP4(file, 1024)).resolves.toBe('Файл превышает лимит сервиса. Выберите файл меньшего размера.');
+    await expect(validateVideo(file, 1024)).resolves.toBe('Файл превышает лимит сервиса. Выберите файл меньшего размера.');
     expect(inspect).not.toHaveBeenCalled();
   });
 });

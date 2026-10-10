@@ -1,11 +1,15 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { useLanguage } from './Language';
 import { formatTimecode } from './timecode';
+import { PREVIEW_WINDOW_MAX_BYTES, PREVIEW_WINDOW_MS, PreviewWindowCache } from './previewWindowCache';
+import type { PreviewWindow } from './previewWindowCache';
 import type { Source } from './types';
 import type { PlayerControls } from './Player';
 
-// Only the current 30-second window is held in browser memory. Absolute source
-// time remains authoritative when seeking and when stopping a selected clip.
+type PendingWindow = { controller: AbortController; promise: Promise<PreviewWindow>; background: boolean };
+
+// Keep source time independent of the short preview files. Recently visited
+// intervals stay in a bounded cache; only the next interval is speculative.
 export const WindowPlayer = forwardRef<PlayerControls, {
   source: Source; active: boolean; poster?: string; initialPosition: number;
   onTime(ms: number): void; onAvailable(available: boolean): void;
@@ -14,12 +18,18 @@ export const WindowPlayer = forwardRef<PlayerControls, {
   const video = useRef<HTMLVideoElement>(null);
   const callbacks = useRef({ onTime, onAvailable });
   callbacks.current = { onTime, onAvailable };
-  const state = useRef({ start: 0, end: 0, position: initialPosition, playing: false, ready: false, url: '', controller: null as AbortController | null });
+  const state = useRef({ start: 0, end: 0, position: initialPosition, playing: false, ready: false, url: '', loading: false, failed: false, generation: 0 });
+  const cache = useRef<PreviewWindowCache | null>(null);
+  if (!cache.current) cache.current = new PreviewWindowCache(url => URL.revokeObjectURL(url));
+  const pending = useRef(new Map<number, PendingWindow>());
   const seekTimer = useRef<number | undefined>(undefined);
+  const prefetchTimer = useRef<number | undefined>(undefined);
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [position, setPosition] = useState(initialPosition);
+  const [buffered, setBuffered] = useState<Array<{ start: number; end: number }>>([]);
+  const [prefetching, setPrefetching] = useState(false);
   const mounted = useRef(false);
   const enabled = useRef(active); enabled.current = active;
 
@@ -28,22 +38,41 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     state.current.position = value; setPosition(value); callbacks.current.onTime(value);
   }
 
-  async function load(ms: number) {
-    const current = state.current;
-    window.clearTimeout(seekTimer.current);
-    seekTimer.current = undefined;
-    current.controller?.abort();
-    const controller = new AbortController(); current.controller = controller;
-    const start = Math.min(Math.max(0, Math.floor(ms / 30000) * 30000), Math.max(0, source.duration_ms - 1));
-    setLoading(true); setFailed(false);
+  function status(busy: boolean, error = false) {
+    state.current.loading = busy; state.current.failed = error;
+    setLoading(busy); setFailed(error);
+  }
+
+  function cancelRequests(exceptStart?: number, nextStart?: number) {
+    window.clearTimeout(prefetchTimer.current); prefetchTimer.current = undefined;
+    for (const [start, request] of pending.current) {
+      if (start !== exceptStart && start !== nextStart) { request.controller.abort(); pending.current.delete(start); }
+    }
+    setPrefetching([...pending.current.values()].some(request => request.background));
+  }
+
+  function requestWindow(start: number, background: boolean): Promise<PreviewWindow> {
+    const cached = cache.current!.get(start);
+    if (cached) return Promise.resolve(cached);
+    const existing = pending.current.get(start);
+    if (existing) {
+      if (!background) {
+        existing.background = false;
+        setPrefetching([...pending.current.values()].some(request => request.background));
+      }
+      return existing.promise;
+    }
+    const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 120000);
-    try {
+    const request: PendingWindow = { controller, background, promise: null! };
+    // Yield once so the request is registered before synchronous failures finish.
+    request.promise = Promise.resolve().then(async () => {
       let response: Response | undefined;
       for (let attempt = 0; attempt < 30; attempt++) {
-        response = await fetch(`/api/v1/sources/${encodeURIComponent(source.id)}/preview?start_ms=${start}`, { credentials: 'same-origin', signal: controller.signal });
+        response = await fetch(`/api/v1/sources/${encodeURIComponent(source.id)}/preview?start_ms=${start}${request.background ? '&priority=background' : ''}`, { credentials: 'same-origin', signal: controller.signal });
         if (response.ok) break;
         const body = await response.json().catch(() => null);
-        if (body?.error?.code !== 'server_busy') throw new Error('preview unavailable');
+        if (request.background || body?.error?.code !== 'server_busy') throw new Error('preview unavailable');
         await new Promise<void>((resolve, reject) => {
           const stop = () => { window.clearTimeout(wait); reject(new DOMException('Aborted', 'AbortError')); };
           const wait = window.setTimeout(() => { controller.signal.removeEventListener('abort', stop); resolve(); }, 1000);
@@ -53,18 +82,66 @@ export const WindowPlayer = forwardRef<PlayerControls, {
       }
       if (!response?.ok) throw new Error('preview unavailable');
       const blob = await response.blob();
-      if (!mounted.current || current.controller !== controller || controller.signal.aborted) return;
-      if (blob.size > 16 * 1024 * 1024 || !blob.type.startsWith('video/')) throw new Error('invalid preview');
-      if (current.url) URL.revokeObjectURL(current.url);
-      current.start = start; current.end = Math.min(start + 30000, source.duration_ms); current.ready = false;
-      current.url = URL.createObjectURL(blob); setUrl(current.url);
-    } catch {
-      if (mounted.current && enabled.current && current.controller === controller) {
-        setFailed(true); current.playing = false;
-      }
-    } finally {
+      if (!mounted.current || controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      if (blob.size > PREVIEW_WINDOW_MAX_BYTES || !blob.type.startsWith('video/')) throw new Error('invalid preview');
+      const end = Math.min(start + PREVIEW_WINDOW_MS, source.duration_ms);
+      const entry = { start, end, url: URL.createObjectURL(blob), bytes: blob.size };
+      cache.current!.add(entry, state.current.start);
+      setBuffered(cache.current!.ranges());
+      return entry;
+    }).finally(() => {
       window.clearTimeout(timer);
-      if (mounted.current && current.controller === controller) { current.controller = null; setLoading(false); }
+      if (pending.current.get(start) === request) pending.current.delete(start);
+    });
+    pending.current.set(start, request);
+    return request.promise;
+  }
+
+  function schedulePrefetch() {
+    window.clearTimeout(prefetchTimer.current);
+    const current = state.current;
+    const next = current.end;
+    const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+    if (!enabled.current || document.hidden || current.loading || !current.ready || next >= source.duration_ms || cache.current!.has(next) || connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType ?? '')) return;
+    prefetchTimer.current = window.setTimeout(() => {
+      prefetchTimer.current = undefined;
+      if (!mounted.current || !enabled.current || document.hidden || state.current.end !== next || state.current.loading) return;
+      setPrefetching(true);
+      void requestWindow(next, true).catch(() => undefined).finally(() => {
+        if (mounted.current) setPrefetching([...pending.current.values()].some(request => request.background));
+      });
+    }, 600);
+  }
+
+  function show(entry: PreviewWindow) {
+    const current = state.current;
+    current.start = entry.start; current.end = entry.end;
+    if (current.url === entry.url && current.ready) {
+      if (video.current) video.current.currentTime = (current.position - entry.start) / 1000;
+      status(false); schedulePrefetch();
+      if (current.playing) void video.current?.play().catch(() => { current.playing = false; });
+      return;
+    }
+    current.ready = false; current.url = entry.url;
+    status(false); setUrl(entry.url);
+  }
+
+  async function load(ms: number) {
+    const current = state.current;
+    window.clearTimeout(seekTimer.current); seekTimer.current = undefined;
+    const start = Math.floor(Math.min(Math.max(0, ms), Math.max(0, source.duration_ms - 1)) / PREVIEW_WINDOW_MS) * PREVIEW_WINDOW_MS;
+    const generation = ++current.generation;
+    const cached = cache.current!.get(start);
+    cancelRequests(start, cached ? start + PREVIEW_WINDOW_MS : undefined);
+    if (cached) { show(cached); return; }
+    status(true);
+    try {
+      const entry = await requestWindow(start, false);
+      if (mounted.current && enabled.current && generation === current.generation) show(entry);
+    } catch {
+      if (mounted.current && enabled.current && generation === current.generation) {
+        status(false, true); current.playing = false;
+      }
     }
   }
 
@@ -72,66 +149,90 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     const current = state.current;
     const target = Math.min(Math.max(0, ms), Math.max(0, source.duration_ms - 1));
     publish(target);
-    window.clearTimeout(seekTimer.current);
-    seekTimer.current = undefined;
-    if (current.url && target >= current.start && target < current.end) {
-      current.controller?.abort(); current.controller = null; setLoading(false); setFailed(false);
-      if (video.current) video.current.currentTime = (target-current.start)/1000;
-    } else if (enabled.current) {
-      current.controller?.abort(); current.controller = null;
-      setLoading(true);
-      seekTimer.current = window.setTimeout(() => { void load(target); }, 180);
-    }
+    window.clearTimeout(seekTimer.current); seekTimer.current = undefined;
+    if (!enabled.current) return;
+    const start = Math.floor(target / PREVIEW_WINDOW_MS) * PREVIEW_WINDOW_MS;
+    if (cache.current!.has(start)) { void load(target); return; }
+    // Protect the desired position from timeupdate events from the old file.
+    current.generation++; status(true); cancelRequests(start);
+    video.current?.pause();
+    seekTimer.current = window.setTimeout(() => { void load(target); }, 180);
+  }
+
+  function play() {
+    const current = state.current;
+    current.playing = true;
+    if (!seekTimer.current && current.ready && !current.loading && !current.failed) void video.current?.play().catch(() => { current.playing = false; });
   }
 
   useImperativeHandle(ref, () => ({
-    seek,
-    play: () => { state.current.playing = true; if (!seekTimer.current && !state.current.controller && state.current.ready && !loading && !failed) void video.current?.play().catch(() => { state.current.playing = false; }); },
+    seek, play,
     pause: () => { state.current.playing = false; video.current?.pause(); },
-    toggle: () => {
-      if (state.current.playing) { state.current.playing = false; video.current?.pause(); }
-      else { state.current.playing = true; if (!seekTimer.current && !state.current.controller && state.current.ready && !loading && !failed) void video.current?.play().catch(() => { state.current.playing = false; }); }
-    },
+    toggle: () => { if (state.current.playing) { state.current.playing = false; video.current?.pause(); } else play(); },
   }));
 
   useEffect(() => {
     mounted.current = true;
-    // Commands can be queued while an interval is being prepared.
     callbacks.current.onAvailable(true);
+    const visibility = () => {
+      if (document.hidden) { window.clearTimeout(prefetchTimer.current); for (const [start, request] of pending.current) if (request.background) { request.controller.abort(); pending.current.delete(start); } setPrefetching(false); }
+      else schedulePrefetch();
+    };
+    document.addEventListener('visibilitychange', visibility);
     return () => {
-      mounted.current = false; state.current.controller?.abort();
-      state.current.controller = null;
-      window.clearTimeout(seekTimer.current);
-      if (state.current.url) URL.revokeObjectURL(state.current.url);
+      mounted.current = false; state.current.generation++;
+      for (const request of pending.current.values()) request.controller.abort();
+      pending.current.clear();
+      window.clearTimeout(seekTimer.current); window.clearTimeout(prefetchTimer.current);
+      cache.current!.clear(); state.current.url = ''; state.current.ready = false;
+      document.removeEventListener('visibilitychange', visibility);
     };
   }, []);
 
   useEffect(() => {
-    if (active) {
-      if ((!state.current.url || state.current.position < state.current.start || state.current.position >= state.current.end) && !state.current.controller) void load(state.current.position);
-    } else { state.current.playing = false; video.current?.pause(); state.current.controller?.abort(); state.current.controller = null; setLoading(false); window.clearTimeout(seekTimer.current); }
+    if (active) void load(state.current.position);
+    else {
+      state.current.playing = false; state.current.generation++;
+      video.current?.pause(); cancelRequests(); status(false);
+      window.clearTimeout(seekTimer.current); seekTimer.current = undefined;
+    }
   }, [active]);
 
+  const nextReady = buffered.some(range => range.start === state.current.end);
   return <div className="window-player">
-    <video ref={video} src={url || undefined} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
-      onLoadedMetadata={() => {
-        state.current.ready = true;
-        if (video.current) video.current.currentTime = Math.max(0, (state.current.position-state.current.start)/1000);
-        if (state.current.playing) void video.current?.play().catch(() => { state.current.playing = false; });
-      }}
-      onPlay={() => { state.current.playing = true; }}
-      onPause={() => { if (state.current.ready && !video.current?.ended && !state.current.controller && !seekTimer.current) state.current.playing = false; }}
-      onTimeUpdate={() => { if (state.current.ready && !loading && !failed && !state.current.controller && !video.current?.seeking) publish(state.current.start+(video.current?.currentTime ?? 0)*1000); }}
-      onEnded={() => {
-        const current = state.current;
-        const shouldContinue = current.playing;
-        publish(current.end);
-        if (shouldContinue && current.playing && current.end < source.duration_ms && enabled.current) void load(current.end);
-        else current.playing = false;
-      }}
-      onError={() => { if (url && !loading) { setFailed(true); state.current.playing = false; } }} />
-    {loading && <div className="window-player-status" role="status"><span className="spinner" />{t('Готовим предпросмотр…')}</div>}
-    {failed && <div className="window-player-status" role="status"><p>{t('Не удалось загрузить участок видео.')}</p><button className="button secondary" type="button" onClick={() => void load(state.current.position)}>{t('Повторить')}</button></div>}
-    <label className="window-player-seek"><span>{t('Позиция в видео')} · {formatTimecode(position)} / {formatTimecode(source.duration_ms)}</span><input type="range" min="0" max={Math.max(0, source.duration_ms-1)} step="100" value={position} aria-label={t('Позиция в видео')} onChange={event => seek(Number(event.target.value))} /></label>
+    <div className="window-player-screen">
+      <video ref={video} src={url || undefined} poster={poster} controls playsInline preload="auto" aria-label={source.title}
+        onLoadedMetadata={() => {
+          const current = state.current;
+          if (!video.current || video.current.currentSrc !== current.url || current.loading) return;
+          current.ready = true;
+          video.current.currentTime = Math.max(0, (current.position-current.start)/1000);
+          if (current.playing) void video.current.play().catch(() => { current.playing = false; });
+          schedulePrefetch();
+        }}
+        onPlay={() => { state.current.playing = true; schedulePrefetch(); }}
+        onPause={() => { if (state.current.ready && !video.current?.ended && !state.current.loading && !seekTimer.current) state.current.playing = false; }}
+        onTimeUpdate={() => { if (state.current.ready && !state.current.loading && !state.current.failed && !video.current?.seeking) publish(state.current.start+(video.current?.currentTime ?? 0)*1000); }}
+        onEnded={() => {
+          const current = state.current;
+          const shouldContinue = current.playing;
+          publish(current.end);
+          if (shouldContinue && current.playing && current.end < source.duration_ms && enabled.current) void load(current.end);
+          else current.playing = false;
+        }}
+        onError={() => { if (url && !state.current.loading) { cache.current!.remove(state.current.start); setBuffered(cache.current!.ranges()); status(false, true); state.current.playing = false; } }} />
+      {loading && <div className="window-player-status" role="status"><span className="spinner" />{t('Готовим предпросмотр…')}</div>}
+      {failed && <div className="window-player-status" role="status"><p>{t('Не удалось загрузить участок видео.')}</p><button className="button secondary" type="button" onClick={() => void load(state.current.position)}>{t('Повторить')}</button></div>}
+    </div>
+    <div className="window-player-navigation">
+      <label className="window-player-seek">
+        <span className="window-player-position"><span>{t('Позиция в видео')}</span><span>{formatTimecode(position)} / {formatTimecode(source.duration_ms)}</span></span>
+        <span className="window-player-rail">
+          <span className="window-player-buffered" aria-hidden="true">{buffered.map(range => <span key={range.start} style={{ left: `${range.start / source.duration_ms * 100}%`, width: `${(range.end-range.start) / source.duration_ms * 100}%` }} />)}</span>
+          <input type="range" min="0" max={Math.max(0, source.duration_ms-1)} step="100" value={position} aria-label={t('Позиция в видео')} aria-valuetext={formatTimecode(position)} onChange={event => seek(Number(event.target.value))} />
+        </span>
+      </label>
+      <span className="window-player-buffer-status">{prefetching ? t('Загружаем следующий участок…') : nextReady ? t('Следующий участок готов') : t('Недавние участки доступны без ожидания')}</span>
+    </div>
   </div>;
 });

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { api, stepButton, uploadThroughUI } from './helpers'
+import { api, showExactTimes, stepButton, uploadThroughUI } from './helpers'
 
 const source = {
   id: 'src_resources', title: 'Resource lifecycle fixture', kind: 'upload', duration_ms: 12000,
@@ -323,7 +323,7 @@ test('resource policy: a lower upload byte limit rejects before any upload mutat
   page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith(`${api}/uploads`)) uploads++ })
   await page.goto('/'); await uploadThroughUI(page)
   await expect(page.getByRole('alert')).toContainText('Файл превышает лимит сервиса')
-  await expect(page.locator('#source-file-hint')).toContainText('MP4 до 1 КБ')
+  await expect(page.locator('#source-file-hint')).toContainText('MP4, MOV, MKV или WebM до 1 КБ')
   expect(uploads).toBe(0)
 })
 
@@ -336,10 +336,15 @@ test('resource policy: shorter range and total duration limits preserve drafts a
   let posts = 0
   await page.route(`**${api}/jobs`, route => { posts++; return route.fulfill({ json: job }) })
   await page.reload(); await expect(page.locator('.output-selection ol > li')).toHaveCount(2)
-  await expect(page.getByRole('alert')).toContainText('Фрагмент превышает лимит сервиса')
+  await expect(page.getByRole('alert')).toContainText('Один фрагмент может длиться до 2 с.')
   await expect(page.getByRole('button', { name: 'Вырезать фрагменты', exact: true })).toBeDisabled()
   await stepButton(page, 3).click()
   await page.getByRole('button', { name: 'Редактировать фрагмент 2', exact: true }).click()
+  await page.getByLabel('Конец', { exact: true }).fill('7'); await page.getByLabel('Конец', { exact: true }).press('Tab')
+  await expect(page.locator('#range-error')).toHaveText('Один фрагмент может длиться до 2 с.')
+  await page.getByRole('button', { name: 'English', exact: true }).click()
+  await expect(page.locator('#range-error')).toHaveText('A single clip can be up to 2 s long.')
+  await page.getByRole('button', { name: 'Русский', exact: true }).click()
   await page.getByLabel('Конец', { exact: true }).fill('6'); await page.getByLabel('Конец', { exact: true }).press('Tab')
   await stepButton(page, 4).click()
   await expect(page.getByRole('button', { name: 'Вырезать фрагменты', exact: true })).toBeEnabled(); expect(posts).toBe(0)
@@ -360,4 +365,108 @@ test('resource policy: lowered count limits keep all saved clips and existing do
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
   await stepButton(page, 3).click(); await expect(page.locator('.clip-list > li')).toHaveCount(3)
   await expect(page.getByRole('button', { name: 'Добавить фрагмент', exact: true })).toBeDisabled()
+})
+
+test('long recordings: 42-minute and full-stream selections, fast export, and a second source during processing', async ({ page }, testInfo) => {
+  const { readFileSync } = await import('node:fs')
+  const recording = { id: 'src_long_workflow', title: 'Запись стрима · 9 часов', kind: 'platform', provider: 'twitch', duration_ms: 9 * 3600000, width: 1920, height: 1080, preview_kind: 'window', preview_url: null, thumbnail_url: null, embed_url: null }
+  const second = { ...recording, id: 'src_next_workflow', title: 'Следующее видео' }
+  const running = { id: 'job_long_workflow', status: 'running', stage: 'fetching', message: 'Preparing fragment 1 of 1: 25% downloaded', items: [{ id: 'item_workflow', label: '', start_ms: 0, end_ms: 2520000, status: 'running', artifact: null }] }
+  const history = { id: running.id, source_id: recording.id, title: recording.title, status: 'running', stage: 'fetching', total: 1, files: [], created_at: new Date().toISOString() }
+  let opens = 0
+  let submitted: any = null
+  await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true, limits: { max_source_bytes: 32 * 1024 ** 3, max_output_bytes: 16 * 1024 ** 3, max_ranges: 32, max_range_ms: 12 * 3600000, max_job_ms: 24 * 3600000 } } }))
+  await page.route(`**${api}/sources`, route => route.fulfill({ status: route.request().method() === 'POST' ? 201 : 200, json: route.request().method() === 'POST' ? (++opens === 1 ? recording : second) : { sources: [recording, second] } }))
+  await page.route(`**${api}/sources/*/preview?*`, route => route.fulfill({ contentType: 'video/mp4', body: readFileSync(process.env.CUTMY_E2E_MEDIA!) }))
+  await page.route(`**${api}/jobs`, route => { if (route.request().method() === 'POST') { submitted = route.request().postDataJSON(); return route.fulfill({ status: 202, json: running }) } return route.fulfill({ json: { jobs: [history] } }) })
+  await page.route(`**${api}/jobs/${running.id}`, route => route.fulfill({ json: running }))
+  await page.goto('/')
+  await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://www.twitch.tv/videos/2896088341')
+  await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
+  await showExactTimes(page)
+  await page.getByRole('button', { name: 'Выбрать всё видео', exact: true }).click()
+  await expect(page.getByLabel('Конец', { exact: true })).toHaveValue('09:00:00.000')
+  await page.getByLabel('Конец', { exact: true }).fill('00:42:00')
+  await page.getByLabel('Конец', { exact: true }).press('Tab')
+  await page.getByRole('button', { name: 'К скачиванию', exact: true }).click()
+  await expect(page.getByText('Один фрагмент — до 12 ч; весь экспорт — до 24 ч.', { exact: true })).toBeVisible()
+  await expect(page.getByText('Готовый файл — до 16.0 ГБ.', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Ускорить без перекодирования', exact: true }).click()
+  await expect(page.getByText('Быстрый экспорт включён', { exact: true })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('long-export-desktop.png'), fullPage: true })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.screenshot({ path: testInfo.outputPath('long-export-mobile.png'), fullPage: true })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
+  await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
+  await expect.poll(() => submitted?.cut_mode).toBe('copy')
+  expect(submitted.ranges).toMatchObject([{ start_ms: 0, end_ms: 2520000 }])
+  await expect(page.getByText('25%', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Пока обрабатывается — открыть другое видео', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled()
+  const disclosure = page.getByRole('button', { name: 'Экспорты и файлы', exact: true })
+  if (await disclosure.getAttribute('aria-expanded') !== 'true') await disclosure.click()
+  await expect(page.locator('.job-library').getByRole('heading', { name: recording.title, exact: true })).toBeVisible()
+  await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://www.twitch.tv/videos/2896088342')
+  await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
+  await expect(page.locator('.source-title')).toContainText(second.title)
+  await stepButton(page, 1).click()
+  const library = page.getByRole('button', { name: 'Экспорты и файлы', exact: true })
+  if (await library.getAttribute('aria-expanded') !== 'true') await library.click()
+  await expect(page.locator('.job-library').getByRole('heading', { name: recording.title, exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'English', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Exports and files', exact: true })).toBeVisible()
+})
+
+test('background exports: replacing a source ignores the previous job poll already in flight', async ({ page }) => {
+  const { readFileSync } = await import('node:fs')
+  await prepare(page, { job_id: job.id })
+  let reads = 0, release!: () => void, finished!: () => void
+  const gate = new Promise<void>(resolve => { release = resolve })
+  const responded = new Promise<void>(resolve => { finished = resolve })
+  await page.route(`**${api}/jobs/${job.id}`, async route => {
+    reads++
+    if (reads === 1) return route.fulfill({ json: job })
+    await gate
+    await route.fulfill({ json: { ...job, status: 'running', stage: 'encoding' } }).catch(() => undefined)
+    finished()
+  })
+  const replacement = { ...source, id: 'src_replacement', title: 'New recording' }
+  await page.route(`**${api}/sources`, route => route.fulfill({ status: 201, json: replacement }))
+  await page.route(`**${api}/sources/*/preview?*`, route => route.fulfill({ contentType: 'video/mp4', body: readFileSync(process.env.CUTMY_E2E_MEDIA!) }))
+  await page.route(`**${api}/jobs`, route => route.fulfill({ json: { jobs: [] } }))
+  try {
+    await page.reload()
+    await expect.poll(() => reads).toBe(2)
+    await stepButton(page, 1).click()
+    await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://www.twitch.tv/videos/123456789')
+    await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
+    await expect(page.locator('.source-title')).toContainText(replacement.title)
+    release(); await responded
+    await stepButton(page, 4).click()
+    await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled()
+    await expect(page.locator('.job-status')).toHaveCount(0)
+    const draft = await page.evaluate(() => { window.dispatchEvent(new Event('pagehide')); return JSON.parse(localStorage.getItem('cutmy.workbench.v1')!) })
+    expect(draft.source_id).toBe(replacement.id)
+    expect(draft.job_id).toBeUndefined()
+  } finally { release() }
+})
+
+test('background exports: long download names and cancellation controls fit a narrow phone in both languages', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 720 })
+  const longName = `${'🎬'.repeat(12)}длинная-запись-с-очень-длинным-названием-и-без-разрывов.mp4`
+  await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
+  await page.route(`**${api}/jobs`, route => route.fulfill({ json: { jobs: [
+    { id: 'job_mobile_running', source_id: source.id, title: longName, status: 'running', stage: 'fetching', total: 1, files: [] },
+    { id: 'job_mobile_done', source_id: source.id, title: longName, status: 'succeeded', stage: 'finished', total: 1, files: [{ id: 'art_mobile', filename: longName, size_bytes: 1024 ** 3, download_url: `${api}/artifacts/art_mobile`, expires_at: '2099-10-05T12:00:00Z' }] },
+  ] } }))
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Экспорты и файлы', exact: true }).click()
+  await expect(page.locator('.job-library-files a')).toBeVisible()
+  for (const language of ['Русский', 'English']) {
+    await page.getByRole('button', { name: language, exact: true }).click()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+    const controls = await page.locator('.job-library button, .job-library-files a').evaluateAll(elements => elements.map(element => { const rect = element.getBoundingClientRect(); return { left: rect.left, right: rect.right, width: innerWidth } }))
+    expect(controls.every(control => control.left >= 0 && control.right <= control.width)).toBe(true)
+  }
+  await page.screenshot({ path: testInfo.outputPath('background-library-mobile.png'), fullPage: true })
 })

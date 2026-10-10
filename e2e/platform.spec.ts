@@ -393,8 +393,9 @@ for (const mode of ['platform', 'codec fallback'] as const) {
     await page.route(`**${api}/sources/${source.id}/media`, route => route.fulfill({ contentType: 'video/mp4', body: 'unsupported media' }))
     let failNext = false
     await page.route(`**${api}/sources/${source.id}/preview?*`, route => {
-      requests.push(Number(new URL(route.request().url()).searchParams.get('start_ms')))
-      if (failNext) { failNext = false; return route.fulfill({ status: 422, json: { error: { code: 'platform_unavailable' } } }) }
+      const url = new URL(route.request().url())
+      requests.push(Number(url.searchParams.get('start_ms')))
+      if (failNext && !url.searchParams.has('priority')) { failNext = false; return route.fulfill({ status: 422, json: { error: { code: 'platform_unavailable' } } }) }
       return route.fulfill({ contentType: 'video/mp4', body: readFileSync(process.env.CUTMY_E2E_MEDIA!) })
     })
     const errors: string[] = []
@@ -410,7 +411,7 @@ for (const mode of ['platform', 'codec fallback'] as const) {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, '28802000')
       el.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await expect.poll(() => requests.at(-1)).toBe(28800000)
+    await expect.poll(() => requests.includes(28800000)).toBe(true)
     await expect(page.getByText('Готовим предпросмотр…', { exact: true })).toHaveCount(0)
     await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeCloseTo(2, 1)
     await expect(seek).toHaveValue('28802000')
@@ -427,17 +428,17 @@ for (const mode of ['platform', 'codec fallback'] as const) {
     expect(requests.filter(ms => ms === 28800000)).toHaveLength(1)
     failNext = true
     await seek.evaluate(el => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, '28832000')
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, '28922000')
       el.dispatchEvent(new Event('input', { bubbles: true }))
     })
     await expect(page.getByText('Не удалось загрузить участок видео.', { exact: true })).toBeVisible()
     await page.getByRole('button', { name: 'Повторить', exact: true }).click()
     await expect(page.getByText('Не удалось загрузить участок видео.', { exact: true })).toHaveCount(0)
     await expect(page.getByText('Готовим предпросмотр…', { exact: true })).toHaveCount(0)
-    await expect(seek).toHaveValue('28832000')
-    expect(requests.slice(-2)).toEqual([28830000, 28830000])
+    await expect(seek).toHaveValue('28922000')
+    expect(requests.filter(ms => ms === 28920000)).toHaveLength(2)
     await video.evaluate(async (el: HTMLVideoElement) => { await el.play(); el.dispatchEvent(new Event('ended')) })
-    await expect.poll(() => requests.at(-1)).toBe(28860000)
+    await expect.poll(() => requests.includes(28950000)).toBe(true)
     await expect(page.getByText('Готовим предпросмотр…', { exact: true })).toHaveCount(0)
     await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false)
     await page.setViewportSize({ width: 390, height: 844 })
@@ -446,3 +447,137 @@ for (const mode of ['platform', 'codec fallback'] as const) {
     expect(errors).toEqual([])
   })
 }
+
+test('window preview caches revisits and preloads the next interval without another seek request', async ({ page }, testInfo) => {
+  const requests: Array<{ start: number; background: boolean }> = []
+  const source = { id: 'src_preview_cache', title: 'Nine-hour recording', kind: 'platform', provider: 'twitch', duration_ms: 9 * 3600000, preview_kind: 'window', preview_url: null, embed_url: null, thumbnail_url: null }
+  await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
+  await page.route(`**${api}/sources`, route => route.fulfill({ status: 201, json: source }))
+  await page.route(`**${api}/sources/${source.id}`, route => route.fulfill({ json: source }))
+  await page.route(`**${api}/sources/${source.id}/preview?*`, route => {
+    const url = new URL(route.request().url())
+    requests.push({ start: Number(url.searchParams.get('start_ms')), background: url.searchParams.get('priority') === 'background' })
+    return route.fulfill({ contentType: 'video/mp4', body: readFileSync(process.env.CUTMY_E2E_MEDIA!) })
+  })
+  await page.goto('/')
+  await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://www.twitch.tv/videos/123456789')
+  await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
+  const video = page.locator('.window-player video')
+  const slider = page.getByRole('slider', { name: 'Позиция в видео', exact: true })
+  const seek = async (ms: number) => {
+    await slider.evaluate((el, value) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, String(value))
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    }, ms)
+    await expect(slider).toHaveValue(String(ms))
+    await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeCloseTo(ms % 30000 / 1000, 1)
+    await expect(page.getByText('Готовим предпросмотр…', { exact: true })).toHaveCount(0)
+  }
+  await expect(page.getByText('Следующий участок готов', { exact: true })).toBeVisible()
+  expect(requests).toEqual([{ start: 0, background: false }, { start: 30000, background: true }])
+  await seek(32000)
+  expect(requests.filter(request => request.start === 30000)).toHaveLength(1)
+  await seek(28802000)
+  await seek(2000)
+  expect(requests.filter(request => request.start === 0)).toHaveLength(1)
+  await seek(28803000)
+  expect(requests.filter(request => request.start === 28800000)).toHaveLength(1)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(slider).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('cached-preview-mobile.png'), fullPage: true })
+})
+
+test('window preview ignores stale seeks, bounds retained media, and releases it when switching source', async ({ page }) => {
+  type ProbeWindow = Window & { __previewURLs: Set<string> }
+  const requests: number[] = []
+  const errors: string[] = []
+  let sourceNumber = 0
+  let releaseStale: (() => void) | undefined
+  page.on('pageerror', error => errors.push(error.message))
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'connection', { configurable: true, value: { saveData: true } })
+    const live = new Set<string>()
+    const create = URL.createObjectURL.bind(URL), revoke = URL.revokeObjectURL.bind(URL)
+    URL.createObjectURL = blob => { const url = create(blob); live.add(url); return url }
+    URL.revokeObjectURL = url => { live.delete(url); revoke(url) }
+    Object.assign(window, { __previewURLs: live })
+  })
+  await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
+  await page.route(`**${api}/sources`, route => route.fulfill({ status: 201, json: { id: `src_cache_bound_${++sourceNumber}`, title: 'Long recording', kind: 'platform', provider: 'twitch', duration_ms: 9 * 3600000, preview_kind: 'window', preview_url: null, embed_url: null, thumbnail_url: null } }))
+  await page.route(`**${api}/sources/*/preview?*`, async route => {
+    const start = Number(new URL(route.request().url()).searchParams.get('start_ms'))
+    requests.push(start)
+    if (start === 28800000) await new Promise<void>(resolve => { releaseStale = resolve })
+    await route.fulfill({ contentType: 'video/mp4', body: readFileSync(process.env.CUTMY_E2E_MEDIA!) }).catch(() => undefined)
+  })
+  const open = async () => {
+    await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://www.twitch.tv/videos/123456789')
+    await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
+    await expect.poll(() => page.locator('.window-player video').evaluate((el: HTMLVideoElement) => el.readyState)).toBeGreaterThan(0)
+  }
+  const slider = page.getByRole('slider', { name: 'Позиция в видео', exact: true })
+  const seek = (ms: number) => slider.evaluate((el, value) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, String(value))
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+  }, ms)
+  await page.goto('/')
+  await open()
+  await seek(28802000)
+  await expect.poll(() => Boolean(releaseStale)).toBe(true)
+  await seek(28862000)
+  await expect.poll(() => requests.includes(28860000)).toBe(true)
+  await expect(page.getByText('Готовим предпросмотр…', { exact: true })).toHaveCount(0)
+  releaseStale!()
+  await expect(slider).toHaveValue('28862000')
+  for (let index = 1; index <= 12; index++) {
+    await seek(index * 120000 + 2000)
+    await expect(page.getByText('Готовим предпросмотр…', { exact: true })).toHaveCount(0)
+    await expect.poll(() => page.locator('.window-player video').evaluate((el: HTMLVideoElement) => el.readyState)).toBeGreaterThan(0)
+    expect(await page.evaluate(() => (window as ProbeWindow).__previewURLs.size)).toBeLessThanOrEqual(8)
+  }
+  await seek(2000)
+  await expect.poll(() => requests.filter(start => start === 0).length).toBe(2)
+  await goToSource(page)
+  await open()
+  await expect.poll(() => page.evaluate(() => (window as ProbeWindow).__previewURLs.size)).toBe(1)
+  expect(errors).toEqual([])
+})
+
+for (const mode of ['promote', 'replace'] as const) test(`window preview ${mode}s speculative loading for a seek and keeps playback intent`, async ({ page }) => {
+  const requests: Array<{ start: number; background: boolean }> = []
+  let releaseBackground: (() => void) | undefined
+  const source = { id: 'src_preview_priority', title: 'Long recording', kind: 'platform', provider: 'twitch', duration_ms: 9 * 3600000, preview_kind: 'window', preview_url: null, embed_url: null, thumbnail_url: null }
+  await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
+  await page.route(`**${api}/sources`, route => route.fulfill({ status: 201, json: source }))
+  await page.route(`**${api}/sources/${source.id}`, route => route.fulfill({ json: source }))
+  await page.route(`**${api}/sources/${source.id}/preview?*`, async route => {
+    const url = new URL(route.request().url())
+    const start = Number(url.searchParams.get('start_ms')), background = url.searchParams.has('priority')
+    requests.push({ start, background })
+    if (start === 30000 && background) await new Promise<void>(resolve => { releaseBackground = resolve })
+    await route.fulfill({ contentType: 'video/mp4', body: readFileSync(process.env.CUTMY_E2E_MEDIA!) }).catch(() => undefined)
+  })
+  await page.goto('/')
+  await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://www.twitch.tv/videos/123456789')
+  await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
+  await expect.poll(() => Boolean(releaseBackground)).toBe(true)
+  const video = page.locator('.window-player video')
+  await video.evaluate((el: HTMLVideoElement) => el.play())
+  const seek = page.getByRole('slider', { name: 'Позиция в видео', exact: true })
+  const target = mode === 'promote' ? 32000 : 28802000
+  await seek.evaluate((el, target) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, String(target))
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+  }, target)
+  if (mode === 'promote') releaseBackground!()
+  else await expect.poll(() => requests.some(request => request.start === 28800000 && !request.background)).toBe(true)
+  await expect(page.getByText('Готовим предпросмотр…', { exact: true })).toHaveCount(0)
+  await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false)
+  releaseBackground!()
+  await video.evaluate((el: HTMLVideoElement) => el.pause())
+  expect(Number(await seek.inputValue())).toBeGreaterThanOrEqual(target)
+  expect(Number(await seek.inputValue())).toBeLessThan(target + 28000)
+  expect(requests.filter(request => request.start === 30000)).toHaveLength(1)
+  await expect(page.getByText('Загружаем следующий участок…', { exact: true })).toHaveCount(0)
+})

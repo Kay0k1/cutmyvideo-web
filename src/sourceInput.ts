@@ -82,23 +82,27 @@ export function canonicalYouTubeUrl(value: string): string | null {
 }
 
 /** A light container check; the core still validates the media streams. */
-export async function validateMP4(file: File, maximumBytes = 1024 ** 3): Promise<string | null> {
+export async function validateVideo(file: File, maximumBytes = 1024 ** 3): Promise<string | null> {
   if (file.size > maximumBytes) return 'Файл превышает лимит сервиса. Выберите файл меньшего размера.';
-  if (!/\.mp4$/i.test(file.name) || (file.type && !['video/mp4', 'application/mp4'].includes(file.type))) return 'Выберите файл MP4. Другие форматы пока не поддерживаются на сайте.';
-  if (!file.size) return 'Файл пустой. Выберите другое видео MP4.';
+  const extension = file.name.split('.').at(-1)?.toLowerCase();
+  if (!extension || !['mp4', 'mov', 'mkv', 'webm'].includes(extension)) return 'Выберите видео MP4, MOV, MKV или WebM.';
+  if (!file.size) return 'Файл пустой. Выберите другое видео.';
   const bytes = new Uint8Array(await file.slice(0, 4096).arrayBuffer());
+  if (extension === 'mkv' || extension === 'webm') {
+    return bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3 ? null : 'Формат файла не совпадает с расширением. Выберите исходное видео.';
+  }
   const view = new DataView(bytes.buffer);
   let offset = 0;
   while (offset + 8 <= bytes.length) {
     const length = view.getUint32(offset);
     const type = String.fromCharCode(...bytes.slice(offset + 4, offset + 8));
     if (type === 'ftyp' && length >= 16 && length <= file.size - offset && offset + 16 <= bytes.length) {
-      const brand = String.fromCharCode(...bytes.slice(offset + 8, offset + 12));
-      if (brand === 'qt  ') return 'Этот файл похож на MOV. Сохраните его как MP4 и попробуйте снова.';
       return null;
     }
+    // Older QuickTime recordings can begin directly with movie/media atoms.
+    if (extension === 'mov' && ['moov', 'mdat', 'wide'].includes(type) && (length === 1 || length >= 8 && length <= file.size - offset)) return null;
     if (length < 8) break;
     offset += length;
   }
-  return 'В файле не найден контейнер MP4. Проверьте файл; смена расширения не меняет формат.';
+  return 'Формат файла не совпадает с расширением. Выберите исходное видео.';
 }

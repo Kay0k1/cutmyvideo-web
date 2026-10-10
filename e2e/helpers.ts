@@ -97,7 +97,7 @@ export async function setTheme(page: Page, theme: 'light' | 'dark' | 'system') {
 
 export async function uploadThroughUI(page: Page, filename = process.env.CUTMY_E2E_MEDIA!) {
   await goToSource(page)
-  await page.getByRole('button', { name: /^(MP4 файл|MP4 file)$/ }).click()
+  await page.getByRole('button', { name: /^(Файл|File)$/ }).click()
   const button = page.locator('button.upload-button')
   await expect(button).toBeEnabled()
   const chooser = page.waitForEvent('filechooser')

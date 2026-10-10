@@ -30,6 +30,12 @@ export function durationLabel(ms: number, locale: Locale = 'ru'): string {
   const seconds = Math.max(0, ms / 1000);
   const unit = locale === 'en' ? 's' : 'с';
   if (seconds < 60) return `${Number(seconds.toFixed(3))} ${unit}`;
+  if (seconds >= 3600) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor(seconds / 60) % 60;
+    const remainder = Number((seconds % 60).toFixed(1));
+    return [`${hours} ${locale === 'en' ? 'h' : 'ч'}`, ...(minutes ? [`${minutes} ${locale === 'en' ? 'min' : 'мин'}`] : []), ...(remainder ? [`${remainder} ${unit}`] : [])].join(' ');
+  }
   return `${Math.floor(seconds / 60)} ${locale === 'en' ? 'min' : 'мин'} ${Number((seconds % 60).toFixed(1))} ${unit}`;
 }
 

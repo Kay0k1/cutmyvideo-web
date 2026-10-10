@@ -118,7 +118,7 @@ test('long Unicode source and clip names keep actions reachable on a narrow phon
   await page.goto('/')
   await page.getByRole('button', { name: 'English', exact: true }).click()
   const filename = `${'🎬'.repeat(35)}семейное-видео.mp4`
-  await page.getByRole('button', { name: 'MP4 file', exact: true }).click()
+  await page.getByRole('button', { name: 'File', exact: true }).click()
   await expect(page.locator('.upload-button')).toBeEnabled()
   await page.locator('input[type=file]').setInputFiles({ name: filename, mimeType: 'video/mp4', buffer: await readFile(process.env.CUTMY_E2E_MEDIA!) })
   await expect(page.locator('video')).toBeVisible()

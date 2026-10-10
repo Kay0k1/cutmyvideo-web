@@ -160,7 +160,7 @@ test('steps preserve work, keep export controls off the first screen and replace
   await expect(page.locator('.range-list > li')).toHaveCount(1)
 })
 
-test('the website rejects non-MP4 files and unsafe URLs before an API mutation', async ({ page }) => {
+test('the website rejects unsupported files and unsafe URLs before an API mutation', async ({ page }) => {
   const mutations: string[] = []
   page.on('request', request => {
     if (request.method() === 'POST' && /\/api\/v1\/(uploads|sources)$/.test(request.url())) mutations.push(request.url())
@@ -174,7 +174,7 @@ test('the website rejects non-MP4 files and unsafe URLs before an API mutation',
     await expect(page.getByLabel('Video link', { exact: true })).toHaveValue(url)
   }
   await goToSource(page)
-  await page.getByRole('button', { name: 'MP4 file', exact: true }).click()
+  await page.getByRole('button', { name: 'File', exact: true }).click()
   const wav = await readFile(process.env.CUTMY_E2E_AUDIO!)
   for (const file of [process.env.CUTMY_E2E_AUDIO!, { name: 'renamed.mp4', mimeType: 'video/webm', buffer: wav }, { name: 'renamed.mp4', mimeType: 'video/mp4', buffer: wav }]) {
     const chooser = page.waitForEvent('filechooser')
