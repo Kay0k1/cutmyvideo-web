@@ -119,14 +119,17 @@ test('saved videos resume the current draft and reopen other videos from fresh m
   await expect(page.getByLabel('End', { exact: true })).toHaveValue('00:00:06.000')
 })
 
-test('an active job allows resuming its video and prevents replacing it from the saved list', async ({ page }) => {
+test('an active job permits saved-source replacement and remains available in export history', async ({ page }) => {
   const job = { id: 'job_usability', status: 'waiting_storage', stage: 'waiting_storage', message: '',
     storage_wait_until: '2099-10-05T12:30:00Z', items: [{ id: 'item_usability', label: '', start_ms: 1500, end_ms: 3250, status: 'queued', artifact: null }] }
   await prepare(page, { step: 1, job_id: job.id })
   await page.route(`**${api}/jobs/${job.id}`, route => route.fulfill({ json: job }))
+  await page.route(`**${api}/jobs`, route => route.fulfill({ json: { jobs: [{ id: job.id, source_id: source.id, title: source.title, status: job.status, stage: job.stage, total: 1, files: [] }] } }))
+  await page.route(`**${api}/sources/${previous.id}`, route => route.fulfill({ json: previous }))
   await page.reload()
   await page.getByRole('button', { name: 'My videos on the server', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Open video “Previous video”', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Open video “Previous video”', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Delete video “Current video” and files', exact: true })).toBeDisabled()
   await expect(page.getByRole('button', { name: 'Continue editing “Current video”', exact: true })).toBeEnabled()
   await page.getByRole('button', { name: 'Continue editing “Current video”', exact: true }).click()
   await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
@@ -138,6 +141,17 @@ test('an active job allows resuming its video and prevents replacing it from the
   await expect(page.getByLabel('Start', { exact: true })).toHaveValue('00:00:01.500')
   await page.goForward()
   await expect(page.getByRole('heading', { name: 'Waiting for storage', exact: true })).toBeVisible()
+  await stepButton(page, 1).click()
+  await page.getByRole('button', { name: 'My videos on the server', exact: true }).click()
+  await page.getByRole('button', { name: 'Open video “Previous video”', exact: true }).click()
+  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.source-title')).toContainText('Previous video')
+  await stepButton(page, 1).click()
+  const history = page.getByRole('button', { name: 'Exports and files', exact: true })
+  if (await history.getAttribute('aria-expanded') !== 'true') await history.click()
+  await expect(page.locator('.job-library').getByRole('heading', { name: 'Current video', exact: true })).toBeVisible()
+  await expect(page.locator('.job-library')).toContainText('Waiting for storage')
+  await expect(page.locator('.job-library').getByRole('button', { name: 'Cancel processing', exact: true })).toBeEnabled()
 })
 
 test('an expired saved video reports the failure without replacing the current draft', async ({ page }) => {

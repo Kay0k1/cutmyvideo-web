@@ -132,9 +132,11 @@ test('a failed YouTube SDK download is retried when another video opens', async 
     await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
   }
   await open('N3REfH4N9Dg')
-  await expect(page.locator('.player-error')).toBeVisible()
+  await expect(page.getByRole('status').filter({ hasText: 'Не удалось загрузить участок видео.' })).toBeVisible()
+  expect(scripts).toBe(1)
   await open('aqz-KE-bpKQ')
   await expect.poll(() => scripts, { timeout: 2000 }).toBe(2)
   await expect(page.getByRole('button', { name: 'Посмотреть фрагмент', exact: true })).toBeEnabled()
-  await expect(page.locator('.player-error')).not.toBeVisible()
+  await expect(page.locator('.window-player')).not.toBeVisible()
+  await expect(page.getByText('Не удалось загрузить участок видео.', { exact: true })).not.toBeVisible()
 })

@@ -1,0 +1,38 @@
+name: Bug report / Ошибка
+description: Report a reproducible website problem / Воспроизводимая ошибка сайта
+body:
+  - type: markdown
+    attributes:
+      value: "For vulnerabilities use SECURITY.md. Never include cookies, passwords, private media or signed URLs. Russian and English are welcome."
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Website release/commit and core revision, or cutmy.video if using the hosted site.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Use synthetic media or a public source without access tokens.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and operating system
+      placeholder: Browser name/version and OS version
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Additional evidence
+      description: Relevant screenshots or redacted errors; include self-hosted settings only after removing secrets.

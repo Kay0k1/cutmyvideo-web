@@ -1,88 +1,100 @@
-# cutmyvideo web
+# cutmyvideo-web
 
 [Русский](README.md) · English
 
-The editing interface for [cutmy.video](https://cutmy.video): choose moments from a linked video or an uploaded MP4 and download them as MP4 video or MP3 audio. This repository is private. Media processing lives in the open-source [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
+[![Product checks](https://github.com/Kay0k1/cutmyvideo-web/actions/workflows/checks.yml/badge.svg)](https://github.com/Kay0k1/cutmyvideo-web/actions/workflows/checks.yml)
+[![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[Using the editor](#using-the-editor) · [Features](#mvp-features) · [Development](#development) · [Structure](#structure) · [Support](#supporting-development)
+The [cutmy.video](https://cutmy.video) product browser interface for selecting moments from video and exporting MP4 or MP3. Accepts uploaded files and accessible public links. The interface source lives in a private repository available to its owner and invited collaborators. Media processing, the HTTP API and persistent job queue live in the open-source MIT [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
 
-## Using the editor
+[Usage](#usage) · [Local development](#local-development) · [Checks](#checks) · [Deployment](#deployment) · [Contributing](#contributing-and-license)
 
-Work is divided into four steps. Going back keeps your selected moments.
+## Usage
 
-1. **Video.** Paste a public link to one video, stream recording or clip, or choose an MP4 from your device (up to the limit shown beside upload; 32 GiB on cutmy.video). The website identifies the service; the core returns the actual title, duration and available preview.
-2. **Moment.** Choose the start and end on the timeline, mark boundaries at the player position and preview the clip. Precise time fields and zoom are available in a separate disclosure. Seconds (`15`), total minutes (`83:10`) and hours with milliseconds (`01:23:10.250`) are supported.
-3. **Clips.** Add up to twelve moments, name and edit them. Check the clips to export; select all, duplicate and delete actions apply to the checked clips.
-4. **Export.** Choose MP4 or MP3, quality and cut mode. Wait for processing and download the results. Each checked moment becomes a separate file. Files from the last export remain available while changing the next selection.
+1. **Video.** Paste a public link to a video, completed recording or clip, or choose an MP4, MOV, MKV or WebM file. The interface shows the actual title, duration, provider and limits returned by the API. A failed import preserves the previous video and draft.
+2. **Moment.** Set start/end on the timeline, mark boundaries at the player position and preview the range. Precise time fields and zoom are available separately. Seconds (`15`), total minutes (`83:10`) and hours with milliseconds (`01:23:10.250`) are accepted.
+3. **Clips, if needed.** Add and name several moments, then check those to export. Select all, duplicate, delete and undo the last deletion are available. A single moment can go straight to export.
+4. **Export.** Choose MP4 or MP3, quality and cut mode. Each checked moment becomes a separate file. Jobs continue when another video opens; **Exports and files** lists recent jobs, cancellation and retained results.
 
-The website recognizes fifteen services: YouTube (including Shorts), Twitch (recordings and clips), Rutube, TikTok, Instagram (including Reels), Vimeo, Dailymotion, VK Video, Facebook, X/Twitter, Reddit, Odnoklassniki, Bilibili, Streamable and Rumble. Public HTTPS video-file links and pages supported by the core are accepted too. Short links are resolved safely on the server.
+**Exact boundaries** re-encode video to H.264/AAC or audio to MP3. **Original quality** preserves compatible MP4 streams without re-encoding; the start can move to a preceding keyframe. Each result shows its actual boundaries. Successful files remain downloadable when another clip fails.
 
-Service support does not guarantee access to every video: privacy, sign-in requirements, geographic restrictions and website changes can prevent import. The interface reports an actionable error and offers MP4 upload. Channels, playlists, DRM and ongoing live streams are not imported.
+Light, dark and system appearance, complete Russian/English copy, keyboard controls, labelled sliders and visible focus work on desktop and mobile. Drafts, stage, language, appearance and defaults are stored in the browser. Server-file access belongs to the current session: a saved local draft cannot recover access after cookies are cleared.
 
-Exact boundaries re-encode media. Original quality avoids re-encoding, but boundaries may shift and codecs must be compatible. Actual boundaries are shown next to each ready file. Preview depends on the source and browser; manual timecode editing remains available.
+## Sources and limits
 
-Changing videos replaces the old moments only after the new source opens successfully. A rejected file or link keeps the existing draft. MP4 inputs must contain video; renaming a file does not change its format.
+Recognizes YouTube, Twitch, Rutube, TikTok, Instagram, Vimeo, Dailymotion, VK Video, Facebook, X/Twitter, Reddit, Odnoklassniki, Bilibili, Streamable and Rumble, plus public HTTPS files/pages supported by the core. The server resolves short links.
 
-## MVP features
+Provider recognition does not guarantee access to every video. Privacy, authentication, regional restrictions and platform changes can prevent import. Channels, playlists, DRM and ongoing live streams are not imported. Ordinary HTTPS media-file links are downloaded in full before processing; supported platform recordings allow selected intervals and decoder context to be fetched. See the [core provider catalogue](https://github.com/Kay0k1/cutmyvideo-core/blob/main/docs/providers.md) for verified providers and restrictions.
 
-- Four separate steps preserving the draft, current stage and checked clips on return and reload.
-- Light, dark, and system appearance; self-hosted Geologica with Cyrillic support.
-- A dedicated stage for selecting several intervals and bulk actions; precise time fields, overview and zoomed timelines, and keyboard controls.
-- Custom quality, cut-mode and zoom menus with keyboard navigation, typeahead, correct focus and theme support.
-- A native player for compatible files and embedded YouTube playback, without invented media or demo data.
-- MP4/MP3 export through the shared core, background jobs, cancellation, and downloads for successful clips from partially failed jobs.
-- Draft and latest-job restoration within the same browser session.
-- Russian by default and a complete English interface; switching language preserves selections.
-- Examples, help, and persistent defaults for format, quality, cut mode, and timeline zoom.
-- Support section with four wallet addresses and copy actions. The application does not perform transfers.
-- Compact desktop workspace: select one moment without a clip list or export settings on the same screen; ready files appear beside export settings.
-- The initial screen fits a small phone; mobile editing follows a natural order with comfortable touch targets. Long desktop lists scroll within their own area.
-- Visible focus, labelled sliders, and actionable errors.
+Compatible files play directly in the browser; YouTube can also use its embed. For other supported sources and browser-incompatible codecs, the server prepares 30-second preview windows while retaining the complete recording timeline. Recently visited windows remain within a browser cache of 8 windows / 64 MiB; the next window is prefetched. The server reuses prepared windows after a reload, with a 512 MiB / 64-window cap and cleanup after 30 minutes without access. A new position still needs preparation. Manual time entry remains available when playback is unavailable.
 
-Preferences, language and appearance are stored in the browser. The server defines media retention and processing limits. Platforms and browser-incompatible codecs use short server-rendered previews. The seek bar shows the complete recording timeline and temporary files are deleted after delivery. Platform links do not require a full recording copy. Platform access restrictions still apply.
+The operator configures limits and the interface reads them from the API. This repository's deployment configuration allows 32 GiB per source and platform fetch per job, 12 hours per range, 24 hours and 32 clips per export, and 16 GiB per output. The local example uses smaller file/storage limits. **Exports and files** lists up to 30 recent jobs, with active work first. Large downloads support HTTP Range and long connections. Sources and results normally expire after 24 hours; active jobs and retained results can keep source media longer. The interface displays the expiry returned by the server.
 
-Compact slider grips retain separate touch targets. The exact boundary time appears while dragging, and keyboard navigation keeps the focused boundary visible. Failed exports explain the cause and recovery action; retrying retains the selected moments.
+## Local development
 
-## Development
-
-Node.js 22 is recommended; the minimum supported version is 20.19. Both the core HTTP API on `127.0.0.1:8080` and its worker must run.
+This section is for collaborators with access to the private website repository. Requires Node.js 22 (minimum 20.19), Docker with Compose, and Git authenticated for this repository. Keep both repositories beside one another. These commands run isolated local PostgreSQL, API and worker services, then the website at `http://localhost:5173`.
 
 ```sh
+git clone https://github.com/Kay0k1/cutmyvideo-core.git core
+git clone https://github.com/Kay0k1/cutmyvideo-web.git web
+cd web
+git -C ../core checkout "$(cat core.version)"
+printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 24)" > .env
+chmod 600 .env
 npm ci
+docker compose --env-file .env -f deploy/compose.dev.yaml up --build -d --wait
 npm run dev
 ```
 
-Vite uses port `5173` and proxies `/api` to the backend. The site, API, media player, and downloads share one origin and an authorized server session.
+Settings are listed in [.env.example](.env.example). If opening the website at `http://127.0.0.1:5173`, set that exact `PUBLIC_ORIGIN` in `.env` and recreate the local API/worker. Vite proxies `/api` to `127.0.0.1:8080`; the website, player and downloads share one origin. The local database has no published port and the API binds to loopback only. Check readiness with:
 
 ```sh
-npm run typecheck
-npm test
-npm run build
+curl --fail http://127.0.0.1:8080/readyz
+docker compose --env-file .env -f deploy/compose.dev.yaml ps
 ```
 
-Browser checks use the actual core and synthetic test videos:
+Stop the services while preserving database/media volumes:
+
+```sh
+docker compose --env-file .env -f deploy/compose.dev.yaml down
+```
+
+If the core already runs manually, both `cutmy server` and `cutmy worker` need the same database/`DATA_DIR` and the website's `PUBLIC_ORIGIN`. When developing the core, keep your modified checkout: `core.version` pins CI, while local checks may exercise your changes.
+
+## Checks
+
+```sh
+npm test
+npm run build
+npm run test:deploy
+```
+
+The build includes TypeScript validation. Browser tests use the actual core and FFmpeg, generate synthetic media, export/decode real MP4/MP3, and verify recovery, cancellation, sessions, keyboard operation and responsive layout. Use a disposable database and media directory with the documented [fixture limits](docs/QA.md#running-the-integrated-checks); the complete suite is not intended for a normal working database.
 
 ```sh
 npx playwright install --with-deps chromium firefox webkit
-npm run test:e2e
+npm run test:e2e -- --project=desktop --project=mobile
 ```
 
-CI retains all five projects: Chromium and Firefox checks run on Linux, and the complete WebKit matrix runs on macOS 15. [Playwright recommends macOS for video playback closest to Safari](https://playwright.dev/docs/browsers#webkit). The same Linux project remains available with `xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --project=layout-webkit --headed`: the GTK/GStreamer stall after seeking remains unresolved, despite verified complete MP4 and byte-range delivery. Moving CI does not fix that Linux issue.
+CI runs unit/build/deployment checks and the complete npm dependency audit, tests PostgreSQL privileges against the actual core, then verifies integration/usability in Chromium/Firefox on Linux and WebKit on macOS. [core.version](core.version) pins the backend; dependencies and images are pinned. CI saves a distributable website build. Linux WebKit has a known GTK/GStreamer seeking instability; the complete CI media matrix runs on macOS. Additional network providers and the three-hour fixture are opt-in. See [QA](docs/QA.md) for evidence and limitations.
 
-The disposable macOS CI environment enables Keyboard Navigation (`AppleKeyboardUIMode=2`) only for `org.webkit.Playwright`, then restores the previous value. This preserves the real Tab-to-slider focus assertion without changing the website. [Apple keyboard-navigation setting](https://support.apple.com/en-my/guide/mac-help/mchlc06d1059/mac), [macOS WebKit behavior in Playwright](https://github.com/microsoft/playwright/issues/41808).
+## Deployment
 
-Run options and verified scenarios are in [docs/QA.md](docs/QA.md). Server deployment and updates are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). The Dockerfile builds static files; a reverse proxy routes `/api` to the core.
+[DEPLOYMENT.md](docs/DEPLOYMENT.md) covers HTTPS, internal networking, limits, backups, monitoring, updates and rollback. Production Compose differs from the local example. The Dockerfile builds static assets; an external reverse proxy routes `/api` to the core. The release helper requires clean repositories and a matching `core.version`, builds from Git archives, verifies service health and rolls back unsuccessful activation while retaining persistent volumes. Running that helper updates its configured server.
 
 ## Structure
 
-- `src/` — editor, player, timeline, API client, translations, and preferences.
-- `docs/UX.md` — interface decisions and primary W3C/GOV.UK guidance.
-- `e2e/` — browser integration checks.
-- `deploy/` — product deployment.
-- `CHANGELOG.md` — change history.
+| Directory | Purpose |
+|---|---|
+| `src/` | Editor, player, timeline, API, translations and preferences |
+| `public/` | Icon, initial appearance and font license |
+| `e2e/` | Real-media browser integration |
+| `deploy/` | Local development and production operations |
+| `docs/` | QA, UX, deployment and measured audits |
+| `.github/` | CI, dependency updates and contribution templates |
 
-This repository contains the product website. Universal processing operations are developed in the public core.
+## Contributing and license
 
-## Supporting development
+Invited collaborators can propose changes: [CONTRIBUTING.md](CONTRIBUTING.md), [issues](https://github.com/Kay0k1/cutmyvideo-web/issues), [CHANGELOG.md](CHANGELOG.md). Report vulnerabilities through [SECURITY.md](SECURITY.md). Code in this private repository uses [MIT](LICENSE); Geologica keeps its separate [SIL Open Font License](public/licenses/geologica.txt).
 
-TRON, Solana, Ethereum, and Bitcoin addresses are available in [Support](https://cutmy.video/?panel=support&lang=en). Copy the address for the intended network and make the transfer in your wallet.
+TRON, Solana, Ethereum and Bitcoin addresses are available in [Support](https://cutmy.video/?panel=support&lang=en). The website copies addresses; transfers happen in your wallet.

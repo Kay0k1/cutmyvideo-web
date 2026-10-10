@@ -1,6 +1,6 @@
 {
   "name": "cutmyvideo-web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -29,5 +29,15 @@
     "typescript": "7.0.2",
     "vite": "8.3.2",
     "vitest": "4.1.11"
-  }
+  },
+  "description": "Product browser editor for cutting video and audio with the open-source cutmyvideo-core",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kay0k1/cutmyvideo-web.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Kay0k1/cutmyvideo-web/issues"
+  },
+  "homepage": "https://cutmy.video"
 }

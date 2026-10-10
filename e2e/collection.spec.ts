@@ -101,22 +101,42 @@ test('bulk duplication and deletion preserve independent clips and an explicitly
   await expect(page.getByRole('checkbox', { name: 'Выбрать фрагмент 1', exact: true })).toBeChecked()
 })
 
-test('the twelve-clip limit prevents partial bulk duplication and still permits clearing the collection', async ({ page }) => {
+test('the server clip limit prevents partial bulk duplication and still permits clearing the collection', async ({ page }) => {
+  const session = await page.request.get(`${api}/session`)
+  expect(session.ok()).toBeTruthy()
+  const maximum = (await session.json()).limits.max_ranges
+  expect(maximum).toBeGreaterThanOrEqual(3)
+  expect(maximum).toBeLessThanOrEqual(128)
   await page.goto('/')
   await uploadThroughUI(page)
   await goToClips(page)
-  for (const count of [2, 4, 8]) {
-    await page.getByRole('button', { name: 'Дублировать выбранные', exact: true }).click()
+  const duplicate = page.getByRole('button', { name: 'Дублировать выбранные', exact: true })
+  const all = page.getByRole('checkbox', { name: 'Выбрать все фрагменты', exact: true })
+  const selectFirst = async (amount: number) => {
+    await all.uncheck()
+    for (let index = 1; index <= amount; index++) await page.getByRole('checkbox', { name: `Выбрать фрагмент ${index}`, exact: true }).check()
+  }
+  const target = Math.floor(maximum / 2) + 1
+  let count = 1
+  while (count * 2 <= target) {
+    await duplicate.click()
+    count *= 2
     await expect(page.locator('.range-list > li')).toHaveCount(count)
   }
-  await expect(page.getByRole('button', { name: 'Дублировать выбранные', exact: true })).toBeDisabled()
-  await page.getByRole('checkbox', { name: 'Выбрать все фрагменты', exact: true }).uncheck()
-  for (let index = 1; index <= 4; index++) await page.getByRole('checkbox', { name: `Выбрать фрагмент ${index}`, exact: true }).check()
-  await page.getByRole('button', { name: 'Дублировать выбранные', exact: true }).click()
-  await expect(page.locator('.range-list > li')).toHaveCount(12)
+  if (count < target) {
+    await selectFirst(target - count)
+    await duplicate.click()
+    await expect(page.locator('.range-list > li')).toHaveCount(target)
+  }
+  await all.check()
+  await expect(duplicate).toBeDisabled()
+  await expect(page.locator('#clip-limit-hint')).toContainText(String(maximum))
+  await selectFirst(maximum - target)
+  await duplicate.click()
+  await expect(page.locator('.range-list > li')).toHaveCount(maximum)
   await expect(page.getByRole('button', { name: 'Добавить фрагмент', exact: true })).toBeDisabled()
-  await expect(page.getByRole('button', { name: 'Дублировать выбранные', exact: true })).toBeDisabled()
-  await page.getByRole('checkbox', { name: 'Выбрать все фрагменты', exact: true }).check()
+  await expect(duplicate).toBeDisabled()
+  await all.check()
   await page.getByRole('button', { name: 'Удалить выбранные', exact: true }).click()
   await expect(page.getByText('Пока нет фрагментов', { exact: true })).toBeVisible()
 })

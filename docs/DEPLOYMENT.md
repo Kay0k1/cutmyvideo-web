@@ -1,7 +1,7 @@
 # Deployment and operation
 
-The product lives in this private repository. The reusable processing engine is
-in the public `Kay0k1/cutmyvideo-core` repository. No deployment passwords, SSH keys,
+The product frontend and deployment tooling live in this repository. The reusable
+processing engine lives in `Kay0k1/cutmyvideo-core`. No deployment passwords, SSH keys,
 GitHub credentials, or production environment files belong in either checkout.
 
 ## Layout
@@ -99,9 +99,10 @@ previews, thumbnails and downloads check the owner; another session receives 404
 without learning whether the resource exists. Clearing the cookie loses access to
 that owner's files. Browser draft storage alone cannot recover ownership.
 
-Current defaults allow twelve ranges, ten minutes per range, one hour
-of selected material per job, three active jobs per owner and thirty-two active
-jobs globally. Source preparation has four global slots and one slot per owner.
+Current core defaults allow thirty-two ranges, twelve hours per range,
+twenty-four hours of selected material per job, three active jobs per owner and
+thirty-two active jobs globally. Local development deliberately uses smaller
+file/storage limits. Source preparation has four global slots and one slot per owner.
 Mutation admission is twenty requests per minute per client IP, including uploads,
 source imports, exports and cancellation. Shared networks also share that IP limit.
 All authenticated requests additionally share a 1,200-per-minute IP ceiling;
@@ -114,16 +115,16 @@ Sources and results have a 24-hour retention target. Cleanup runs in the worker
 every five minutes; independent cron also calls `cutmy maintenance` inside API
 when the worker is unavailable. Active jobs pin resources. This is not an exact
 deletion deadline. Owner storage admission covers staged sources and thumbnails
-(2 GiB by default); exported files count toward the global media admission
-limit configured by `MAX_STORAGE_BYTES` (10 GiB by default, 80 GiB on the new
-production host). Production source uploads allow 32 GiB and 2 hours; owner source storage allows 64 GiB. Individual outputs and selected remote interval transfers remain capped at 1 GiB. Shared database
+(64 GiB by default); exported files count toward the global media admission
+limit configured by `MAX_STORAGE_BYTES` (96 GiB by default). The effective
+production limit comes from persistent operator configuration. Production source uploads allow 32 GiB and 2 hours; owner source storage allows 64 GiB. Production outputs allow 16 GiB per file and selected remote transfers allow 32 GiB per job; read the deployed configuration for the effective values. Shared database
 reservations coordinate admission/publication/claims across processes. Jobs
 waiting for disk enter `waiting_storage`, bounded by `STORAGE_WAIT_TIMEOUT`
 (30 minutes). Waiting jobs count toward owner/global active caps. Claims rotate
 owners; `WORKER_CONCURRENCY` defaults to one and should be measured under the
 worker's 3 CPU/4 GiB limit before increasing. `STORAGE_SAFETY_BYTES` sets a
 physical safety floor (512 MiB). Activation derives the edge upload cap from
-`MAX_SOURCE_BYTES + 2 MiB`. Window previews reserve at most 144 MiB, deliver a 30-second 480p MP4 and remove temporary bytes after delivery. These are application limits, not a filesystem quota or a guarantee
+`MAX_SOURCE_BYTES + 2 MiB`. Window previews reserve at most 144 MiB while preparing a 30-second 480p MP4. Prepared files become an owner-protected reusable cache capped at 512 MiB / 64 entries, with cleanup after 30 minutes without access. Browser windows are separately bounded to 8 entries / 64 MiB. These are application limits, not a filesystem quota or a guarantee
 that the operating-system disk cannot fill. Keep capacity for database files,
 rotated logs, images and backups outside the media budget.
 

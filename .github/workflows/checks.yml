@@ -1,13 +1,19 @@
 name: Product checks
 on:
+  workflow_dispatch:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 permissions:
   contents: read
+concurrency:
+  group: product-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -18,7 +24,18 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm run test:deploy
-      - run: npm audit --omit=dev
+      - run: npm audit
+      - name: Validate deployment shell scripts and local Compose
+        run: |
+          for script in deploy/*.sh; do bash -n "$script"; done
+          POSTGRES_PASSWORD=ci_config_only docker compose -f deploy/compose.dev.yaml config --quiet
+      - name: Save distributable website
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cutmyvideo-web-dist
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error
 
   database-access:
     runs-on: ubuntu-24.04
@@ -36,7 +53,7 @@ jobs:
           path: core
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.2'
           cache-dependency-path: core/go.sum
       - name: Build actual maintenance command
         working-directory: core
@@ -64,6 +81,7 @@ jobs:
 
   integration:
     runs-on: ubuntu-24.04
+    timeout-minutes: 35
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
       options: --init --ipc=host
@@ -72,7 +90,7 @@ jobs:
         shell: bash
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
         env:
           POSTGRES_USER: cutmy
           POSTGRES_PASSWORD: cutmy_ci_only
@@ -85,7 +103,11 @@ jobs:
       DATA_DIR: /tmp/cutmy-ci-data
       PUBLIC_ORIGIN: http://127.0.0.1:5173
       COOKIE_SECURE: 'false'
-      MUTATIONS_PER_MINUTE: '200'
+      MUTATIONS_PER_MINUTE: '10000'
+      MAX_OUTPUT_BYTES: '16777216'
+      MAX_SOURCE_BYTES: '67108864'
+      MAX_STORAGE_BYTES: '2147483648'
+      MAX_OWNER_BYTES: '268435456'
       CUTMY_E2E_URL: http://127.0.0.1:5173
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     steps:
@@ -103,7 +125,7 @@ jobs:
           path: core
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.2'
           cache-dependency-path: core/go.sum
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
@@ -162,7 +184,11 @@ jobs:
       DATABASE_URL: postgres://cutmy:cutmy_ci_only@127.0.0.1:55434/cutmy?sslmode=disable
       PUBLIC_ORIGIN: http://127.0.0.1:5173
       COOKIE_SECURE: 'false'
-      MUTATIONS_PER_MINUTE: '200'
+      MUTATIONS_PER_MINUTE: '10000'
+      MAX_OUTPUT_BYTES: '16777216'
+      MAX_SOURCE_BYTES: '67108864'
+      MAX_STORAGE_BYTES: '2147483648'
+      MAX_OWNER_BYTES: '268435456'
       CUTMY_E2E_URL: http://127.0.0.1:5173
       HOMEBREW_NO_AUTO_UPDATE: '1'
       HOMEBREW_NO_INSTALL_CLEANUP: '1'
@@ -189,7 +215,7 @@ jobs:
           path: core
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.27.1'
+          go-version: '1.27.2'
           cache-dependency-path: core/go.sum
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:

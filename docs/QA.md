@@ -1,4 +1,4 @@
-# MVP acceptance and UX review
+# Acceptance and UX review
 
 ## UX refinement — 8 October 2026
 
@@ -51,19 +51,18 @@ The matrix budget is now fifteen minutes; individual behavior assertions retain
 their fifteen-second deadline. This changes the test runner's budget only.
 The CI jobs now include all three usability projects alongside their matrices.
 
-The MVP is a working manual media tool. Reviews must exercise the real Go API
+The product is a working manual media tool. Reviews must exercise the real Go API
 and real FFmpeg outputs; screenshots or mocked API responses alone are not proof.
 
 ## Acceptance checklist
 
 - The website accepts a public video-page or HTTPS media-file link, or a local
-  MP4 with a video stream. Known providers are identified honestly; recognition
+  MP4, MOV, MKV or WebM with a video stream. Known providers are identified honestly; recognition
   is distinct from a successful import or export. Watch, share and Shorts links
   resolve to the same real YouTube video. Channels, collections, live streams and
   sources requiring access must explain the restriction rather than create fake
-  media. Non-MP4
-  files, including a renamed WAV claiming `video/mp4`, fail the browser's container
-  check before an upload. An audio-only MP4 does not replace an existing video.
+  media. Unsupported containers, including a renamed WAV claiming `video/mp4`,
+  fail the browser's container check before an upload. An audio-only MP4 does not replace an existing video.
   Invalid, oversized or unavailable inputs explain how to try another source.
 - The first screen shows source choices. The four steps are Video, Moment, Clips
   and Export. The moment screen offers the player, handles and preview; precise

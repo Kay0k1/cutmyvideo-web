@@ -1,0 +1,70 @@
+# Isolated local API/worker for `npm run dev`; production uses compose.yaml.
+name: cutmyvideo-dev
+
+services:
+  postgres:
+    image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
+    environment:
+      POSTGRES_USER: cutmy
+      POSTGRES_DB: cutmy
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - dev_database:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U cutmy -d cutmy"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    image: cutmyvideo-core:dev
+    build:
+      context: ../../core
+    command: [server]
+    environment: &core-env
+      DATABASE_URL: postgres://cutmy:${POSTGRES_PASSWORD}@postgres:5432/cutmy?sslmode=disable
+      DATA_DIR: /data
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost:5173}
+      COOKIE_SECURE: "false"
+      TRUST_PROXY: "false"
+      MAX_SOURCE_BYTES: "1073741824"
+      MAX_FETCH_BYTES: "1073741824"
+      MAX_OUTPUT_BYTES: "1073741824"
+      MAX_STORAGE_BYTES: "10737418240"
+      MAX_OWNER_BYTES: "2147483648"
+      MAX_RANGES: "32"
+      MAX_RANGE_MS: "43200000"
+      MAX_JOB_MS: "86400000"
+      FFMPEG_THREADS: "2"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - dev_media:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, /usr/local/bin/cutmy, healthcheck]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  worker:
+    image: cutmyvideo-core:dev
+    command: [worker]
+    environment: *core-env
+    volumes:
+      - dev_media:/data
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, /usr/local/bin/cutmy, worker-healthcheck]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    stop_grace_period: 20s
+
+volumes:
+  dev_database:
+  dev_media:

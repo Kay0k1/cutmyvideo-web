@@ -4,6 +4,26 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+## 0.2.0 — 2026-10-10
+
+### Added
+- MIT license, contributor/security policies, bilingual issue forms and pull request guidance.
+- Reproducible local database/API/worker Compose stack with the website origin and isolated volumes.
+- CI concurrency, bounded jobs, distributable build artifacts, local Compose validation, and explicit fixture storage limits.
+- Parallel background exports and an owner-protected recent-job browser with cancellation, retained files and expiry notices.
+- Long-recording limits obtained from the API; MP4, MOV, MKV and WebM uploads, bounded 30-second preview windows, browser prefetch/cache and reusable server previews.
+
+### Fixed
+- Exercise the server-advertised clip limit in real browser collection checks instead of assuming twelve clips, verify that background exports keep source entry usable, and check the current preview fallback when the YouTube SDK fails.
+
+### Changed
+- Document the working product, collaborator development, source restrictions, current preview/retention behavior and the private website/public MIT core boundary in both languages.
+- Record website version and license metadata for the private 0.2.0 release.
+
+## Initial development
+
+The entries below describe development before the first tagged website release.
+
 ### Added
 - Restore the last clip deletion with original order, labels, selection and boundaries; explain bulk-copy limits and associate upload errors with the chooser.
 - Compact, theme-aware encoding progress measured from actual processed media time, weighted across selected clips, with accessible labels, retry resets and backward compatibility for older jobs.

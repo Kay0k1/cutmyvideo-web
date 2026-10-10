@@ -115,7 +115,7 @@ test('replacing a source resets selections belonging to the old video', async ({
   await expect(page.locator('.range-list > li')).toHaveCount(1)
 })
 
-test('an active UI export survives reload and can be cancelled', async ({ page }) => {
+test('an active UI export survives reload, keeps source entry usable and can be cancelled', async ({ page }) => {
   await page.goto('/')
   await uploadThroughUI(page)
   for (let i = 0; i < 9; i++) await addClip(page)
@@ -129,7 +129,7 @@ test('an active UI export survives reload and can be cancelled', async ({ page }
   await expect(cancel).toBeVisible()
   await expect.poll(async () => (await (await page.request.get(`${api}/jobs/${id}`)).json()).status, { intervals: [100, 100, 200] }).toBe('running')
   await goToSource(page)
-  await expect(page.getByLabel('Ссылка на видео', { exact: true })).toBeDisabled()
+  await expect(page.getByLabel('Ссылка на видео', { exact: true })).toBeEnabled()
   await goToExport(page)
   await page.reload()
   await expect(cancel).toBeVisible()

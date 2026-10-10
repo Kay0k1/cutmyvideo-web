@@ -1,0 +1,20 @@
+name: Feature request / Предложение
+description: Describe a useful improvement / Полезное улучшение
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What task is difficult today?
+      description: Explain the workflow and who needs the change. Russian and English are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or examples
