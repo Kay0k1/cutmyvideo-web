@@ -221,7 +221,7 @@ test('a real public platform source exposes honest preview availability and expo
     await expect(page.getByRole('button', { name: 'Preview clip', exact: true })).toBeDisabled()
     await expect(page.getByLabel('Start', { exact: true })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Watch the original video', exact: true })).toHaveAttribute('href', sourcePage.href)
-  } else if (source.preview_kind === 'native') {
+  } else if (source.preview_kind === 'native' || source.preview_kind === 'window') {
     await expect(page.locator('video')).toBeVisible()
     await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).duration)).toBeGreaterThan(6)
   } else {
@@ -256,6 +256,12 @@ test('a real public platform source exposes honest preview availability and expo
   await page.getByLabel('Start', { exact: true }).press('Tab')
   await page.getByLabel('End', { exact: true }).fill(time(end))
   await page.getByLabel('End', { exact: true }).press('Tab')
+  if (source.preview_kind === 'window') {
+    await page.getByRole('button', { name: 'Preview clip', exact: true }).click()
+    await expect(page.getByText('Preparing preview…', { exact: true })).toHaveCount(0, { timeout: 120000 })
+    await expect.poll(() => page.locator('.window-player video').evaluate((element: HTMLVideoElement) => element.paused), { timeout: 15000 }).toBe(false)
+    await page.getByRole('button', { name: 'Stop preview', exact: true }).click()
+  }
   await goToExport(page)
   const created = page.waitForResponse(result => result.request().method() === 'POST' && result.url().endsWith(`${api}/jobs`))
   await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
