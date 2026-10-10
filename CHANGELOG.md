@@ -4,6 +4,13 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+## 0.2.1 — 2026-10-10
+
+### Fixed
+- Keep whole-video selection and retained export downloads at least 44 pixels tall for touch interaction.
+- Allow the timeline zoom label to wrap on narrow screens with text enlarged to 200%, verified across browser engines.
+- Pin the core patch correcting initial MKV keyframes and HLS continuity handling across FFmpeg versions.
+
 ## 0.2.0 — 2026-10-10
 
 ### Added
