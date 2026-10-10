@@ -2,6 +2,13 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  'Сервис готовится к работе.': 'The service is getting ready.',
+  'Сервис временно недоступен.': 'The service is temporarily unavailable.',
+  'Сервис временно недоступен. Экспорт мог быть принят. Проверьте «Экспорты и файлы» перед повторной отправкой.': 'The service is temporarily unavailable. The export may have been accepted. Check Exports and files before submitting it again.',
+  'Сервис готовится к работе. Подождите немного и повторите действие.': 'The service is getting ready. Wait a little and try again.',
+  'Сервис временно недоступен. Подождите немного и повторите действие.': 'The service is temporarily unavailable. Wait a little and try again.',
+  'Сервис временно недоступен. Экспорт мог быть принят. Проверьте «Экспорты и файлы» перед повторной отправкой. Подождите немного и повторите действие.': 'The service is temporarily unavailable. The export may have been accepted. Check Exports and files before submitting it again. Wait a little and try again.',
+  'Повторите действие не раньше чем через {seconds} с.': 'Try again in at least {seconds} s.',
   "Не удалось загрузить файл. Выберите один видеофайл и попробуйте ещё раз.": "Could not upload the file. Choose one video file and try again.",
   "Очередь экспорта заполнена. Дождитесь завершения одного задания или отмените его в списке «Экспорты и файлы».": "The export queue is full. Wait for a job to finish or cancel it in Exports and files.",
   "Файл слишком большой. Выберите «Точные границы» и 720p либо разделите запись на несколько фрагментов.": "The output is too large. Choose Exact boundaries and 720p, or split the recording into separate clips.",
@@ -448,7 +455,14 @@ export const english: Record<string, string> = {
 };
 
 export function translate(text: string, locale: Locale, values?: Record<string, string | number>): string {
-  let output = locale === 'en' ? english[text.trim()] ?? text.trim() : text.trim();
+  const source = text.trim();
+  let output = locale === 'en' ? english[source] ?? source : source;
+  // API errors are stored in the source language, so the server's wait remains
+  // translatable when the user switches languages after a failed request.
+  const retry = locale === 'en' && source.match(/^(.*) Повторите действие не раньше чем через (\d{1,5}) с\.$/);
+  if (retry && Object.hasOwn(english, retry[1])) {
+    output = `${english[retry[1]]} ${english['Повторите действие не раньше чем через {seconds} с.'].replace('{seconds}', retry[2])}`;
+  }
   for (const [key, value] of Object.entries(values ?? {})) output = output.replaceAll(`{${key}}`, String(value));
   return output;
 }

@@ -28,6 +28,45 @@ describe('safe API error messages', () => {
     expect(translate(message, 'en')).not.toMatch(/[А-Яа-яЁё]/);
     expect(message).not.toContain('Raw provider diagnostic');
   });
+
+  it.each([
+    ['storage_initializing', 'source', undefined, 'The service is getting ready. Wait a little and try again.'],
+    ['storage_initializing', 'source', 2, 'The service is getting ready. Try again in at least 2 s.'],
+    ['database_unavailable', 'source', undefined, 'The service is temporarily unavailable. Wait a little and try again.'],
+    ['database_unavailable', 'export', undefined, 'The service is temporarily unavailable. The export may have been accepted. Check Exports and files before submitting it again. Wait a little and try again.'],
+    ['database_unavailable', 'export', 3, 'The service is temporarily unavailable. The export may have been accepted. Check Exports and files before submitting it again. Try again in at least 3 s.'],
+  ] as const)('explains %s safely for %s and remains translatable after a language change', (code, action, seconds, expected) => {
+    const message = errorMessage(new ApiError(code, 'https://private.example/?token=secret', 503, seconds), action);
+    expect(translate(message, 'en')).toBe(expected);
+    expect(translate(message, 'ru')).toBe(message);
+    expect(message).not.toMatch(/https|secret|файлом|MP4/);
+  });
+});
+
+describe('server retry guidance', () => {
+  it.each([
+    ['2', 2], ['0', 0], [' 5 ', 5], ['86400', 86400],
+    [null, undefined], ['-1', undefined], ['1.5', undefined], ['later', undefined],
+    ['86401', undefined], ['999999999999999999', undefined],
+  ])('preserves usable delta-seconds %s without automatically repeating a mutation', async (header, expected) => {
+    const headers = header === null ? undefined : { 'Retry-After': header };
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ error: { code: 'storage_initializing', message: 'Preparing storage' } }, { status: 503, headers }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(api.open('https://video.example/recording.mp4', new AbortController().signal)).rejects.toMatchObject({ code: 'storage_initializing', httpStatus: 503, retryAfterSeconds: expected });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an uncertain export as an error and lets a deliberate retry reuse its idempotency key', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ error: { code: 'database_unavailable', message: 'Unavailable' } }, { status: 503 }))
+      .mockResolvedValueOnce(Response.json({ id: 'job_existing', status: 'queued' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const create = () => api.createJob('src_a', [{ id: 'clip_a', start_ms: 0, end_ms: 1000, label: '' }], { format: 'mp4', quality: '720p', cut_mode: 'accurate' }, 'original-attempt');
+    await expect(create()).rejects.toMatchObject({ code: 'database_unavailable', httpStatus: 503 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await expect(create()).resolves.toMatchObject({ id: 'job_existing' });
+    for (const [, options] of fetchMock.mock.calls) expect(options.headers['Idempotency-Key']).toBe('original-attempt');
+    expect(fetchMock.mock.calls[0][1].body).toBe(fetchMock.mock.calls[1][1].body);
+  });
 });
 
 describe('session initialization', () => {
@@ -106,11 +145,31 @@ class UploadXHR {
   upload: { onprogress: ((event: { loaded: number; total: number; lengthComputable: boolean }) => void) | null } = { onprogress: null };
   onload: (() => void) | null = null; onerror: (() => void) | null = null; onabort: (() => void) | null = null; ontimeout: (() => void) | null = null;
   status = 201; response: unknown = { id: 'src_uploaded' }; responseType = ''; timeout = 0;
+  retryAfter: string | null = null;
+  getResponseHeader = vi.fn(() => this.retryAfter);
   open = vi.fn(); send = vi.fn(); abort = vi.fn(() => this.onabort?.());
   constructor() { UploadXHR.current = this; }
 }
 
 describe('native uploads with bounded progress work', () => {
+  it('retains upload Retry-After and retries the same File only when the caller requests it', async () => {
+    vi.stubGlobal('XMLHttpRequest', UploadXHR);
+    const file = new File(['media'], 'kept.mp4', { type: 'video/mp4' });
+    const first = api.upload(file, new AbortController().signal);
+    const rejected = expect(first).rejects.toMatchObject({ code: 'storage_initializing', httpStatus: 503, retryAfterSeconds: 2 });
+    const failed = UploadXHR.current;
+    failed.status = 503; failed.response = { error: { code: 'storage_initializing', message: 'Preparing storage' } }; failed.retryAfter = '2';
+    failed.onload?.(); await rejected;
+    expect(failed.getResponseHeader).toHaveBeenCalledWith('Retry-After');
+    expect(failed.send).toHaveBeenCalledOnce();
+    expect(UploadXHR.current).toBe(failed);
+    const repeated = api.upload(file, new AbortController().signal);
+    const successful = UploadXHR.current;
+    expect(successful).not.toBe(failed);
+    for (const request of [failed, successful]) expect((request.send.mock.calls[0][0] as FormData).get('file')).toBe(file);
+    successful.onload?.(); await expect(repeated).resolves.toMatchObject({ id: 'src_uploaded' });
+  });
+
   it('passes the original File in FormData, throttles percentage updates and reports the response', async () => {
     vi.stubGlobal('XMLHttpRequest', UploadXHR);
     const file = new File(['media'], 'file.mp4', { type: 'video/mp4' });
