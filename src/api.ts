@@ -51,7 +51,7 @@ function upload(file: File, signal: AbortSignal, onProgress?: (progress: UploadP
     signal.addEventListener('abort', abort, { once: true });
     xhr.open('POST', `${base}/uploads`);
     xhr.responseType = 'json';
-    xhr.timeout = 10 * 60 * 1000;
+    xhr.timeout = 123 * 60 * 1000;
     xhr.upload.onprogress = event => {
       if (settled || signal.aborted || !Number.isFinite(event.loaded)) return;
       const total = event.lengthComputable && event.total > 0 ? event.total : null;
@@ -89,7 +89,7 @@ export const api = {
   source: (id: string, signal?: AbortSignal) => request<Source>(`/sources/${encodeURIComponent(id)}`, { signal }),
   open: (url: string, signal: AbortSignal) => request<Source>('/sources', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }), signal,
-  }, 150000),
+  }, 123 * 60 * 1000),
   upload,
   deleteSource: (id: string) => request<void>(`/sources/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   createJob: (source_id: string, ranges: ClipRange[], output: OutputSettings, key: string) => request<Job>('/jobs', {

@@ -19,6 +19,9 @@ x-core: &core
     XDG_CACHE_HOME: /tmp/cache
     MAX_STORAGE_BYTES: "${MAX_STORAGE_BYTES:-10737418240}"
     MAX_SOURCE_BYTES: "${MAX_SOURCE_BYTES:-1073741824}"
+    MAX_FETCH_BYTES: "${MAX_FETCH_BYTES:-1073741824}"
+    SOURCE_TIMEOUT: "${SOURCE_TIMEOUT:-2m}"
+    UPLOAD_TIMEOUT: "${UPLOAD_TIMEOUT:-2h}"
     MAX_OUTPUT_BYTES: "${MAX_OUTPUT_BYTES:-1073741824}"
     MAX_OWNER_BYTES: "${MAX_OWNER_BYTES:-2147483648}"
     STORAGE_SAFETY_BYTES: "${STORAGE_SAFETY_BYTES:-536870912}"
@@ -76,7 +79,7 @@ services:
       timeout: 3s
       retries: 10
       start_period: 15s
-    mem_limit: 512m
+    mem_limit: 1536m
     cpus: 1
     pids_limit: 256
     networks:

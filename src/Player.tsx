@@ -2,8 +2,8 @@ import { useLanguage } from './Language';
 import { forwardRef, memo, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { Source } from './types';
 import { Icon } from './Icons';
-import { providerName } from './sourceInput';
 import './Player.css';
+import { WindowPlayer } from './WindowPlayer';
 
 export interface PlayerControls { seek(ms: number): void; play(): void; pause(): void; toggle(): void; }
 interface YTPlayer {
@@ -86,17 +86,15 @@ export const Player = memo(forwardRef<PlayerControls, {
   const host = useRef<HTMLDivElement>(null);
   const youtube = useRef<YoutubeInstance | null>(null);
   const callbacks = useRef({ onTime, onAvailable });
-  callbacks.current = { onTime, onAvailable };
+  const lastTime = useRef({ id: source?.id, ms: 0 });
+  if (lastTime.current.id !== source?.id) lastTime.current = { id: source?.id, ms: 0 };
+  callbacks.current = { onTime: ms => { lastTime.current.ms = ms; onTime(ms); }, onAvailable };
   const pollingActive = useRef(active);
   pollingActive.current = active;
-  const [error, setError] = useState(false);
-  const provider = providerName(source?.provider);
+  const [serverPreview, setServerPreview] = useState(false);
+  const windowPlayer = useRef<PlayerControls>(null);
+  const useWindow = serverPreview || (!!source && !source.preview_url && !embedId(source.embed_url));
   const poster = source && source.thumbnail_url === `/api/v1/sources/${encodeURIComponent(source.id)}/thumbnail` ? source.thumbnail_url : undefined;
-  let pageUrl: string | undefined;
-  try {
-    const page = source?.source_url ? new URL(source.source_url) : null;
-    if (page?.protocol === 'https:' && !page.username && !page.password && (!page.port || page.port === '443')) pageUrl = page.href;
-  } catch { /* A malformed source link must not become a navigation target. */ }
 
   function readyCommand(command: (player: YTPlayer) => void) {
     const instance = youtube.current;
@@ -108,20 +106,23 @@ export const Player = memo(forwardRef<PlayerControls, {
 
   useImperativeHandle(ref, () => ({
     seek: ms => {
+      if (windowPlayer.current) { windowPlayer.current.seek(ms); return; }
       if (video.current) video.current.currentTime = ms / 1000;
       const instance = youtube.current;
       if (instance && !instance.ready && !instance.failed && !instance.disposed) instance.pendingSeek = ms;
       else readyCommand(player => player.seekTo(ms / 1000, true));
       callbacks.current.onTime(ms);
     },
-    play: () => { void video.current?.play().catch(() => undefined); readyCommand(player => player.playVideo()); },
+    play: () => { if (windowPlayer.current) { windowPlayer.current.play(); return; } void video.current?.play().catch(() => undefined); readyCommand(player => player.playVideo()); },
     pause: () => {
+      if (windowPlayer.current) { windowPlayer.current.pause(); return; }
       video.current?.pause();
       const instance = youtube.current;
       if (instance && !instance.ready && !instance.failed && !instance.disposed) instance.pendingPause = true;
       else readyCommand(player => player.pauseVideo());
     },
     toggle: () => {
+      if (windowPlayer.current) { windowPlayer.current.toggle(); return; }
       if (video.current) { if (video.current.paused) void video.current.play().catch(() => undefined); else video.current.pause(); }
       readyCommand(player => { if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo(); });
     },
@@ -131,7 +132,7 @@ export const Player = memo(forwardRef<PlayerControls, {
 
   useEffect(() => {
     const visibility = () => {
-      if (document.hidden) { video.current?.pause(); readyCommand(player => player.pauseVideo()); }
+      if (document.hidden) { windowPlayer.current?.pause(); video.current?.pause(); readyCommand(player => player.pauseVideo()); }
       youtube.current?.syncPolling();
     };
     document.addEventListener('visibilitychange', visibility);
@@ -139,7 +140,11 @@ export const Player = memo(forwardRef<PlayerControls, {
   }, []);
 
   useEffect(() => {
-    setError(false);
+    setServerPreview(false);
+  }, [source?.id]);
+
+  useEffect(() => {
+    if (useWindow) return;
     callbacks.current.onAvailable(false);
     const id = embedId(source?.embed_url ?? null);
     if (!id || source?.preview_url || !host.current) return;
@@ -158,7 +163,7 @@ export const Player = memo(forwardRef<PlayerControls, {
       if (instance.disposed || youtube.current !== instance) return;
       instance.failed = true; instance.ready = false; instance.pendingSeek = null; instance.pendingPause = false;
       window.clearInterval(timer); timer = undefined;
-      setError(true); callbacks.current.onAvailable(false);
+      setServerPreview(true); callbacks.current.onAvailable(false);
     } };
     youtube.current = instance;
     const element = document.createElement('div');
@@ -197,7 +202,7 @@ export const Player = memo(forwardRef<PlayerControls, {
         try { instance.player.destroy(); } catch { /* The instance is already detached from application state. */ }
       }
     };
-  }, [source?.id, source?.embed_url, source?.preview_url]);
+  }, [source?.id, source?.embed_url, source?.preview_url, useWindow]);
 
   if (!source) return <div className="player-empty">
     <div className="empty-cut"><Icon name="cut" size={36} /></div>
@@ -207,20 +212,11 @@ export const Player = memo(forwardRef<PlayerControls, {
   </div>;
 
   return <div className="player-frame">
-    {source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
+    {useWindow ? <WindowPlayer key={source.id} ref={windowPlayer} source={source} active={active} poster={poster} initialPosition={lastTime.current.ms} onTime={ms => callbacks.current.onTime(ms)} onAvailable={onAvailable} /> : source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
       onLoadedMetadata={() => callbacks.current.onAvailable(true)}
       onTimeUpdate={() => callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000))}
-      onError={() => { setError(true); callbacks.current.onAvailable(false); }} />
-      : embedId(source.embed_url) ? <div ref={host} className="youtube-player" />
-      : <div className={`player-unavailable platform-preview${poster ? ' has-poster' : ''}`}>
-        {poster && <img className="platform-poster" src={poster} alt="" loading="lazy" onError={event => { event.currentTarget.hidden = true; }} />}
-        <div className="platform-preview-copy">
-          <span className="platform-preview-provider">{provider ? t(provider) : t('Видео по ссылке')}</span>
-          <h2>{t('Видео открыто')}</h2>
-          <p>{t('У этого источника нет встроенного предпросмотра. Задайте начало и конец по таймкодам.')}</p>
-          {pageUrl && <a className="platform-source-link" href={pageUrl} target="_blank" rel="noopener noreferrer">{t('Посмотреть исходное видео')}<Icon name="link" size={15} /></a>}
-        </div>
-      </div>}
-    {error && <div className="player-error" role="status">{t("Не удалось открыть плеер. Вы можете задать границы по таймкодам и вырезать фрагмент.")}</div>}
+      onError={() => { setServerPreview(true); callbacks.current.onAvailable(false); }} />
+      : <div ref={host} className="youtube-player" />}
+
   </div>;
 }));

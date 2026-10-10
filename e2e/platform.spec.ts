@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test'
+import { readFileSync } from 'node:fs'
 import { api, goToExport, goToSource, probeDownloadedFile, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
 
 type YoutubeProbe = { commands: string[]; polls: number; destroyed: boolean; throwDestroy: boolean; throwSeek: boolean; destroy?: () => void; ready(): void; fail(): void }
 type YoutubeProbeWindow = Window & { __youtubeProbe: { instances: YoutubeProbe[] } }
 
 test('YouTube navigation and controls wait for readiness and ignore replaced or failed players', async ({ page }) => {
+  await page.route(`**${api}/sources/*/preview?*`, route => route.fulfill({ contentType: 'video/mp4', body: readFileSync(process.env.CUTMY_E2E_MEDIA!) }))
   const pageErrors: string[] = []
   page.on('pageerror', error => pageErrors.push(error.message))
   await page.clock.install()
@@ -126,15 +128,15 @@ test('YouTube navigation and controls wait for readiness and ignore replaced or 
   await preview.click()
   await expect(page.getByRole('button', { name: 'Остановить просмотр', exact: true })).toBeEnabled()
   await fail(1)
-  await expect(preview).toBeDisabled()
-  await expect(page.getByText('Не удалось открыть плеер.', { exact: false })).toBeVisible()
+  await expect(preview).toBeEnabled()
+  await expect(page.locator('.window-player')).toBeVisible()
   const failed = await snapshot(1)
   await page.locator('.trim-track').click({ position: { x: 80, y: 4 } })
   await goToSource(page)
   await stepButton(page, 2).click()
   await ready(1)
   await page.clock.runFor(300)
-  await expect(preview).toBeDisabled()
+  await expect(preview).toBeEnabled()
   expect((await snapshot(1)).polls).toBe(failed.polls)
   expect((await snapshot(1)).commands).toEqual(failed.commands)
   await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:00.100')
@@ -181,8 +183,8 @@ test('YouTube navigation and controls wait for readiness and ignore replaced or 
   await expect.poll(() => page.evaluate(() => (window as YoutubeProbeWindow).__youtubeProbe.instances.length)).toBe(1)
   await page.evaluate(() => { (window as YoutubeProbeWindow).__youtubeProbe.instances[0].throwSeek = true })
   await ready(0)
-  await expect(preview).toBeDisabled()
-  await expect(page.getByText('Не удалось открыть плеер.', { exact: false })).toBeVisible()
+  await expect(preview).toBeEnabled()
+  await expect(page.locator('.window-player')).toBeVisible()
   await page.clock.runFor(300)
   expect((await snapshot(0)).polls).toBe(0)
   expect(pageErrors).toEqual([])
@@ -368,3 +370,71 @@ test('playback coalesces draft writes, flushes the latest position and suspends 
   await showExactTimes(page)
   expect(Number(await page.locator('#overview').getAttribute('value'))).toBe(current)
 })
+
+for (const mode of ['platform', 'codec fallback'] as const) {
+  test(`window preview: ${mode} seeks into hour eight, retries, and stops at the selected end`, async ({ page }) => {
+    const requests: number[] = []
+    const source = {
+      id: 'src_window_preview', title: 'Nine-hour recording', kind: mode === 'platform' ? 'platform' : 'upload',
+      provider: 'twitch', duration_ms: 9 * 3600000, preview_kind: mode === 'platform' ? 'window' : 'native',
+      preview_url: mode === 'platform' ? null : `${api}/sources/src_window_preview/media`, embed_url: null, thumbnail_url: null,
+    }
+    await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
+    await page.route(`**${api}/sources`, route => route.fulfill({ status: 201, json: source }))
+    await page.route(`**${api}/sources/${source.id}`, route => route.fulfill({ json: source }))
+    await page.route(`**${api}/sources/${source.id}/media`, route => route.fulfill({ contentType: 'video/mp4', body: 'unsupported media' }))
+    let failNext = false
+    await page.route(`**${api}/sources/${source.id}/preview?*`, route => {
+      requests.push(Number(new URL(route.request().url()).searchParams.get('start_ms')))
+      if (failNext) { failNext = false; return route.fulfill({ status: 422, json: { error: { code: 'platform_unavailable' } } }) }
+      return route.fulfill({ contentType: 'video/mp4', body: readFileSync(process.env.CUTMY_E2E_MEDIA!) })
+    })
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    await page.goto('/')
+    await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://www.twitch.tv/videos/123456789')
+    await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
+    await expect(page.locator('.window-player')).toBeVisible()
+    const video = page.locator('.window-player video')
+    await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.readyState)).toBeGreaterThan(0)
+    const seek = page.getByRole('slider', { name: 'Позиция в видео', exact: true })
+    await seek.evaluate(el => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, '28802000')
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await expect.poll(() => requests.at(-1)).toBe(28800000)
+    await expect(page.getByText('Готовим предпросмотр…', { exact: true })).toHaveCount(0)
+    await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeCloseTo(2, 1)
+    await expect(seek).toHaveValue('28802000')
+    await showExactTimes(page)
+    await page.getByLabel('Конец', { exact: true }).fill('08:00:04.000')
+    await page.getByLabel('Конец', { exact: true }).press('Tab')
+    await page.getByLabel('Начало', { exact: true }).fill('08:00:02.000')
+    await page.getByLabel('Начало', { exact: true }).press('Tab')
+    await page.getByRole('button', { name: 'Посмотреть фрагмент', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Остановить просмотр', exact: true })).toBeVisible()
+    await video.evaluate((el: HTMLVideoElement) => { el.currentTime = 4.1; el.dispatchEvent(new Event('timeupdate')) })
+    await expect(page.getByRole('button', { name: 'Посмотреть фрагмент', exact: true })).toBeVisible()
+    await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true)
+    expect(requests.filter(ms => ms === 28800000)).toHaveLength(1)
+    failNext = true
+    await seek.evaluate(el => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, '28832000')
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await expect(page.getByText('Не удалось загрузить участок видео.', { exact: true })).toBeVisible()
+    await page.getByRole('button', { name: 'Повторить', exact: true }).click()
+    await expect(page.getByText('Не удалось загрузить участок видео.', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('Готовим предпросмотр…', { exact: true })).toHaveCount(0)
+    await expect(seek).toHaveValue('28832000')
+    expect(requests.slice(-2)).toEqual([28830000, 28830000])
+    await video.evaluate(async (el: HTMLVideoElement) => { await el.play(); el.dispatchEvent(new Event('ended')) })
+    await expect.poll(() => requests.at(-1)).toBe(28860000)
+    await expect(page.getByText('Готовим предпросмотр…', { exact: true })).toHaveCount(0)
+    await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.paused)).toBe(false)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect(seek).toBeVisible()
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+    expect(errors).toEqual([])
+  })
+}

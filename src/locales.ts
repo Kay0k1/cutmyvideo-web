@@ -2,6 +2,11 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  'Для длинных записей достаточно ссылки: предпросмотр загружает выбранный участок. Если сервис требует вход или закрывает доступ, загрузите MP4.': 'A link is enough for long recordings: preview loads the selected interval. If a service requires login or blocks access, upload an MP4.',
+  'Готовим предпросмотр…': 'Preparing preview…',
+  'Не удалось загрузить участок видео.': 'Could not load this video interval.',
+  'Позиция в видео': 'Position in video',
+
   "Для одного момента нажмите «К скачиванию». Для нескольких откройте «Список фрагментов».": "For one clip, choose “Continue to download”. For several, open “Clip list”.",
   "Изменить время начала: {time}": "Edit start time: {time}",
   "Изменить время конца: {time}": "Edit end time: {time}",

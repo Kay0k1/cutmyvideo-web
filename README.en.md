@@ -10,7 +10,7 @@ The editing interface for [cutmy.video](https://cutmy.video): choose moments fro
 
 Work is divided into four steps. Going back keeps your selected moments.
 
-1. **Video.** Paste a public link to one video, stream recording or clip, or choose an MP4 from your device (up to 1 GiB). The website identifies the service; the core returns the actual title, duration and available preview.
+1. **Video.** Paste a public link to one video, stream recording or clip, or choose an MP4 from your device (up to the limit shown beside upload; 32 GiB on cutmy.video). The website identifies the service; the core returns the actual title, duration and available preview.
 2. **Moment.** Choose the start and end on the timeline, mark boundaries at the player position and preview the clip. Precise time fields and zoom are available in a separate disclosure. Seconds (`15`), total minutes (`83:10`) and hours with milliseconds (`01:23:10.250`) are supported.
 3. **Clips.** Add up to twelve moments, name and edit them. Check the clips to export; select all, duplicate and delete actions apply to the checked clips.
 4. **Export.** Choose MP4 or MP3, quality and cut mode. Wait for processing and download the results. Each checked moment becomes a separate file. Files from the last export remain available while changing the next selection.
@@ -39,7 +39,7 @@ Changing videos replaces the old moments only after the new source opens success
 - The initial screen fits a small phone; mobile editing follows a natural order with comfortable touch targets. Long desktop lists scroll within their own area.
 - Visible focus, labelled sliders, and actionable errors.
 
-Preferences, language and appearance are stored in the browser. The server defines media retention and processing limits. Sources without a controllable preview provide the original link and manual timecodes; the website does not simulate an unavailable player.
+Preferences, language and appearance are stored in the browser. The server defines media retention and processing limits. Platforms and browser-incompatible codecs use short server-rendered previews. The seek bar shows the complete recording timeline and temporary files are deleted after delivery. Platform links do not require a full recording copy. Platform access restrictions still apply.
 
 Compact slider grips retain separate touch targets. The exact boundary time appears while dragging, and keyboard navigation keeps the focused boundary visible. Failed exports explain the cause and recovery action; retrying retains the selected moments.
 

@@ -116,14 +116,14 @@ when the worker is unavailable. Active jobs pin resources. This is not an exact
 deletion deadline. Owner storage admission covers staged sources and thumbnails
 (2 GiB by default); exported files count toward the global media admission
 limit configured by `MAX_STORAGE_BYTES` (10 GiB by default, 80 GiB on the new
-production host). Source and individual output limits are 1 GiB. Shared database
+production host). Production source uploads allow 32 GiB and 2 hours; owner source storage allows 64 GiB. Individual outputs and selected remote interval transfers remain capped at 1 GiB. Shared database
 reservations coordinate admission/publication/claims across processes. Jobs
 waiting for disk enter `waiting_storage`, bounded by `STORAGE_WAIT_TIMEOUT`
 (30 minutes). Waiting jobs count toward owner/global active caps. Claims rotate
 owners; `WORKER_CONCURRENCY` defaults to one and should be measured under the
 worker's 3 CPU/4 GiB limit before increasing. `STORAGE_SAFETY_BYTES` sets a
 physical safety floor (512 MiB). Activation derives the edge upload cap from
-`MAX_SOURCE_BYTES + 2 MiB`. These are application limits, not a filesystem quota or a guarantee
+`MAX_SOURCE_BYTES + 2 MiB`. Window previews reserve at most 144 MiB, deliver a 30-second 480p MP4 and remove temporary bytes after delivery. These are application limits, not a filesystem quota or a guarantee
 that the operating-system disk cannot fill. Keep capacity for database files,
 rotated logs, images and backups outside the media budget.
 

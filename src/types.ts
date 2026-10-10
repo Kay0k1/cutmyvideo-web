@@ -9,7 +9,7 @@ export interface Source {
   provider?: string;
   provider_video_id?: string | null;
   source_url?: string | null;
-  preview_kind?: 'native' | 'youtube' | 'none';
+  preview_kind?: 'native' | 'youtube' | 'window' | 'none';
   width?: number;
   height?: number;
   expires_at?: string | null;
