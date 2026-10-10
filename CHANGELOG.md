@@ -4,6 +4,9 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+### Fixed
+- Explain temporary database unavailability and storage initialization in Russian and English, respect the server's retry delay, and ask users to check recent exports before resubmitting a request with an uncertain result.
+
 ## 0.2.1 — 2026-10-10
 
 ### Fixed
