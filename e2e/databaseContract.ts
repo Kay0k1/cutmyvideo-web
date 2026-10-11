@@ -5,7 +5,8 @@ import { disposableDatabaseDiagnostic } from './databaseDiagnostics'
 
 // This is an explicit fault injector for the disposable CI database. Ordinary
 // development and the deployed website never enable or call it.
-export async function holdStorageCounterLock(): Promise<() => Promise<void>> {
+export async function holdDatabaseTableLock(table: 'storage_counters' | 'jobs'): Promise<() => Promise<void>> {
+  if (table !== 'storage_counters' && table !== 'jobs') throw new Error('Unsupported disposable database lock target')
   const environment = disposableDatabaseEnvironment(process.env)
   const marker = `cutmy_lock_${randomBytes(12).toString('hex')}`
   const child = spawn('psql', ['-X', '-qAt', '-v', 'ON_ERROR_STOP=1'], {
@@ -39,7 +40,7 @@ export async function holdStorageCounterLock(): Promise<() => Promise<void>> {
   }
   try {
     child.stdin.write("SET lock_timeout='2s'; SET idle_in_transaction_session_timeout='20s';\n"
-      + `BEGIN; LOCK TABLE public.storage_counters IN ACCESS EXCLUSIVE MODE; SELECT '${marker}';\n`)
+      + `BEGIN; LOCK TABLE public.${table} IN ACCESS EXCLUSIVE MODE; SELECT '${marker}';\n`)
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => finish(new Error('Disposable database lock was not acknowledged')), 5000)
       const onData = () => {

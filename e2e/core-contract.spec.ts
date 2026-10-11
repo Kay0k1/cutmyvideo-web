@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
-import { holdStorageCounterLock } from './databaseContract'
+import { holdDatabaseTableLock } from './databaseContract'
+import { parseTimecode } from '../src/timecode'
 import { api, goToExport, goToMoment, goToSource, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
 
 test.describe('current core database contract', () => {
@@ -16,10 +17,14 @@ test.describe('current core database contract', () => {
     await page.getByLabel('Начало', { exact: true }).press('Tab')
     await page.getByLabel('Конец', { exact: true }).fill('3')
     await page.getByLabel('Конец', { exact: true }).press('Tab')
+    const draft = await Promise.all([
+      page.getByLabel('Начало', { exact: true }).inputValue(), page.getByLabel('Конец', { exact: true }).inputValue(),
+    ])
+    expect(draft.map(parseTimecode)).toEqual([1000, 3000])
     await goToSource(page)
     let uploads = 0
     page.on('request', r => { if (r.url().endsWith(`${api}/uploads`) && r.method() === 'POST') uploads++ })
-    const release = await holdStorageCounterLock()
+    const release = await holdDatabaseTableLock('storage_counters')
     try {
       const unavailable = page.waitForResponse(r => r.url().endsWith(`${api}/uploads`) && r.request().method() === 'POST')
       await uploadThroughUI(page)
@@ -33,8 +38,8 @@ test.describe('current core database contract', () => {
     expect(uploads).toBe(1)
     await goToMoment(page)
     await showExactTimes(page)
-    await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:01.000')
-    await expect(page.getByLabel('Конец', { exact: true })).toHaveValue('00:00:03.000')
+    await expect(page.getByLabel('Начало', { exact: true })).toHaveValue(draft[0])
+    await expect(page.getByLabel('Конец', { exact: true })).toHaveValue(draft[1])
     const originalResponse = await page.request.get(`${api}/sources/${original.id}`)
     expect(originalResponse.ok()).toBeTruthy()
     const retry = page.waitForResponse(r => r.url().endsWith(`${api}/uploads`) && r.request().method() === 'POST')
@@ -57,7 +62,9 @@ test.describe('current core database contract', () => {
     page.on('request', r => {
       if (r.url().endsWith(`${api}/jobs`) && r.method() === 'POST') attempts.push(r.headers()['idempotency-key'])
     })
-    const release = await holdStorageCounterLock()
+    // Admission reads jobs before inserting; storage counters are updated by
+    // the later worker and cannot deterministically block this HTTP request.
+    const release = await holdDatabaseTableLock('jobs')
     try {
       const unavailable = page.waitForResponse(r => r.url().endsWith(`${api}/jobs`) && r.request().method() === 'POST')
       await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
