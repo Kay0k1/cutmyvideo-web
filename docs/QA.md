@@ -237,10 +237,12 @@ then start the frontend on port 5173. Install FFmpeg and ffprobe on the test hos
 Use a disposable database and media directory for the complete suite. Its
 twelve-fragment cancellation checks reserve the configured output ceiling for
 every fragment: use `MAX_OUTPUT_BYTES=16777216`, `MAX_SOURCE_BYTES=67108864`,
-`MAX_STORAGE_BYTES=2147483648`, `MAX_OWNER_BYTES=268435456`, and
-`MUTATIONS_PER_MINUTE=10000` on both test services. Keep at least the storage
+`MAX_STORAGE_BYTES=2147483648`, `MAX_OWNER_BYTES=536870912`,
+`STORAGE_SAFETY_BYTES=67108864`, and `MUTATIONS_PER_MINUTE=10000` on both test services. Keep at least the storage
 safety margin plus the simultaneous reservations free. These reduced fixture
-ceilings and relaxed mutation rate are for isolated tests, not production.
+ceilings, disk margin and relaxed mutation rate apply only to isolated tests.
+The 512 MiB owner ceiling accommodates joined intermediates and the bounded
+text-subtitle staging allowance; production limits remain unchanged.
 
 ```sh
 npm ci
@@ -628,3 +630,49 @@ test directory, without changing host package state. WebKit used a private
 GStreamer registry; its actual H.264/AAC preview, seeking, frame decoding and
 downloads passed. macOS WebKit CI remains the release check closest to Safari;
 these Linux checks do not certify physical mobile devices or screen readers.
+
+## Batch audio and joined exports — 12 October 2026
+
+The frontend passes 199 unit tests, the production TypeScript/Vite build,
+strict browser-contract type validation (including the new scenarios), and
+67 deployment checks with one expected environment-dependent skip. The design
+and four-step workflow retain the existing selectors, mobile reflow and focus
+behavior.
+
+Browser coverage contains 133 distinct passing desktop/mobile scenarios across
+the full regression and 16 focused rechecks. Six scenarios require unavailable
+local prerequisites: public direct media, YouTube/provider access, the separate
+three-hour fixture, and two fault-injection checks restricted to disposable
+hosted CI. Final CI also covers the native browser engines. The added checks
+exercise track selection in preview/export, default audio resolution, keyboard
+no-sound selection, MP3 exclusion, joined order, MKV, subtitle compatibility,
+Russian/English switching, narrow-screen layout and restored retry identity.
+Keyboard checks wait for the actual focused option before activating it.
+
+A generated real 12-second source includes two AAC tracks at 440/880 Hz and
+mov_text captions at 2–3 and 9–10 seconds. Through the real browser/API/worker,
+selecting Russian track #1 and joining 8–11 seconds followed by 1–4 seconds
+produces one MKV with H.264, one Russian audio stream measured near 440 Hz,
+and subrip captions in the requested order at output times 1–2 and 4–5 seconds.
+The file passes full independent FFmpeg decoding, ffprobe stream/duration checks,
+and actual segment/track display assertions. A second job produces two exact
+MP4 clips without audio or subtitles; both files decode independently and retain
+the requested source start times. Synthetic media are generated during setup;
+no user media are committed. Local evidence is retained in the operator test
+cache under `web-batch-live`, `web-regression` and `web-targeted`.
+
+Canonical request serialization covers known settings in a stable order and
+omits equivalent defaults. Preview/audio changes and draft restoration cannot
+reorder the retry fingerprint into a new job identity. A controlled uncertain
+joined/audio request is reloaded and deliberately retried with the same body and
+idempotency key in both viewports; the existing real lost-response scenario also
+passes. Track-inspection retry controls name their specific action, independently
+of preview retries. Result track descriptions refer to source indices/codecs,
+with explicit notice that text-subtitle formats can change. User-provided clip
+labels remain literal while the generated joined-result label is localized.
+
+Track selection for platform links requires uploading the original file; no-sound
+preview/export is available by link. Subtitle preservation is limited to local
+copy exports with supported text codecs; styling is simplified and ASS/SSA or
+bitmap tracks receive clear diagnostics. MKV remains a copy-only container.
+Browser emulation does not certify physical mobile hardware or screen readers.

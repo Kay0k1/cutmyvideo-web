@@ -78,9 +78,11 @@ function embedId(url: string | null): string | null {
 export const Player = memo(forwardRef<PlayerControls, {
   source: Source | null;
   active: boolean;
+  audioTrack?: number;
+  noAudio?: boolean;
   onTime(ms: number): void;
   onAvailable(available: boolean): void;
-}>(({ source, active, onTime, onAvailable }, ref) => {
+}>(({ source, active, audioTrack, noAudio, onTime, onAvailable }, ref) => {
   const { t } = useLanguage();
   const video = useRef<HTMLVideoElement>(null);
   const host = useRef<HTMLDivElement>(null);
@@ -93,7 +95,7 @@ export const Player = memo(forwardRef<PlayerControls, {
   pollingActive.current = active;
   const [serverPreview, setServerPreview] = useState(false);
   const windowPlayer = useRef<PlayerControls>(null);
-  const useWindow = serverPreview || (!!source && !source.preview_url && !embedId(source.embed_url));
+  const useWindow = audioTrack !== undefined || noAudio === true || serverPreview || (!!source && !source.preview_url && !embedId(source.embed_url));
   const poster = source && source.thumbnail_url === `/api/v1/sources/${encodeURIComponent(source.id)}/thumbnail` ? source.thumbnail_url : undefined;
 
   function readyCommand(command: (player: YTPlayer) => void) {
@@ -149,7 +151,7 @@ export const Player = memo(forwardRef<PlayerControls, {
     const id = embedId(source?.embed_url ?? null);
     if (!id || source?.preview_url || !host.current) return;
     let timer: number | undefined;
-    const instance: YoutubeInstance = { player: null, ready: false, failed: false, disposed: false, pendingSeek: null, pendingPause: false, syncPolling: () => {
+    const instance: YoutubeInstance = { player: null, ready: false, failed: false, disposed: false, pendingSeek: lastTime.current.ms || null, pendingPause: false, syncPolling: () => {
       window.clearInterval(timer); timer = undefined;
       if (document.hidden || !pollingActive.current || !instance.ready || instance.failed || instance.disposed) return;
       timer = window.setInterval(() => {
@@ -212,8 +214,8 @@ export const Player = memo(forwardRef<PlayerControls, {
   </div>;
 
   return <div className="player-frame">
-    {useWindow ? <WindowPlayer key={source.id} ref={windowPlayer} source={source} active={active} poster={poster} initialPosition={lastTime.current.ms} onTime={ms => callbacks.current.onTime(ms)} onAvailable={onAvailable} /> : source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
-      onLoadedMetadata={() => callbacks.current.onAvailable(true)}
+    {useWindow ? <WindowPlayer key={`${source.id}:${audioTrack ?? 'default'}:${noAudio ?? false}`} ref={windowPlayer} source={source} audioTrack={audioTrack} noAudio={noAudio} active={active} poster={poster} initialPosition={lastTime.current.ms} onTime={ms => callbacks.current.onTime(ms)} onAvailable={onAvailable} /> : source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
+      onLoadedMetadata={() => { if (video.current && lastTime.current.ms > 0) video.current.currentTime = lastTime.current.ms / 1000; callbacks.current.onAvailable(true); }}
       onTimeUpdate={() => callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000))}
       onError={() => { setServerPreview(true); callbacks.current.onAvailable(false); }} />
       : <div ref={host} className="youtube-player" />}

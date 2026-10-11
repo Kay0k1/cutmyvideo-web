@@ -1,19 +1,22 @@
 import { useLanguage } from './Language';
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
-import { api, ApiError, errorMessage } from './api';
+import { api, ApiError, errorMessage, jobRequestBody } from './api';
 import { Icon } from './Icons';
 import { Player } from './Player';
 import type { PlayerControls } from './Player';
 import { Timeline } from './Timeline';
 import { displayTimecode, durationLabel, formatBytes, formatTimecode, parseTimecode, validateRange, zoomWindow } from './timecode';
-import type { ClipRange, Job, OutputSettings, Source, UploadProgress, PublicLimits } from './types';
+import type { ClipRange, Job, OutputSettings, Source, UploadProgress, PublicLimits, MediaTrack } from './types';
 import { countLabel } from './locales';
 import { LanguageSwitch, WorkspaceNav } from './WorkspaceNav';
 import { SourceChooser } from './SourceChooser';
 import { ThemeToggle } from './Theme';
 import { canonicalSourceUrl, providerName, validateVideo } from './sourceInput';
-import { readOutputSettings, readPreferences, savePreferences } from './preferences';
+import { readOutputSettings, readPreferences, savePreferences, withoutSourceAudio } from './preferences';
+import { AudioTrackSelector } from './AudioTrackSelector';
+import { ArtifactDetails } from './ArtifactDetails';
+import { defaultAudioTrack, includedTrackIndices, supportedSubtitles, trackLabel, withAudioSelection } from './mediaTracks';
 import type { Preferences } from './preferences';
 import { SelectControl } from './SelectControl';
 import { ClipLibrary } from './ClipLibrary';
@@ -96,7 +99,10 @@ export default function App() {
   const [viewCenter, setViewCenter] = useState(15000);
   const [simpleView, setSimpleView] = useState<[number, number]>([0, 60000]);
   const [output, setOutput] = useState<OutputSettings>(preferences.output);
+  const [sourceTracks, setSourceTracks] = useState<{ sourceID: string; tracks: MediaTrack[] | null; loading: boolean; error: string }>({ sourceID: '', tracks: null, loading: false, error: '' });
+  const [trackRevision, setTrackRevision] = useState(0);
   const [job, setJob] = useState<Job | null>(null);
+  const [joinedJob, setJoinedJob] = useState(false);
   const [jobRangeNumbers, setJobRangeNumbers] = useState<number[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -130,6 +136,19 @@ export default function App() {
   const invalidDraft = !!selected && !!validateRange(parseTimecode(startText), parseTimecode(endText), duration, limits.max_range_ms);
   const exportLimitError = exportRanges.length > limits.max_ranges ? t('Можно экспортировать не больше {limit} фрагментов за один раз.', { limit: limits.max_ranges }) : exportRanges.some(range => range.end_ms - range.start_ms > limits.max_range_ms) ? t('Один фрагмент может длиться до {limit}.', { limit: durationLabel(limits.max_range_ms, locale) }) : totalDuration > limits.max_job_ms ? t('Общая длительность одного экспорта — до {limit}. Разделите фрагменты на несколько заданий.', { limit: durationLabel(limits.max_job_ms, locale) }) : '';
   const preserveLocalQuality = output.cut_mode === 'copy' && (source?.kind === 'upload' || source?.kind === 'direct');
+  const tracks = sourceTracks.sourceID === source?.id ? sourceTracks.tracks : null;
+  const tracksLoading = sourceTracks.sourceID !== source?.id || sourceTracks.loading;
+  const tracksError = sourceTracks.sourceID === source?.id ? sourceTracks.error : '';
+  const subtitleTracks = tracks?.filter(track => track.type === 'subtitle') ?? [];
+  const canPreserveSubtitles = preserveLocalQuality && supportedSubtitles(tracks ?? []);
+  const includedTracks = includedTrackIndices(tracks ?? [], output);
+  const audioTracks = tracks?.filter(track => track.type === 'audio') ?? [];
+  const selectedAudio = output.no_audio ? undefined : output.audio_track !== undefined ? audioTracks.find(track => track.index === output.audio_track) : defaultAudioTrack(tracks ?? []);
+  // Multi-track browser defaults differ between engines; use the same inspected
+  // default stream as the exporter when more than one audio track is available.
+  const previewAudioTrack = output.audio_track ?? (audioTracks.length > 1 && !output.no_audio ? selectedAudio?.index : undefined);
+  const invalidAudio = output.audio_track !== undefined && (tracks !== null && !selectedAudio || tracksError !== '');
+  const incompatibleOutput = output.format === 'mkv' && !preserveLocalQuality || output.subtitle_mode === 'preserve' && !canPreserveSubtitles;
   const navigation = useWorkflowHistory({ ready: sessionReady, step, panel, onNavigate: navigateHistory });
 
   const playbackPosition = useCallback((ms: number) => {
@@ -148,6 +167,26 @@ export default function App() {
     setEndText(formatTimecode(range.end_ms, true));
     setRangeError('');
   }, []);
+
+  useEffect(() => {
+    if (!source) return;
+    const sourceID = source.id;
+    const controller = new AbortController();
+    let disposed = false;
+    setSourceTracks({ sourceID, tracks: null, loading: true, error: '' });
+    void api.tracks(sourceID, controller.signal).then(value => {
+      if (!disposed) setSourceTracks({ sourceID, tracks: value.tracks, loading: false, error: '' });
+    }).catch(error => {
+      if (!disposed) setSourceTracks({ sourceID, tracks: null, loading: false, error: error instanceof ApiError && error.code === 'tracks_unavailable'
+        ? 'Чтобы выбрать аудиодорожку площадки, загрузите исходный файл. Экспорт без звука доступен.' : errorMessage(error) });
+    });
+    return () => { disposed = true; controller.abort(); };
+  }, [source?.id, trackRevision]);
+
+  function changeAudio(selection: string) {
+    player.current?.pause(); previewEnd.current = null; setPreviewing(false);
+    setOutput(previous => withAudioSelection(previous, selection));
+  }
 
   useEffect(() => {
     let disposed = false;
@@ -195,7 +234,7 @@ export default function App() {
           }
           if (disposed) return;
           if (storedResourceId(saved.job_id)) {
-            try { const previous = await api.job(saved.job_id, controller.signal); if (!disposed) { setJob(previous); setJobRangeNumbers(Array.isArray(saved.job_range_numbers) && saved.job_range_numbers.length === previous.items.length && saved.job_range_numbers.every(number => Number.isInteger(number) && number > 0 && number <= maxClientRanges) ? saved.job_range_numbers : previous.items.map((_, index) => index + 1)); setStep(sourceWasRestored ? sourceStep ?? 4 : 4); } } catch (error) { if (disposed) return; if (!(error instanceof ApiError) || !(error.httpStatus === 404 || error.httpStatus === 410 || ['not_found', 'expired'].includes(error.code))) throw error; }
+            try { const previous = await api.job(saved.job_id, controller.signal); if (!disposed) { setJob(previous); setJoinedJob(saved.job_output_mode === 'joined' || previous.items.some(item => item.artifact?.segments?.length)); setJobRangeNumbers(Array.isArray(saved.job_range_numbers) && saved.job_range_numbers.length === previous.items.length && saved.job_range_numbers.every(number => Number.isInteger(number) && number > 0 && number <= maxClientRanges) ? saved.job_range_numbers : previous.items.map((_, index) => index + 1)); setStep(sourceWasRestored ? sourceStep ?? 4 : 4); } } catch (error) { if (disposed) return; if (!(error instanceof ApiError) || !(error.httpStatus === 404 || error.httpStatus === 410 || ['not_found', 'expired'].includes(error.code))) throw error; }
           }
           if (disposed) return;
           restored.current = true;
@@ -207,7 +246,7 @@ export default function App() {
   }, [sessionAttempt, setFields]);
 
   function draftSnapshot() {
-    return { workflow_version: 2, source_id: source?.id, ranges, selected_id: selectedId, selected_range_ids: selectedRangeIds, output, job_id: job?.id, job_range_numbers: jobRangeNumbers, step, current_ms: position.getSnapshot(), precision_open: precisionOpen, export_attempt: exportAttempt.current };
+    return { workflow_version: 2, source_id: source?.id, ranges, selected_id: selectedId, selected_range_ids: selectedRangeIds, output, job_id: job?.id, job_output_mode: joinedJob ? 'joined' : 'separate', job_range_numbers: jobRangeNumbers, step, current_ms: position.getSnapshot(), precision_open: precisionOpen, export_attempt: exportAttempt.current };
   }
 
   const saveDraft = useEffectEvent(() => {
@@ -230,7 +269,7 @@ export default function App() {
     };
   }, [position]);
 
-  useEffect(() => { draftWriter.current?.schedule(300); }, [source, ranges, selectedId, selectedRangeIds, output, job?.id, jobRangeNumbers, sessionReady, step, precisionOpen]);
+  useEffect(() => { draftWriter.current?.schedule(300); }, [source, ranges, selectedId, selectedRangeIds, output, job?.id, joinedJob, jobRangeNumbers, sessionReady, step, precisionOpen]);
 
   useEffect(() => {
     if (!job || !activeJob(job) || cancelling) return;
@@ -396,9 +435,9 @@ export default function App() {
     player.current?.pause(); previewEnd.current = null; restoredPosition.current = null;
     setSource(opened); setRanges([range]); setSelectedId(range.id); setFields(range);
     setSelectedRangeIds([range.id]); setRevealId(range.id); setSimpleView(simpleRangeView(opened.duration_ms, range)); setPrecisionOpen(opened.preview_kind === 'none' || (!opened.preview_url && !opened.embed_url));
-    position.set(0); setViewCenter((range.start_ms + range.end_ms) / 2); setSpan(Math.min(opened.duration_ms, preferences.timeline_span)); setOutput(preferences.output);
+    position.set(0); setViewCenter((range.start_ms + range.end_ms) / 2); setSpan(Math.min(opened.duration_ms, preferences.timeline_span)); setOutput(withoutSourceAudio(preferences.output));
     exportAttempt.current = null;
-    setJob(null); setJobRangeNumbers([]); setJobError(''); setPreviewing(false); setPlayerAvailable(false); setStep(2);
+    setJob(null); setJoinedJob(false); setJobRangeNumbers([]); setJobError(''); setPreviewing(false); setPlayerAvailable(false); setStep(2);
     setAdvancedOutputOpen(false);
   }
 
@@ -488,7 +527,7 @@ export default function App() {
 
   async function exportClips(event: FormEvent) {
     event.preventDefault();
-    if (!source || busy || sourceBusy || mutationPending.current || !exportRanges.length) return;
+    if (!source || busy || sourceBusy || mutationPending.current || !exportRanges.length || invalidAudio || incompatibleOutput) return;
     if (exportLimitError) { setJobError(exportLimitError); return; }
     const range = selected ? validateFields(true) : null;
     if (selected && !range) { setStep(2); return; }
@@ -500,13 +539,13 @@ export default function App() {
     try {
       const included = committed.filter(item => selectedRangeIds.includes(item.id));
       const requestedOutput = preserveLocalQuality ? { ...output, quality: 'best' as const } : output;
-      const fingerprint = JSON.stringify({ source_id: source.id, ranges: included.map(({ start_ms, end_ms, label }) => ({ start_ms, end_ms, label })), ...requestedOutput });
+      const fingerprint = jobRequestBody(source.id, included, requestedOutput);
       if (exportAttempt.current?.fingerprint !== fingerprint) exportAttempt.current = { fingerprint, key: crypto.randomUUID() };
       try { localStorage.setItem(storageKey, JSON.stringify({ ...draftSnapshot(), ranges: committed })); }
       catch { /* The retry key remains available in memory when storage is unavailable. */ }
       const created = await api.createJob(source.id, included, requestedOutput, exportAttempt.current.key);
       exportAttempt.current = null;
-      setJobRangeNumbers(included.map(item => committed.findIndex(original => original.id === item.id) + 1)); setJob(created);
+      setJobRangeNumbers(requestedOutput.output_mode === 'joined' ? [1] : included.map(item => committed.findIndex(original => original.id === item.id) + 1)); setJoinedJob(requestedOutput.output_mode === 'joined'); setJob(created);
     }
     catch (error) { setJobError(errorMessage(error, 'export')); }
     finally { mutationPending.current = false; setSubmitting(false); }
@@ -525,7 +564,7 @@ export default function App() {
   function clearDeletedSource() {
     player.current?.pause(); previewEnd.current = null; restoredPosition.current = null;
     exportAttempt.current = null; setSource(null); setRanges([]); setSelectedId(''); setSelectedRangeIds([]);
-    setJob(null); setJobRangeNumbers([]); setJobError(''); setStartText(''); setEndText(''); setRangeError('');
+    setJob(null); setJoinedJob(false); setJobRangeNumbers([]); setJobError(''); setStartText(''); setEndText(''); setRangeError('');
     setPreviewing(false); setPlayerAvailable(false); position.set(0); setStep(1);
     // Persist immediately so closing the page cannot resurrect deleted IDs.
     try { localStorage.removeItem(storageKey); } catch { /* Optional persistence. */ }
@@ -548,7 +587,7 @@ export default function App() {
   }
 
   function applyPreferences(value: Preferences) {
-    savePreferences(value); setPreferences(value); setOutput(value.output);
+    savePreferences(value); setPreferences({ ...value, output: withoutSourceAudio(value.output) }); setOutput(previous => ({ ...withoutSourceAudio(value.output), ...(previous.audio_track !== undefined ? { audio_track: previous.audio_track } : {}), ...(previous.no_audio && value.output.format !== 'mp3' ? { no_audio: true } : {}) }));
     setSpan(source ? Math.min(source.duration_ms, value.timeline_span) : value.timeline_span);
     if (selected) setViewCenter((selected.start_ms + selected.end_ms) / 2);
     setNotice('Настройки сохранены.');
@@ -572,13 +611,13 @@ export default function App() {
   const sourceProvider = providerName(source?.provider);
   const qualityLabel = source?.width && source?.height ? `${source.width} × ${source.height}` : null;
 
-  const jobProgress = job && <section className={`job-status ${job.status}`} aria-label={t("Состояние экспорта")} aria-live="polite"><p className="job-history-label">{t("Последний экспорт")}</p><div className="job-status-heading">{activeJob(job) ? <span className="spinner" /> : <Icon name={job.status === 'succeeded' ? 'check' : 'file'} size={20} />}<h3>{t(jobHeading)}</h3></div><p>{jobDescription(job, t)}</p>{job.status === 'waiting_storage' && <RetentionNotice expiresAt={job.storage_wait_until} kind="wait" />}<ExportProgress job={job} /><p className="job-file-count">{t('Готово: {count} из {total}', { count: files.length, total: job.items.length })}</p>{failedItems.length > 0 && <div className="failed-items"><ul>{failedItems.map(item => <li key={item.id}><strong>{item.label || `${t('Фрагмент')} ${jobRangeNumbers[job.items.indexOf(item)] ?? job.items.indexOf(item) + 1}`}</strong><span>{t(exportFailureReason(item, job.message))}</span></li>)}</ul>{source && <p className="job-recovery-note">{t('Выбранные моменты сохранены. Настройки можно изменить перед повтором.')}</p>}</div>}{activeJob(job) && <button type="button" className="button secondary cancel-button" disabled={cancelling} onClick={() => void cancelJob()}>{cancelling ? t("Отменяем…") : t("Отменить обработку")}</button>}{activeJob(job) && <button type="button" className="text-button background-source" onClick={() => goToStep(1)}>{t('Пока обрабатывается — открыть другое видео')}</button>}</section>;
+  const jobProgress = job && <section className={`job-status ${job.status}`} aria-label={t("Состояние экспорта")} aria-live="polite"><p className="job-history-label">{t("Последний экспорт")}</p><div className="job-status-heading">{activeJob(job) ? <span className="spinner" /> : <Icon name={job.status === 'succeeded' ? 'check' : 'file'} size={20} />}<h3>{t(jobHeading)}</h3></div><p>{jobDescription(job, t)}</p>{job.status === 'waiting_storage' && <RetentionNotice expiresAt={job.storage_wait_until} kind="wait" />}<ExportProgress job={job} /><p className="job-file-count">{t('Готово: {count} из {total}', { count: files.length, total: job.items.length })}</p>{failedItems.length > 0 && <div className="failed-items"><ul>{failedItems.map(item => <li key={item.id}><strong>{joinedJob && item.label === 'Joined result' ? t('Объединённый результат') : item.label || `${t('Фрагмент')} ${jobRangeNumbers[job.items.indexOf(item)] ?? job.items.indexOf(item) + 1}`}</strong><span>{t(exportFailureReason(item, job.message))}</span></li>)}</ul>{source && <p className="job-recovery-note">{t('Выбранные моменты сохранены. Настройки можно изменить перед повтором.')}</p>}</div>}{activeJob(job) && <button type="button" className="button secondary cancel-button" disabled={cancelling} onClick={() => void cancelJob()}>{cancelling ? t("Отменяем…") : t("Отменить обработку")}</button>}{activeJob(job) && <button type="button" className="text-button background-source" onClick={() => goToStep(1)}>{t('Пока обрабатывается — открыть другое видео')}</button>}</section>;
 
-  const resultsPanel = files.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading" tabIndex={-1}>{t("Файлы последнего экспорта")}</h2><p>{t("Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(files.length, 'file', locale)}</span></div><ul className="file-list">{files.map((item, index) => {
+  const resultsPanel = files.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading" tabIndex={-1}>{t("Файлы последнего экспорта")}</h2><p>{t(files.some(item => item.artifact?.segments?.length) ? 'Скачайте объединённый файл. Порядок и границы фрагментов указаны ниже.' : "Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(files.length, 'file', locale)}</span></div><ul className="file-list">{files.map((item, index) => {
         const artifact = item.artifact!;
         const itemNumber = jobRangeNumbers[job?.items.indexOf(item) ?? index] ?? (job?.items.indexOf(item) ?? index) + 1;
-        const adjusted = Math.abs(artifact.actual_start_ms - item.start_ms) > 100 || Math.abs(artifact.actual_end_ms - item.end_ms) > 100;
-        return <li key={artifact.id}><span className="file-icon"><Icon name="file" size={23} /></span><div className="file-description"><h3>{item.label || `${t('Фрагмент')} ${itemNumber}`}</h3><p>{artifact.filename}</p><span>{formatBytes(artifact.size_bytes, locale)}<span className="meta-separator"> / </span>{formatTimecode(artifact.actual_start_ms, true)} — {formatTimecode(artifact.actual_end_ms, true)}</span><RetentionNotice expiresAt={artifact.expires_at} kind="artifact" />{adjusted && <p className="adjusted-note">{t("Фактические границы отличаются от выбранных.")}</p>}</div><a className="button secondary download-button" href={artifact.download_url} download={artifact.filename}><Icon name="download" size={17} />{t("Скачать")}</a></li>;
+        const adjusted = !artifact.segments?.length && (Math.abs(artifact.actual_start_ms - item.start_ms) > 100 || Math.abs(artifact.actual_end_ms - item.end_ms) > 100);
+        return <li key={artifact.id}><span className="file-icon"><Icon name="file" size={23} /></span><div className="file-description"><h3>{artifact.segments?.length && item.label === 'Joined result' ? t('Объединённый результат') : item.label || `${t('Фрагмент')} ${itemNumber}`}</h3><p>{artifact.filename}</p><span>{formatBytes(artifact.size_bytes, locale)}<span className="meta-separator"> / </span>{formatTimecode(artifact.actual_start_ms, true)} — {formatTimecode(artifact.actual_end_ms, true)}</span><RetentionNotice expiresAt={artifact.expires_at} kind="artifact" />{adjusted && <p className="adjusted-note">{t("Фактические границы отличаются от выбранных.")}</p>}<ArtifactDetails artifact={artifact} /></div><a className="button secondary download-button" href={artifact.download_url} download={artifact.filename}><Icon name="download" size={17} />{t("Скачать")}</a></li>;
       })}</ul></section>;
 
   const stageTitles = ['Откройте видео', 'Выберите один момент', 'Соберите фрагменты', 'Сохраните фрагменты'];
@@ -602,8 +641,9 @@ export default function App() {
         <div className="editing-panel">
           <div className="media-heading"><div className="source-title"><Icon name="file" size={18} /><span title={source.title}>{source.title}</span>{sourceProvider && <span className="source-provider">{t(sourceProvider)}</span>}</div><span className="source-meta">{qualityLabel && <>{qualityLabel}<span className="meta-separator"> / </span></>}{formatTimecode(duration)}</span></div>
           <div className="moment-layout">
-          <Player ref={player} source={source} active={step === 2} onAvailable={playerAvailability} onTime={playbackPosition} />
+          <Player ref={player} source={source} audioTrack={previewAudioTrack} noAudio={output.no_audio} active={step === 2} onAvailable={playerAvailability} onTime={playbackPosition} />
           {selected && <div className="moment-controls">
+            <AudioTrackSelector id="audio-track-preview" output={output} tracks={tracks} loading={tracksLoading} error={tracksError} disabled={busy} onChange={changeAudio} onRetry={() => setTrackRevision(value => value + 1)} />
             <div className="moment-boundaries"><div><label htmlFor="range-start">{t('Начало')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время начала: {time}', { time: displayTimecode(selected.start_ms) })} onClick={() => editTime('start')}>{displayTimecode(selected.start_ms)}<Icon name="edit" size={14} /></button><input ref={startField} id="range-start" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span>{t('Начало здесь')}<kbd>I</kbd></button></div><div><label htmlFor="range-end">{t('Конец')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время конца: {time}', { time: displayTimecode(selected.end_ms) })} onClick={() => editTime('end')}>{displayTimecode(selected.end_ms)}<Icon name="edit" size={14} /></button><input ref={endField} id="range-end" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={endText} onChange={event => { setEndText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span>{t('Конец здесь')}<kbd>O</kbd></button></div><div className="moment-duration"><span>{t('Длительность')}</span><strong>{durationLabel(selected.end_ms - selected.start_ms, locale)}</strong></div></div>
             <Timeline duration={duration} position={position} ranges={ranges} selected={selected} view={precisionOpen ? view : simpleView} showOverview={precisionOpen} onSeek={seek} onRange={changeBounds} onReveal={revealBoundary} />
             <div className="moment-selection-tools"><span>{t('Фрагмент до {limit}', { limit: durationLabel(limits.max_range_ms, locale) })}</span>{duration <= Math.min(limits.max_range_ms, limits.max_job_ms) && <button type="button" className="text-button" disabled={busy} onClick={() => { changeBounds(0, duration); setSimpleView([0, duration]); setViewCenter(duration / 2); }}>{t('Выбрать всё видео')}</button>}</div>
@@ -626,17 +666,32 @@ export default function App() {
         <section className="export-panel" aria-labelledby="export-heading"><form onSubmit={exportClips}>
           <div className="export-heading"><Icon name="download" size={20} /><h2 id="export-heading">{t("Экспорт")}</h2></div>
           <fieldset disabled={!source || submitting || activeJob(job)}><legend className="sr-only">{t("Настройки экспорта")}</legend>
-            <div className="format-picker" role="group" aria-label={t("Формат файла")}><button type="button" className={output.format === 'mp4' ? 'active' : ''} onClick={() => setOutput(previous => ({ ...previous, format: 'mp4' }))} aria-pressed={output.format === 'mp4'}><strong>MP4</strong><span>{t("Видео")}</span></button><button type="button" className={output.format === 'mp3' ? 'active' : ''} onClick={() => setOutput(previous => ({ ...previous, format: 'mp3', cut_mode: 'accurate' }))} aria-pressed={output.format === 'mp3'}><strong>MP3</strong><span>{t("Аудио")}</span></button></div>
+            <div className="format-picker" role="group" aria-label={t("Формат файла")}><button type="button" className={output.format !== 'mp3' ? 'active' : ''} onClick={() => setOutput(previous => ({ ...previous, format: previous.format === 'mkv' ? 'mkv' : 'mp4' }))} aria-pressed={output.format !== 'mp3'}><strong>{output.format === 'mkv' ? 'MKV' : 'MP4'}</strong><span>{t("Видео")}</span></button><button type="button" disabled={output.no_audio} className={output.format === 'mp3' ? 'active' : ''} onClick={() => setOutput(previous => ({ ...previous, format: 'mp3', cut_mode: 'accurate', subtitle_mode: 'omit' }))} aria-pressed={output.format === 'mp3'}><strong>MP3</strong><span>{t("Аудио")}</span></button></div>
+            <div className="export-primary-fields">
+              <div className="export-field"><label htmlFor="output-mode">{t('Результат нарезки')}</label><SelectControl id="output-mode" value={output.output_mode ?? 'separate'} label={t('Результат нарезки')} describedBy="output-mode-hint" onChange={value => setOutput(previous => ({ ...previous, output_mode: value as OutputSettings['output_mode'] }))} options={[{ value: 'separate', label: t('Отдельные файлы') }, { value: 'joined', label: t('Один объединённый файл') }]} /><p id="output-mode-hint" className="field-hint">{t(output.output_mode === 'joined' ? 'Фрагменты соединятся в порядке выбранного списка, без промежутков между ними.' : 'Каждый выбранный фрагмент станет отдельным файлом.')}</p></div>
+              <AudioTrackSelector id="audio-track-export" output={output} tracks={tracks} loading={tracksLoading} error={tracksError} onChange={changeAudio} onRetry={() => setTrackRevision(value => value + 1)} />
+              {output.no_audio && <p className="field-hint">{t('Чтобы сохранить MP3, выберите аудиодорожку.')}</p>}
+            </div>
             {output.format === 'mp4' && totalDuration >= 10 * 60 * 1000 && <div className="long-export-choice"><strong>{t(output.cut_mode === 'copy' ? 'Быстрый экспорт включён' : 'Длинную запись можно сохранить быстрее')}</strong><p>{t(output.cut_mode === 'copy' ? 'Сохраним видео без перекодирования. Начало может сдвинуться до ближайшего ключевого кадра.' : 'Без перекодирования сохраняется качество записи и сокращается время обработки. Для точных границ оставьте текущий режим.')}</p>{output.cut_mode === 'accurate' && <button type="button" className="button secondary" onClick={() => setOutput(previous => ({ ...previous, cut_mode: 'copy' }))}>{t('Ускорить без перекодирования')}</button>}</div>}
             <details className="export-options" open={advancedOutputOpen} onToggle={event => setAdvancedOutputOpen(event.currentTarget.open)}><summary>{t('Качество и точность')}<Icon name="chevron" size={15} /></summary><div className="export-option-fields">
-            {output.format === 'mp4' && <div className="export-field"><label htmlFor="quality">{t("Качество видео")}</label><SelectControl id="quality" value={output.quality} disabled={preserveLocalQuality} onChange={value => setOutput(previous => ({ ...previous, quality: value as OutputSettings['quality'] }))} options={preserveLocalQuality ? [{ value: output.quality, label: t('Исходное качество') }] : [{ value: '1080p', label: t('До 1080p') }, { value: '720p', label: t('До 720p') }, { value: 'best', label: t('Лучшее доступное') }]} /><p className="field-hint">{t(preserveLocalQuality ? 'Видео сохраняется без перекодирования, в качестве исходного файла.' : 'Качество выше исходного не создаётся.')}</p></div>}
-            <div className="export-field"><label htmlFor="cut-mode">{t("Границы и качество")}</label><SelectControl id="cut-mode" value={output.cut_mode} disabled={output.format === 'mp3'} onChange={value => setOutput(previous => ({ ...previous, cut_mode: value as OutputSettings['cut_mode'] }))} options={[{ value: 'accurate', label: t('Точные границы') }, { value: 'copy', label: t('Исходное качество') }]} /><p className="mode-hint">{output.format === 'mp3' ? t("Аудио будет преобразовано в MP3.") : output.cut_mode === 'accurate' ? t("Видео будет перекодировано. Начало и конец — по выбранным таймкодам.") : t("Без перекодирования. Границы могут сдвинуться; некоторые кодеки несовместимы с MP4.")}</p></div>
+            {output.format !== 'mp3' && <div className="export-field"><label htmlFor="quality">{t("Качество видео")}</label><SelectControl id="quality" value={output.quality} disabled={preserveLocalQuality} onChange={value => setOutput(previous => ({ ...previous, quality: value as OutputSettings['quality'] }))} options={preserveLocalQuality ? [{ value: output.quality, label: t('Исходное качество') }] : [{ value: '1080p', label: t('До 1080p') }, { value: '720p', label: t('До 720p') }, { value: 'best', label: t('Лучшее доступное') }]} /><p className="field-hint">{t(preserveLocalQuality ? 'Видео сохраняется без перекодирования, в качестве исходного файла.' : 'Качество выше исходного не создаётся.')}</p></div>}
+            <div className="export-field"><label htmlFor="cut-mode">{t("Границы и качество")}</label><SelectControl id="cut-mode" value={output.cut_mode} disabled={output.format === 'mp3'} onChange={value => setOutput(previous => ({ ...previous, cut_mode: value as OutputSettings['cut_mode'], ...(value === 'accurate' ? { subtitle_mode: 'omit' as const } : {}) }))} options={[{ value: 'accurate', label: t('Точные границы'), disabled: output.format === 'mkv' }, { value: 'copy', label: t('Исходное качество') }]} /><p className="mode-hint">{output.format === 'mp3' ? t("Аудио будет преобразовано в MP3.") : output.cut_mode === 'accurate' ? t("Видео будет перекодировано. Начало и конец — по выбранным таймкодам.") : t(output.format === 'mkv' ? 'Без перекодирования. Границы могут сдвинуться; сохраняются совместимые потоки MKV.' : 'Без перекодирования. Границы могут сдвинуться; некоторые кодеки несовместимы с MP4.')}</p></div>
+            {(preserveLocalQuality || output.format === 'mkv') && <div className="export-field"><label htmlFor="copy-container">{t('Контейнер исходного качества')}</label><SelectControl id="copy-container" value={output.format} label={t('Контейнер исходного качества')} onChange={value => setOutput(previous => ({ ...previous, format: value as OutputSettings['format'] }))} options={[{ value: 'mp4', label: 'MP4' }, { value: 'mkv', label: 'MKV', disabled: !preserveLocalQuality }]} /><p className="field-hint">{t('MKV доступен при копировании. Чтобы выбрать точные границы, переключитесь на MP4.')}</p></div>}
+            {(preserveLocalQuality && subtitleTracks.length > 0 || output.subtitle_mode === 'preserve') && <div className="export-field"><label htmlFor="subtitle-mode">{t('Субтитры')}</label><SelectControl id="subtitle-mode" value={output.subtitle_mode ?? 'omit'} label={t('Субтитры')} onChange={value => setOutput(previous => ({ ...previous, subtitle_mode: value as OutputSettings['subtitle_mode'] }))} options={[{ value: 'omit', label: t('Исключить субтитры') }, { value: 'preserve', label: t('Сохранить текстовые субтитры'), disabled: !canPreserveSubtitles }]} /><p className="field-hint">{t(canPreserveSubtitles ? 'Текстовые субтитры сохранятся со временем каждого фрагмента. Оформление будет упрощено.' : 'Есть неподдерживаемые субтитры. ASS, SSA и графические субтитры сохранить пока нельзя.')}</p></div>}
             </div></details>
           </fieldset>
+          <div className="export-track-summary" aria-label={t('Дорожки результата')}>
+            <p>{t(output.format === 'mp3' ? 'Видео будет исключено.' : 'Сохраним одну видеодорожку.')}{' '}{output.no_audio ? t('Звук будет исключён.') : selectedAudio ? trackLabel(selectedAudio, t) : tracks !== null && audioTracks.length === 0 ? t('В источнике нет звука.') : t('Сохраним аудиодорожку по умолчанию.')}</p>
+            {audioTracks.length > 1 && <p>{t('Остальные аудиодорожки будут исключены.')}</p>}
+            <p>{t(output.subtitle_mode === 'preserve' ? 'Сохраним совместимые текстовые субтитры; время будет сдвинуто к началу фрагмента.' : 'Субтитры, вложения и служебные дорожки будут исключены.')}</p>
+            {tracks !== null && <details className="artifact-details"><summary>{t('Все дорожки источника')}</summary><ul>{tracks.map(track => <li key={track.index}><strong>{t(includedTracks.has(track.index) ? 'Включена' : 'Исключена')}</strong>{': '}{trackLabel(track, t)}</li>)}</ul></details>}
+          </div>
+          {invalidAudio && <p className="error-message" role="alert">{t('Выбранная аудиодорожка недоступна. Выберите другую дорожку.')}</p>}
+          {incompatibleOutput && <p className="error-message" role="alert">{t('Эти настройки требуют исходного файла и режима копирования. Выберите MP4 и исключите субтитры либо загрузите исходный файл.')}</p>}
           <p className="field-hint export-limits">{t('Один фрагмент — до {range}; весь экспорт — до {total}.', { range: durationLabel(limits.max_range_ms, locale), total: durationLabel(limits.max_job_ms, locale) })}</p>{limits.max_output_bytes && <p className="field-hint export-limits">{t('Готовый файл — до {limit}.', { limit: formatBytes(limits.max_output_bytes, locale) })}</p>}{exportLimitError && <p className="error-message" role="alert">{exportLimitError}</p>}<div className="export-summary"><span>{source ? countLabel(exportRanges.length, 'clip', locale) : t("Фрагменты не выбраны")}</span>{source && <strong>{durationLabel(totalDuration, locale)}</strong>}</div>
-          <button className="button primary export-submit" type="submit" disabled={!source || !exportRanges.length || busy || sourceBusy || invalidDraft || !!exportLimitError}>{submitting ? <><span className="spinner" />{t("Создаём задание…")}</> : activeJob(job) ? <><span className="spinner" />{t("Идёт обработка…")}</> : <><Icon name="cut" size={18} />{repeatExport ? t('Повторить экспорт') : exportRanges.length > 1 ? t("Вырезать фрагменты") : t("Вырезать фрагмент")}</>}</button>
+          <button className="button primary export-submit" type="submit" disabled={!source || !exportRanges.length || busy || sourceBusy || invalidDraft || !!exportLimitError || invalidAudio || incompatibleOutput}>{submitting ? <><span className="spinner" />{t("Создаём задание…")}</> : activeJob(job) ? <><span className="spinner" />{t("Идёт обработка…")}</> : <><Icon name="cut" size={18} />{repeatExport ? t('Повторить экспорт') : exportRanges.length > 1 ? t("Вырезать фрагменты") : t("Вырезать фрагмент")}</>}</button>
           {!source && <p className="export-empty-hint">{t("Сначала откройте видео.")}</p>}
-          {source && <p className="export-empty-hint">{t("Результат:")}{' '}{exportRanges.length > 1 ? t("отдельные файлы") : t("один файл")} {output.format.toUpperCase()}.</p>}
+          {source && <p className="export-empty-hint">{t("Результат:")}{' '}{output.output_mode === 'joined' || exportRanges.length === 1 ? t("один файл") : t("отдельные файлы")} {output.format.toUpperCase()}.</p>}
         </form>
         {jobProgress}
         {jobError && <p className="error-message" role="alert">{t(jobError)}</p>}

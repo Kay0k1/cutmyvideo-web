@@ -33,6 +33,20 @@ export interface Artifact {
   actual_start_ms: number;
   actual_end_ms: number;
   expires_at?: string | null;
+  segments?: { index: number; label: string; source_start_ms: number; source_end_ms: number; output_start_ms: number; output_end_ms: number }[];
+  track_manifest?: (MediaTrack & { included: boolean; reason?: string })[];
+}
+
+export interface MediaTrack {
+  index: number;
+  type: 'video' | 'audio' | 'subtitle' | 'data' | 'attachment';
+  codec: string;
+  language?: string;
+  title?: string;
+  channels?: number;
+  sample_rate?: number;
+  default?: boolean;
+  attached_picture?: boolean;
 }
 
 export interface Job {
@@ -57,9 +71,13 @@ export interface Job {
 export interface UploadProgress { bytesPerSecond?: number; loaded: number; total: number | null; }
 
 export interface OutputSettings {
-  format: 'mp4' | 'mp3';
+  format: 'mp4' | 'mp3' | 'mkv';
   quality: '1080p' | '720p' | 'best';
   cut_mode: 'accurate' | 'copy';
+  output_mode?: 'separate' | 'joined';
+  audio_track?: number;
+  no_audio?: boolean;
+  subtitle_mode?: 'omit' | 'preserve';
 }
 
 export interface PublicLimits { max_output_bytes?: number; max_fetch_bytes?: number; max_source_bytes: number; max_ranges: number; max_range_ms: number; max_job_ms: number; }

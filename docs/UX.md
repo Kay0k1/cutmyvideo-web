@@ -141,3 +141,13 @@ Pending retry fingerprints are bounded to 128 KiB so the allowed larger range
 collection retains idempotency across reload. Control characters in saved labels
 are rejected. Cleanup dates that have already passed explicitly say that deletion
 may happen at any time, without promising future availability.
+
+## Batch audio and original-quality exports — 12 October 2026
+
+Moment and Export share the same audio selection. Track options show absolute stream index, language, title, codec, channel count and sample rate. The default follows the core: lowest default-marked audio stream, otherwise lowest audio index. Sources with several audio tracks use bounded server previews even with the default choice, because native browser defaults differ. Explicit track selection and no-sound preview always use those same server preview parameters. Switching selection clears its preview cache while retaining the source position. Source-specific audio choices survive a draft reload but are excluded from saved global defaults and reset for another source.
+
+Separate files remains the export default. Joining uses selected-list order, which is stated beside the control and preserved in the request. It produces one downloadable file whose expanded details show source boundaries and output positions for every segment. Audio defaults and subtitle omission remain compatible with older requests. Known-field request serialization preserves the retry identity across restored property order and equivalent defaults.
+
+The primary export view exposes audio and output grouping; quality and original preservation remain in the existing disclosure. MKV appears only in local copy mode. Compatible text-subtitle preservation appears when inspected subtitles are present; unsupported ASS, SSA and bitmap tracks leave preservation disabled and explain the limitation. Selecting an exact MP4 or audio export explicitly omits subtitles. Restored incompatible settings receive a corrective message and block export until corrected. MP3 is disabled when no sound is selected. Source-track and result-track summaries distinguish included and omitted tracks; data and attachment streams are omitted.
+
+The added controls use existing selectors, visible labels and descriptions, focus behavior, touch sizing and Russian/English translations. The four-step workflow and visual design are retained.

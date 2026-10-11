@@ -1,4 +1,4 @@
-import type { Job, Source, ClipRange, OutputSettings, UploadProgress, SessionResponse, JobSummary } from './types';
+import type { Job, Source, ClipRange, OutputSettings, UploadProgress, SessionResponse, JobSummary, MediaTrack } from './types';
 
 const base = '/api/v1';
 
@@ -97,11 +97,24 @@ function session(): Promise<SessionResponse> {
   return sessionRequest;
 }
 
+// Use the same stable payload for transport and retry identity. Draft restoration
+// can reorder optional settings; explicitly selected defaults are equivalent to
+// omitted defaults on the server.
+export function jobRequestBody(source_id: string, ranges: ClipRange[], output: OutputSettings): string {
+  return JSON.stringify({ source_id, ranges: ranges.map(({ start_ms, end_ms, label }) => ({ start_ms, end_ms, label })),
+    format: output.format, quality: output.quality, cut_mode: output.cut_mode,
+    ...(output.output_mode === 'joined' ? { output_mode: 'joined' } : {}),
+    ...(output.audio_track !== undefined ? { audio_track: output.audio_track } : {}),
+    ...(output.no_audio ? { no_audio: true } : {}),
+    ...(output.subtitle_mode === 'preserve' ? { subtitle_mode: 'preserve' } : {}) });
+}
+
 export const api = {
   session,
   jobs: (signal?: AbortSignal) => request<{ jobs: JobSummary[] }>('/jobs', { signal }),
   sources: (signal?: AbortSignal) => request<{ sources: Source[] }>('/sources', { signal }),
   source: (id: string, signal?: AbortSignal) => request<Source>(`/sources/${encodeURIComponent(id)}`, { signal }),
+  tracks: (id: string, signal?: AbortSignal) => request<{ tracks: MediaTrack[] }>(`/sources/${encodeURIComponent(id)}/tracks`, { signal }),
   open: (url: string, signal: AbortSignal) => request<Source>('/sources', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }), signal,
   }, 123 * 60 * 1000),
@@ -109,7 +122,7 @@ export const api = {
   deleteSource: (id: string) => request<void>(`/sources/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   createJob: (source_id: string, ranges: ClipRange[], output: OutputSettings, key: string) => request<Job>('/jobs', {
     method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
-    body: JSON.stringify({ source_id, ranges: ranges.map(({ start_ms, end_ms, label }) => ({ start_ms, end_ms, label })), format: output.format, quality: output.quality, cut_mode: output.cut_mode }),
+    body: jobRequestBody(source_id, ranges, output),
   }),
   job: (id: string, signal?: AbortSignal) => request<Job>(`/jobs/${encodeURIComponent(id)}`, { signal }),
   cancel: (id: string) => request<Job>(`/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
@@ -164,6 +177,13 @@ export function errorMessage(error: unknown, action: 'source' | 'source-create' 
     unsupported_source: 'Этот источник не поддерживает обработку. Загрузите видео файлом.',
     invalid_upload: 'Не удалось загрузить файл. Выберите один видеофайл и попробуйте ещё раз.',
     preview_unavailable: 'Предпросмотр недоступен. Используйте поля начала и конца.',
+    tracks_unavailable: 'Чтобы выбрать аудиодорожку площадки, загрузите исходный файл. Экспорт без звука доступен.',
+    audio_track_unavailable: 'Выбранная аудиодорожка недоступна. Выберите другую дорожку.',
+    audio_track_invalid: 'Выбранная аудиодорожка недоступна. Выберите другую дорожку.',
+    subtitle_unavailable: 'Эти настройки требуют исходного файла и режима копирования. Выберите MP4 и исключите субтитры либо загрузите исходный файл.',
+    subtitle_unsupported: 'Субтитры нельзя сохранить с этими настройками. Исключите субтитры или загрузите файл с текстовыми субтитрами.',
+    copy_incompatible: 'Эти потоки несовместимы с выбранным контейнером. Выберите MKV либо MP4 с точными границами.',
+    join_incompatible: 'Эти фрагменты нельзя объединить копированием. Выберите MP4 с точными границами.',
     invalid_export: 'Проверьте интервалы и настройки экспорта. Границы должны находиться внутри видео.',
     job_limit: 'Очередь экспорта заполнена. Дождитесь завершения одного задания или отмените его в списке «Экспорты и файлы».',
     expired: 'Срок хранения файла закончился. Вырежьте фрагмент заново.',

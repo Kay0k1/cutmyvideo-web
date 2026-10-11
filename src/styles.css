@@ -253,6 +253,15 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 .export-options[open] summary > svg { transform: rotate(-90deg); }
 .export-option-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding-top: 8px; }
 .export-field label { display: block; margin-bottom: 8px; font-size: .875rem; font-weight: 480; }
+.export-primary-fields { display: grid; gap: 16px; margin-top: 16px; }
+.audio-track-field { min-width: 0; }
+.moment-controls > .audio-track-field { margin-bottom: 16px; }
+.export-track-summary { color: var(--muted); font-size: .875rem; line-height: 1.6; margin-top: 12px; overflow-wrap: anywhere; }
+.artifact-details { margin-top: 10px; font-size: .875rem; overflow-wrap: anywhere; }
+.artifact-details summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--accent); }
+.file-description .artifact-details ul, .file-description .artifact-details ol { display: grid; gap: 8px; margin: 8px 0; padding-left: 20px; }
+.file-description .artifact-details li { display: list-item; padding: 0; border: 0; }
+.artifact-details li > span { display: block; color: var(--muted); }
 .export-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; font-size: .875rem; color: var(--muted); }
 .export-summary strong { color: var(--ink); font-weight: 480; }
 .export-submit { width: 100%; margin-top: 14px; min-height: 50px; }

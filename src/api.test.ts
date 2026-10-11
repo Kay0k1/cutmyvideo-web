@@ -1,8 +1,40 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { api, ApiError, errorMessage } from './api';
+import { api, ApiError, errorMessage, jobRequestBody } from './api';
 import { translate } from './locales';
 
 afterEach(() => { vi.unstubAllGlobals(); });
+
+describe('batch and track API contracts', () => {
+  it('keeps retry identity stable across optional property order and explicit defaults', () => {
+    const ranges = [{ id: 'range_retry', label: 'Opening', start_ms: 1000, end_ms: 2500 }];
+    const baseline = { format: 'mp4', quality: 'best', cut_mode: 'copy' } as const;
+    expect(jobRequestBody('src_retry', ranges, { ...baseline, subtitle_mode: 'preserve', audio_track: 2, output_mode: 'joined' }))
+      .toBe(jobRequestBody('src_retry', ranges, { output_mode: 'joined', audio_track: 2, subtitle_mode: 'preserve', ...baseline }));
+    expect(jobRequestBody('src_retry', ranges, { ...baseline, output_mode: 'separate', no_audio: false, subtitle_mode: 'omit' }))
+      .toBe(jobRequestBody('src_retry', ranges, baseline));
+  });
+  it('sends explicit selections unchanged while leaving older requests unchanged', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => Response.json({ id: 'job_contract', items: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const ranges = [{ id: 'range_a', label: 'Opening', start_ms: 1000, end_ms: 2500 }, { id: 'range_b', label: 'End', start_ms: 4000, end_ms: 6000 }];
+    await api.createJob('src_contract', ranges, { format: 'mkv', quality: 'best', cut_mode: 'copy', output_mode: 'joined', audio_track: 2, subtitle_mode: 'preserve' }, 'key_contract');
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/v1/jobs');
+    expect(options.headers['Idempotency-Key']).toBe('key_contract');
+    expect(JSON.parse(options.body)).toEqual({ source_id: 'src_contract', ranges: ranges.map(({ label, start_ms, end_ms }) => ({ label, start_ms, end_ms })), format: 'mkv', quality: 'best', cut_mode: 'copy', output_mode: 'joined', audio_track: 2, subtitle_mode: 'preserve' });
+    await api.createJob('src_contract', ranges, { format: 'mp4', quality: '1080p', cut_mode: 'accurate' }, 'key_legacy');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('audio_track');
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('output_mode');
+  });
+  it('reads owner-protected source tracks with an escaped identifier and cancellation', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(Response.json({ tracks: [{ index: 2, type: 'audio', codec: 'aac', language: 'eng', title: 'Commentary' }] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+    await expect(api.tracks('source/special', controller.signal)).resolves.toHaveProperty('tracks.0.index', 2);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/v1/sources/source%2Fspecial/tracks');
+    expect(fetchMock.mock.calls[0][1].credentials).toBe('same-origin');
+  });
+});
 
 describe('safe API error messages', () => {
   it.each(['future_source_error', 'constructor', 'toString', '__proto__'])('uses localized fallback copy for an unknown %s code', code => {
