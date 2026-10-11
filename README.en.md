@@ -78,6 +78,8 @@ npm run test:e2e -- --project=desktop --project=mobile
 
 CI runs unit/build/deployment checks and the complete npm dependency audit, tests PostgreSQL privileges against the actual core, then verifies integration/usability in Chromium/Firefox on Linux and WebKit on macOS. [core.version](core.version) pins the backend; dependencies and images are pinned. CI saves a distributable website build. Linux WebKit has a known GTK/GStreamer seeking instability; the complete CI media matrix runs on macOS. Additional network providers and the three-hour fixture are opt-in. See [QA](docs/QA.md) for evidence and limitations.
 
+The website pins stable [cutmyvideo-core v1.0.2](https://github.com/Kay0k1/cutmyvideo-core/releases/tag/v1.0.2), commit `4e34a17`. The production image records the release version, commit and build timestamp.
+
 ## Deployment
 
 [DEPLOYMENT.md](docs/DEPLOYMENT.md) covers HTTPS, internal networking, limits, backups, monitoring, updates and rollback. Production Compose differs from the local example. The Dockerfile builds static assets; an external reverse proxy routes `/api` to the core. The release helper requires clean repositories and a matching `core.version`, builds from Git archives, verifies service health and rolls back unsuccessful activation while retaining persistent volumes. Running that helper updates its configured server.

@@ -1,12 +1,15 @@
 # Acceptance and UX review
 
-## Current core candidate — 11 October 2026
+## Stable core v1.0.2 — 12 October 2026
 
-The integration pin is the immutable `06bb74bca90a79fbf399c01cf71f7f44af186431`
-candidate, including bounded database waits, durable publication, stable HTTP
-errors, storage recovery and media selection. This pin does not publish a core
-release or deploy the website. Historical results below describe their original
-versions and do not establish acceptance of this candidate.
+The integration pin is the immutable release commit
+`4e34a17fce228742b9f63fee95c8062dd50371e5`, including bounded database waits,
+durable publication, stable HTTP errors, storage recovery and media selection.
+Production Compose passes the published version, commit and build timestamp to
+the unchanged core Dockerfile. The deployment helper requires the exact core
+checkout to match `core.version`; Product checks on this pin must pass before
+activation. A core release does not automatically deploy the website.
+Historical results below describe their original versions.
 
 The database-role job checks the current ordered version/checksum ledger under
 the existing ordinary application role. Removing one version marker must make
@@ -25,7 +28,7 @@ explicitly restricted to the hosted disposable job, the named `postgres` test
 service and `cutmy` test database. The transaction has an idle timeout and is
 rolled back before the next test; raw connection diagnostics are not recorded.
 
-Current-candidate browser execution is pending until the new CI run completes.
+The earlier current-code integration [run 38151477278](https://github.com/Kay0k1/cutmyvideo-web/actions/runs/38151477278) passed on commit `d8c6559`. The stable-pin update requires its own Product checks.
 Without the explicit CI database-control mode these two scenarios are skipped,
 which must not be reported as a passed database-failure experiment.
 
