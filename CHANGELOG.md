@@ -4,6 +4,8 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+## 0.3.0 — 2026-10-12
+
 ### Added
 - Choose a source audio track by index, language and title, or export without sound; preview and export share the selection, and source-specific choices never become defaults for another video.
 - Export selected named clips as separate files or join them in list order through the existing workflow.
