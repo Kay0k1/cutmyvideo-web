@@ -1,24 +1,15 @@
 import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
+import { disposableDatabaseEnvironment } from './databaseEnvironment'
 
 // This is an explicit fault injector for the disposable CI database. Ordinary
 // development and the deployed website never enable or call it.
 export async function holdStorageCounterLock(): Promise<() => Promise<void>> {
-  if (process.env.CUTMY_E2E_DATABASE_CONTROL !== 'hosted-disposable'
-      || process.env.GITHUB_ACTIONS !== 'true' || process.env.RUNNER_ENVIRONMENT !== 'github-hosted') {
-    throw new Error('Database fault injection requires the disposable hosted integration job')
-  }
-  const url = new URL(process.env.DATABASE_URL || '')
-  if (url.hostname !== 'postgres' || url.pathname !== '/cutmy' || url.username !== 'cutmy'
-      || (url.port && url.port !== '5432') || url.protocol !== 'postgres:') {
-    throw new Error('Database fault injection refused an unexpected test database')
-  }
+  const environment = disposableDatabaseEnvironment(process.env)
   const marker = `cutmy_lock_${randomBytes(12).toString('hex')}`
   const child = spawn('psql', ['-X', '-qAt', '-v', 'ON_ERROR_STOP=1'], {
     detached: true,
-    env: { ...process.env, PGHOST: 'postgres', PGPORT: '5432', PGDATABASE: 'cutmy', PGUSER: 'cutmy',
-      PGPASSWORD: decodeURIComponent(url.password), PGSERVICE: '', PGSERVICEFILE: '/dev/null',
-      PGOPTIONS: '', PGAPPNAME: 'cutmy-disposable-browser-contract', PGCONNECT_TIMEOUT: '3' },
+    env: environment,
     stdio: ['pipe', 'pipe', 'pipe'],
   })
   let output = '', bytes = 0
