@@ -12,6 +12,8 @@ export function disposableDatabaseEnvironment(environment: Record<string, string
   }
   const clean = Object.fromEntries(Object.entries(environment).filter(([key]) => !key.startsWith('PG')))
   return { ...clean, PGHOST: 'postgres', PGPORT: '5432', PGDATABASE: 'cutmy', PGUSER: 'cutmy',
-    PGPASSWORD: decodeURIComponent(url.password), PGSERVICE: '', PGSERVICEFILE: '/dev/null',
+    // libpq treats even an empty PGSERVICE as a selected service. It must be
+    // absent after inherited PG* overrides have been removed.
+    PGPASSWORD: decodeURIComponent(url.password), PGSERVICEFILE: '/dev/null',
     PGOPTIONS: '', PGSSLMODE: 'disable', PGAPPNAME: 'cutmy-disposable-browser-contract', PGCONNECT_TIMEOUT: '3' }
 }

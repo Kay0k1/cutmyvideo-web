@@ -160,8 +160,11 @@ jobs:
           done
           cat /tmp/cutmy-server.log /tmp/cutmy-web.log
           exit 1
-      - name: Run browser checks with a virtual display
-        run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed --project=desktop --project=mobile --project=layout-chromium --project=layout-firefox --project=usability-chromium --project=usability-firefox
+      - name: Verify actual database fault contract first
+        run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed --project=desktop --grep='current core database contract'
+        working-directory: web
+      - name: Run remaining browser checks with a virtual display
+        run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed --project=desktop --project=mobile --project=layout-chromium --project=layout-firefox --project=usability-chromium --project=usability-firefox --grep-invert='current core database contract'
         working-directory: web
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
