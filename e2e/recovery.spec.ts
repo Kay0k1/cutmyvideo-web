@@ -1,6 +1,76 @@
 import { expect, test, type Page } from '@playwright/test'
 import { api, goToExport, goToSource, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
 
+for (const input of ['link', 'upload'] as const) {
+  test(`an uncertain ${input} response recovers the saved video without another source POST`, async ({ page }) => {
+    const source = {
+      id: 'src_uncertain_saved', title: 'Recovery fixture', kind: input === 'upload' ? 'upload' : 'direct',
+      duration_ms: 12000, width: 1280, height: 720, preview_kind: 'none',
+      preview_url: null, embed_url: null, thumbnail_url: null, expires_at: null, retention_blocked: false,
+    }
+    const privateDiagnostic = 'https://private.example/?token=secret password=hidden /private/recording.mp4'
+    const mutations: string[] = [], unexpected: string[] = []
+    let saved = false, listReads = 0, sourceReads = 0, previewReads = 0
+    // All API traffic is controlled; this scenario does not create or decode media.
+    await page.route(`**${api}/**`, route => {
+      const request = route.request(), path = new URL(request.url()).pathname, method = request.method()
+      if (method === 'POST') mutations.push(path)
+      if (path === `${api}/session` && method === 'GET') return route.fulfill({ json: { ok: true } })
+      if (path === `${api}/jobs` && method === 'GET') return route.fulfill({ json: { jobs: [] } })
+      if (path === `${api}/${input === 'upload' ? 'uploads' : 'sources'}` && method === 'POST') {
+        saved = true
+        return route.fulfill({ status: 503, headers: { 'Retry-After': '2' }, json: { error: { code: 'database_unavailable', message: privateDiagnostic } } })
+      }
+      if (path === `${api}/sources` && method === 'GET') {
+        listReads++
+        return route.fulfill({ json: { sources: saved ? [source] : [] } })
+      }
+      if (path === `${api}/sources/${source.id}` && method === 'GET') {
+        sourceReads++
+        return route.fulfill({ json: source })
+      }
+      if (path === `${api}/sources/${source.id}/preview` && method === 'GET') {
+        previewReads++
+        return route.fulfill({ status: 404, json: { error: { code: 'preview_unavailable', message: 'Controlled preview failure' } } })
+      }
+      unexpected.push(`${method} ${path}`)
+      return route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'Controlled test route' } } })
+    })
+    await page.goto('/')
+    await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled()
+    if (input === 'link') {
+      await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://video.example/recording.mp4')
+      await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
+    } else {
+      await page.getByRole('button', { name: 'Файл', exact: true }).click()
+      // Only the small accepted MP4 header is needed; preview stays unavailable.
+      await page.locator('#source-file').setInputFiles({ name: 'recovery.mp4', mimeType: 'video/mp4', buffer: Buffer.from([0, 0, 0, 16, 102, 116, 121, 112, 105, 115, 111, 109, 0, 0, 0, 0]) })
+    }
+    const message = 'Не удалось подтвердить сохранение видео. Оно могло уже сохраниться. Проверьте «Мои видео на сервере» перед повторной отправкой. Повторите действие не раньше чем через 2 с.'
+    await expect(page.locator('#source-error')).toHaveText(message)
+    expect(mutations).toEqual([`${api}/${input === 'upload' ? 'uploads' : 'sources'}`])
+    expect(listReads).toBe(0)
+    await page.getByRole('button', { name: 'English', exact: true }).click()
+    await expect(page.locator('#source-error')).toHaveText('Could not confirm that the video was saved. It may already be on the server. Check My videos on the server before submitting it again. Try again in at least 2 s.')
+    await page.waitForTimeout(2200)
+    expect(mutations).toHaveLength(1)
+    expect(await page.locator('body').innerText()).not.toMatch(/private\.example|token=secret|password=hidden|\/private\/recording/)
+    await page.getByRole('button', { name: 'My videos on the server', exact: true }).click()
+    await expect(page.getByRole('heading', { name: source.title, exact: true })).toBeVisible()
+    expect(listReads).toBe(1)
+    await page.getByRole('button', { name: 'Русский', exact: true }).click()
+    await expect(page.locator('#source-error')).toHaveText(message)
+    await page.getByRole('button', { name: `Открыть видео «${source.title}»`, exact: true }).click()
+    await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+    expect(sourceReads).toBe(1)
+    expect(listReads).toBe(1)
+    await expect.poll(() => previewReads).toBe(1)
+    expect(mutations).toHaveLength(1)
+    expect(unexpected).toEqual([])
+    expect(await page.evaluate(() => Object.keys(localStorage).map(key => localStorage.getItem(key)).join('\n'))).not.toMatch(/private\.example|token=secret|password=hidden|\/private\/recording/)
+  })
+}
+
 async function draft(page: Page) {
   await page.goto('/')
   await uploadThroughUI(page)

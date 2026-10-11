@@ -1,5 +1,37 @@
 # Acceptance and UX review
 
+## Stable core v1.0.2 — 12 October 2026
+
+The integration pin is the immutable release commit
+`4e34a17fce228742b9f63fee95c8062dd50371e5`, including bounded database waits,
+durable publication, stable HTTP errors, storage recovery and media selection.
+Production Compose passes the published version, commit and build timestamp to
+the unchanged core Dockerfile. The deployment helper requires the exact core
+checkout to match `core.version`; Product checks on this pin must pass before
+activation. A core release does not automatically deploy the website.
+Historical results below describe their original versions.
+
+The database-role job checks the current ordered version/checksum ledger under
+the existing ordinary application role. Removing one version marker must make
+the actual maintenance command refuse startup without repairing history; after
+the exact marker is restored, two unchanged maintenance startups must succeed.
+The former single-marker/reset expectation belonged to the historical core.
+
+Two additional desktop scenarios use the actual core and disposable CI
+PostgreSQL. A bounded transaction holds the storage-counter table, forcing a
+real `503 database_unavailable` during upload or export. The scenarios require
+safe localized guidance, the retained source/range, no automatic mutation retry,
+recovery after lock release, a persisted idempotency key across reload and exactly
+one successful job. The existing lost-response scenario separately covers an
+export accepted before the browser loses its acknowledgement. Fault injection is
+explicitly restricted to the hosted disposable job, the named `postgres` test
+service and `cutmy` test database. The transaction has an idle timeout and is
+rolled back before the next test; raw connection diagnostics are not recorded.
+
+The earlier current-code integration [run 38151477278](https://github.com/Kay0k1/cutmyvideo-web/actions/runs/38151477278) passed on commit `d8c6559`. The stable-pin update requires its own Product checks.
+Without the explicit CI database-control mode these two scenarios are skipped,
+which must not be reported as a passed database-failure experiment.
+
 ## UX refinement — 8 October 2026
 
 The primary journey is Video → Moment → Export. Continue to download validates

@@ -3,7 +3,16 @@ import type { Job, Source, ClipRange, OutputSettings, UploadProgress, SessionRes
 const base = '/api/v1';
 
 export class ApiError extends Error {
-  constructor(public code: string, message: string, public httpStatus?: number) { super(message); }
+  constructor(public code: string, message: string, public httpStatus?: number, public retryAfterSeconds?: number) { super(message); }
+}
+
+// The core sends Retry-After as delta-seconds. Unusable values keep the generic
+// retry guidance instead of displaying an invented or unbounded wait.
+function retryAfterSeconds(header: string | null): number | undefined {
+  const value = header?.trim();
+  if (!value || !/^\d{1,5}$/.test(value)) return undefined;
+  const seconds = Number(value);
+  return seconds <= 86400 ? seconds : undefined;
 }
 
 async function request<T>(path: string, options: RequestInit = {}, timeoutMS = 30000): Promise<T> {
@@ -21,7 +30,7 @@ async function request<T>(path: string, options: RequestInit = {}, timeoutMS = 3
     try { body = await response.json(); } catch { throw new ApiError('connection', 'Invalid server response', response.status); }
     if (!response.ok) {
       const error = typeof body === 'object' && body !== null ? (body as { error?: { code?: string; message?: string } }).error : undefined;
-      throw new ApiError(typeof error?.code === 'string' ? error.code : 'server', typeof error?.message === 'string' ? error.message : 'Request failed', response.status);
+      throw new ApiError(typeof error?.code === 'string' ? error.code : 'server', typeof error?.message === 'string' ? error.message : 'Request failed', response.status, retryAfterSeconds(response.headers.get('Retry-After')));
     }
     return body as T;
   } catch (error) {
@@ -68,7 +77,7 @@ function upload(file: File, signal: AbortSignal, onProgress?: (progress: UploadP
     xhr.onload = () => {
       if (xhr.status < 200 || xhr.status >= 300) {
         const error = xhr.response?.error;
-        finish(new ApiError(error?.code ?? 'server', error?.message ?? 'Upload failed', xhr.status));
+        finish(new ApiError(error?.code ?? 'server', error?.message ?? 'Upload failed', xhr.status, retryAfterSeconds(xhr.getResponseHeader('Retry-After'))));
       } else if (!xhr.response || typeof xhr.response !== 'object') finish(new ApiError('connection', 'Invalid server response'));
       else finish(undefined, xhr.response as Source);
     };
@@ -106,9 +115,29 @@ export const api = {
   cancel: (id: string) => request<Job>(`/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
 };
 
-export function errorMessage(error: unknown, action: 'source' | 'export' = 'source'): string {
+function uncertainSourceMessage(error: unknown): string {
+  const message = 'Не удалось подтвердить сохранение видео. Оно могло уже сохраниться. Проверьте «Мои видео на сервере» перед повторной отправкой.';
+  const seconds = error instanceof ApiError ? error.retryAfterSeconds : undefined;
+  return seconds !== undefined && Number.isInteger(seconds) && seconds >= 0 && seconds <= 86400
+    ? `${message} Повторите действие не раньше чем через ${seconds} с.` : message;
+}
+
+export function errorMessage(error: unknown, action: 'source' | 'source-create' | 'export' = 'source'): string {
+  if (action === 'source-create' && (!(error instanceof ApiError)
+    || ['connection', 'database_unavailable', 'source_timeout', 'request_timeout', 'internal', 'server'].includes(error.code))) {
+    return uncertainSourceMessage(error);
+  }
   if (!(error instanceof ApiError)) return 'Нет связи с сервером. Проверьте подключение и попробуйте ещё раз.';
   if (action === 'export' && error.code === 'storage_limit') return 'Этот экспорт превышает бюджет хранилища сервера. Выберите меньше фрагментов и попробуйте снова.';
+  if (error.code === 'storage_initializing' || error.code === 'database_unavailable') {
+    const message = error.code === 'storage_initializing' ? 'Сервис готовится к работе.'
+      : action === 'export' ? 'Сервис временно недоступен. Экспорт мог быть принят. Проверьте «Экспорты и файлы» перед повторной отправкой.'
+        : 'Сервис временно недоступен.';
+    const seconds = error.retryAfterSeconds;
+    const retry = seconds !== undefined && Number.isInteger(seconds) && seconds >= 0 && seconds <= 86400
+      ? `Повторите действие не раньше чем через ${seconds} с.` : 'Подождите немного и повторите действие.';
+    return `${message} ${retry}`;
+  }
   const messages: Record<string, string> = {
     connection: 'Сервер не ответил. Попробуйте ещё раз.',
     not_ready: 'Сервис запускается. Попробуйте подключиться через минуту.',
@@ -143,5 +172,6 @@ export function errorMessage(error: unknown, action: 'source' | 'export' = 'sour
     request_timeout: 'Не удалось передать настройки вовремя. Проверьте соединение и повторите действие.',
     internal: 'Не удалось выполнить действие. Попробуйте ещё раз через минуту.',
   };
-  return Object.hasOwn(messages, error.code) ? messages[error.code] : 'Не удалось выполнить действие. Попробуйте ещё раз или загрузите видео файлом.';
+  if (Object.hasOwn(messages, error.code)) return messages[error.code];
+  return action === 'source-create' ? uncertainSourceMessage(error) : 'Не удалось выполнить действие. Попробуйте ещё раз или загрузите видео файлом.';
 }

@@ -58,7 +58,7 @@ services:
     volumes:
       - database:/var/lib/postgresql/data
     healthcheck:
-      test: [CMD-SHELL, "pg_isready -U cutmy -d cutmy"]
+      test: [CMD-SHELL, "pg_isready -h 127.0.0.1 -p 5432 -U cutmy -d cutmy"]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -73,6 +73,11 @@ services:
     <<: *core
     build:
       context: ${CORE_CONTEXT:-../../core}
+      # Keep these release identifiers aligned with the immutable core.version pin.
+      args:
+        VERSION: v1.0.2
+        VCS_REF: 4e34a17fce228742b9f63fee95c8062dd50371e5
+        BUILD_TIME: "2026-10-11T20:24:15Z"
     command: [server]
     depends_on:
       postgres:
