@@ -115,7 +115,18 @@ export const api = {
   cancel: (id: string) => request<Job>(`/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
 };
 
-export function errorMessage(error: unknown, action: 'source' | 'export' = 'source'): string {
+function uncertainSourceMessage(error: unknown): string {
+  const message = 'Не удалось подтвердить сохранение видео. Оно могло уже сохраниться. Проверьте «Мои видео на сервере» перед повторной отправкой.';
+  const seconds = error instanceof ApiError ? error.retryAfterSeconds : undefined;
+  return seconds !== undefined && Number.isInteger(seconds) && seconds >= 0 && seconds <= 86400
+    ? `${message} Повторите действие не раньше чем через ${seconds} с.` : message;
+}
+
+export function errorMessage(error: unknown, action: 'source' | 'source-create' | 'export' = 'source'): string {
+  if (action === 'source-create' && (!(error instanceof ApiError)
+    || ['connection', 'database_unavailable', 'source_timeout', 'request_timeout', 'internal', 'server'].includes(error.code))) {
+    return uncertainSourceMessage(error);
+  }
   if (!(error instanceof ApiError)) return 'Нет связи с сервером. Проверьте подключение и попробуйте ещё раз.';
   if (action === 'export' && error.code === 'storage_limit') return 'Этот экспорт превышает бюджет хранилища сервера. Выберите меньше фрагментов и попробуйте снова.';
   if (error.code === 'storage_initializing' || error.code === 'database_unavailable') {
@@ -161,5 +172,6 @@ export function errorMessage(error: unknown, action: 'source' | 'export' = 'sour
     request_timeout: 'Не удалось передать настройки вовремя. Проверьте соединение и повторите действие.',
     internal: 'Не удалось выполнить действие. Попробуйте ещё раз через минуту.',
   };
-  return Object.hasOwn(messages, error.code) ? messages[error.code] : 'Не удалось выполнить действие. Попробуйте ещё раз или загрузите видео файлом.';
+  if (Object.hasOwn(messages, error.code)) return messages[error.code];
+  return action === 'source-create' ? uncertainSourceMessage(error) : 'Не удалось выполнить действие. Попробуйте ещё раз или загрузите видео файлом.';
 }

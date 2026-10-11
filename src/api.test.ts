@@ -43,6 +43,71 @@ describe('safe API error messages', () => {
   });
 });
 
+describe('uncertain source creation recovery', () => {
+  const message = 'Не удалось подтвердить сохранение видео. Оно могло уже сохраниться. Проверьте «Мои видео на сервере» перед повторной отправкой.';
+  const english = 'Could not confirm that the video was saved. It may already be on the server. Check My videos on the server before submitting it again.';
+  const privateDiagnostic = 'https://private.example/?token=secret password=hidden /private/recording.mp4';
+
+  it.each([
+    ['connection', undefined], ['database_unavailable', 503], ['request_timeout', 408],
+    ['source_timeout', 504], ['internal', 500], ['server', 502],
+    ['future_source_error', 503], ['constructor', 500], ['toString', 500], ['__proto__', 500],
+  ] as const)('checks saved videos before retrying a source POST after %s', (code, status) => {
+    const localized = errorMessage(new ApiError(code, privateDiagnostic, status), 'source-create');
+    expect(localized).toBe(message);
+    expect(translate(localized, 'en')).toBe(english);
+    expect(translate(localized, 'ru')).toBe(message);
+    expect(localized).not.toMatch(/https|secret|password|private|MP4|файлом/);
+  });
+
+  it('keeps a network TypeError private and warns that the mutation may already have succeeded', () => {
+    const error = new TypeError(privateDiagnostic);
+    expect(errorMessage(error, 'source-create')).toBe(message);
+    expect(errorMessage(error)).toBe('Нет связи с сервером. Проверьте подключение и попробуйте ещё раз.');
+  });
+
+  it.each([0, 2, 86400])('keeps the check-before-repeat guidance before the bounded %s second wait', seconds => {
+    const localized = errorMessage(new ApiError('database_unavailable', privateDiagnostic, 503, seconds), 'source-create');
+    expect(localized).toBe(`${message} Повторите действие не раньше чем через ${seconds} с.`);
+    expect(translate(localized, 'en')).toBe(`${english} Try again in at least ${seconds} s.`);
+    expect(translate(localized, 'ru')).toBe(localized);
+  });
+
+  it.each([-1, 1.5, 86401, NaN, Infinity])('does not invent a wait from unusable Retry-After %s', seconds => {
+    expect(errorMessage(new ApiError('database_unavailable', privateDiagnostic, 503, seconds), 'source-create')).toBe(message);
+  });
+
+  it.each([
+    'storage_initializing', 'not_ready', 'rate_limit', 'session_required', 'invalid_url',
+    'invalid_upload', 'unsupported_media', 'source_limit', 'source_busy', 'server_busy', 'storage_limit',
+  ])('retains the definite admission or input message for %s', code => {
+    const error = new ApiError(code, privateDiagnostic, 503, 2);
+    expect(errorMessage(error, 'source-create')).toBe(errorMessage(error));
+    expect(errorMessage(error, 'source-create')).not.toContain('Оно могло уже сохраниться.');
+  });
+
+  it('keeps source reads and export error guidance scoped to their existing actions', () => {
+    const error = new ApiError('database_unavailable', privateDiagnostic, 503);
+    expect(errorMessage(error)).toBe('Сервис временно недоступен. Подождите немного и повторите действие.');
+    expect(errorMessage(error, 'export')).toContain('Экспорт мог быть принят.');
+    expect(errorMessage(error, 'export')).not.toContain('Мои видео на сервере');
+  });
+
+  it('recovers a saved source through reads without repeating an uncertain mutation', async () => {
+    const source = { id: 'src_saved_after_uncertain_response', title: 'Saved video', duration_ms: 12000 };
+    const fetchMock = vi.fn().mockResolvedValueOnce(Response.json({ error: { code: 'database_unavailable', message: privateDiagnostic } }, { status: 503 }))
+      .mockResolvedValueOnce(Response.json({ sources: [source] })).mockResolvedValueOnce(Response.json(source));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(api.open('https://video.example/recording.mp4', new AbortController().signal)).rejects.toMatchObject({ code: 'database_unavailable', httpStatus: 503 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const retained = await api.sources();
+    await expect(api.source(retained.sources[0].id)).resolves.toMatchObject(source);
+    expect(fetchMock.mock.calls.map(([url, options]) => [url, options.method ?? 'GET'])).toEqual([
+      ['/api/v1/sources', 'POST'], ['/api/v1/sources', 'GET'], ['/api/v1/sources/src_saved_after_uncertain_response', 'GET'],
+    ]);
+  });
+});
+
 describe('server retry guidance', () => {
   it.each([
     ['2', 2], ['0', 0], [' 5 ', 5], ['86400', 86400],

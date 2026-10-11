@@ -386,7 +386,7 @@ export default function App() {
       if (!file) setUrl(candidateUrl!);
       setNotice('Источник открыт. Укажите границы фрагмента.');
     } catch (error) {
-      if (!controller.signal.aborted) setSourceError(errorMessage(error));
+      if (!controller.signal.aborted) setSourceError(errorMessage(error, 'source-create'));
     } finally { if (sourceController.current === controller) { sourceController.current = null; setSourceBusy(false); setUploadProgress(null); } }
   }
 

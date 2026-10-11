@@ -31,7 +31,7 @@ test.describe('current core database contract', () => {
       const response = await unavailable
       expect(response.status()).toBe(503)
       expect(await response.json()).toEqual({ error: { code: 'database_unavailable', message: 'Database is temporarily unavailable; try again' } })
-      await expect(page.locator('#source-error')).toHaveText('Сервис временно недоступен. Подождите немного и повторите действие.')
+      await expect(page.locator('#source-error')).toHaveText('Не удалось подтвердить сохранение видео. Оно могло уже сохраниться. Проверьте «Мои видео на сервере» перед повторной отправкой.')
       await expect(page.locator('button.upload-button')).toBeEnabled()
     } finally { await release() }
     await page.waitForTimeout(2200)

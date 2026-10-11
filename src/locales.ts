@@ -2,6 +2,7 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  'Не удалось подтвердить сохранение видео. Оно могло уже сохраниться. Проверьте «Мои видео на сервере» перед повторной отправкой.': 'Could not confirm that the video was saved. It may already be on the server. Check My videos on the server before submitting it again.',
   'Сервис готовится к работе.': 'The service is getting ready.',
   'Сервис временно недоступен.': 'The service is temporarily unavailable.',
   'Сервис временно недоступен. Экспорт мог быть принят. Проверьте «Экспорты и файлы» перед повторной отправкой.': 'The service is temporarily unavailable. The export may have been accepted. Check Exports and files before submitting it again.',
