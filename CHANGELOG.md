@@ -4,9 +4,11 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+## 0.2.2 — 2026-10-12
+
 ### Fixed
 - Wait for the PostgreSQL TCP listener rather than its temporary initialization socket in local, production and disposable CI health checks.
-- Pin the verified current core candidate and check actual database-timeout responses, explicit retries and retained export identity in browser integration.
+- Deploy stable core v1.0.2 with matching binary version, source commit and build timestamp; check actual database-timeout responses, explicit retries and retained export identity in browser integration.
 - Explain temporary database unavailability and storage initialization in Russian and English, respect the server's retry delay, and ask users to check recent exports before resubmitting a request with an uncertain result.
 
 ## 0.2.1 — 2026-10-10
