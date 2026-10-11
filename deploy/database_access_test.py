@@ -196,17 +196,36 @@ CREATE TRIGGER audit_fixture BEFORE INSERT ON project.sample FOR EACH ROW EXECUT
             result = subprocess.run(["docker", "exec", "-i", container, "sh"], input=script, text=True,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
             self.assertEqual(result.returncode, 0, "Go OpenStore/maintenance failed under ordinary app role")
-            self.assertEqual(q("cutmy", "SELECT count(*) FROM public.app_schema_versions;"), "1")
+            def history():
+                return json.loads(q("cutmy", """SELECT jsonb_build_object(
+ 'versions',(SELECT jsonb_agg(version ORDER BY version) FROM public.app_schema_versions),
+ 'ledger',(SELECT jsonb_agg(to_jsonb(x) ORDER BY position) FROM public.app_schema_migrations x));"""))
+            recorded = history()
+            self.assertGreater(len(recorded["versions"]), 1)
+            self.assertEqual(recorded["versions"], sorted(row["version"] for row in recorded["ledger"]))
+            self.assertEqual([row["position"] for row in recorded["ledger"]],
+                             list(range(1, len(recorded["versions"]) + 1)))
+            for row in recorded["ledger"]:
+                self.assertRegex(row["checksum"], r"^[0-9a-f]{64}$")
             self.assertEqual(q("cutmy_operator", """SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
 WHERE n.nspname='public' AND pg_get_userbyid(c.relowner)<>'cutmy';"""), "0")
             self.assertEqual(q("cutmy_operator", """SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
 WHERE n.nspname='public' AND pg_get_userbyid(p.proowner)<>'cutmy';"""), "0")
-            # Force the actual storage migration to run again: DDL replacement
-            # and counter reconstruction must work after role separation too.
-            q("cutmy", "DELETE FROM public.app_schema_versions;")
+            # Current cores refuse inconsistent history instead of silently
+            # rerunning DDL. Prove rejection and restoration on this disposable
+            # fixture; preserve every original version and checksum.
+            first_version = recorded["ledger"][0]["version"]
+            q("cutmy", "DELETE FROM public.app_schema_versions WHERE version=" + db.sql_literal(first_version) + ";")
+            inconsistent = history()
             result = subprocess.run(["docker", "exec", "-i", container, "sh"], input=script, text=True,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
-            self.assertEqual(result.returncode, 0, "repeated Go migration failed under ordinary app role")
+            self.assertNotEqual(result.returncode, 0, "Go startup accepted inconsistent ordered history")
+            self.assertEqual(history(), inconsistent, "failed Go startup silently repaired migration history")
+            q("cutmy", "INSERT INTO public.app_schema_versions(version) VALUES(" + db.sql_literal(first_version) + ");")
+            result = subprocess.run(["docker", "exec", "-i", container, "sh"], input=script, text=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60)
+            self.assertEqual(result.returncode, 0, "restored Go migration history failed under ordinary app role")
+            self.assertEqual(history(), recorded)
 
 
 if __name__ == "__main__":

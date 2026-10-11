@@ -23,6 +23,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+      - run: npm run test:e2e-contract-types
       - run: npm run test:deploy
       - run: npm audit
       - name: Validate deployment shell scripts and local Compose
@@ -71,7 +72,7 @@ jobs:
             postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
           ready=false
           for attempt in $(seq 1 60); do
-            if docker exec "$container" pg_isready -U cutmy -d cutmy; then ready=true; break; fi
+            if docker exec "$container" pg_isready -h 127.0.0.1 -p 5432 -U cutmy -d cutmy; then ready=true; break; fi
             sleep 1
           done
           [[ "$ready" == true ]]
@@ -96,7 +97,7 @@ jobs:
           POSTGRES_PASSWORD: cutmy_ci_only
           POSTGRES_DB: cutmy
         options: >-
-          --health-cmd "pg_isready -U cutmy -d cutmy"
+          --health-cmd "pg_isready -h 127.0.0.1 -p 5432 -U cutmy -d cutmy"
           --health-interval 5s --health-timeout 3s --health-retries 20
     env:
       DATABASE_URL: postgres://cutmy:cutmy_ci_only@postgres:5432/cutmy?sslmode=disable
@@ -109,6 +110,7 @@ jobs:
       MAX_STORAGE_BYTES: '2147483648'
       MAX_OWNER_BYTES: '268435456'
       CUTMY_E2E_URL: http://127.0.0.1:5173
+      CUTMY_E2E_DATABASE_CONTROL: hosted-disposable
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     steps:
       - name: Prepare browser user directory
@@ -135,7 +137,7 @@ jobs:
       - name: Install media tools
         run: |
           apt-get update -qq
-          apt-get install -y ffmpeg
+          apt-get install -y ffmpeg postgresql-client
       - run: go build -o /tmp/cutmy ./cmd/cutmy
         working-directory: core
       - run: npm ci
