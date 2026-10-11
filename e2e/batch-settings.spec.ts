@@ -102,9 +102,32 @@ test('platform and unsupported subtitles explain available choices without silen
   await chooseOption(page, page.locator('#audio-track-preview'), 'No sound')
   await goToExport(page)
   await chooseOption(page, page.locator('#cut-mode'), 'Original quality')
-  await expect(page.locator('#copy-container')).toHaveCount(0)
+  await expect(page.locator('#copy-container')).toContainText('MP4')
   await expect(page.locator('#subtitle-mode')).toHaveCount(0)
   expect(await page.locator('body').innerText()).not.toContain('Private raw diagnostic')
+})
+
+test('platform copy offers MKV while retaining explicit quality and no-sound settings', async ({ page }) => {
+  await prepare(page, { platform: true, output: { format: 'mp4', quality: '720p', cut_mode: 'accurate' } })
+  await chooseOption(page, page.locator('#audio-track-preview'), 'No sound')
+  await goToExport(page)
+  await chooseOption(page, page.locator('#cut-mode'), 'Original quality')
+  await chooseOption(page, page.locator('#copy-container'), 'MKV')
+  await expect(page.locator('#quality')).toBeEnabled()
+  await expect(page.locator('#quality')).toContainText('Up to 720p')
+  await expect(page.locator('#subtitle-mode')).toHaveCount(0)
+  let submitted: any
+  await page.route('**/api/v1/jobs', route => {
+    submitted = route.request().postDataJSON()
+    return route.fulfill({ json: { id: 'job_platform_mkv', status: 'cancelled', stage: 'cancelled', message: '', items: [] } })
+  })
+  const exportButton = page.getByRole('button', { name: 'Cut clips', exact: true })
+  await expect(exportButton).toBeEnabled()
+  await exportButton.click()
+  await expect.poll(() => submitted).toMatchObject({ format: 'mkv', quality: '720p', cut_mode: 'copy', no_audio: true })
+  expect(submitted).not.toHaveProperty('audio_track')
+  expect(submitted).not.toHaveProperty('subtitle_mode')
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).output.quality)).toBe('720p')
 })
 
 test('unsupported subtitle tracks remain excluded and preservation is disabled', async ({ page }) => {

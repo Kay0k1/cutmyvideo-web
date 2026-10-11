@@ -639,8 +639,8 @@ strict browser-contract type validation (including the new scenarios), and
 and four-step workflow retain the existing selectors, mobile reflow and focus
 behavior.
 
-Browser coverage contains 133 distinct passing desktop/mobile scenarios across
-the full regression and 16 focused rechecks. Six scenarios require unavailable
+Browser coverage contains 135 distinct passing desktop/mobile scenarios across
+the full regression and focused rechecks. Six scenarios require unavailable
 local prerequisites: public direct media, YouTube/provider access, the separate
 three-hour fixture, and two fault-injection checks restricted to disposable
 hosted CI. Final CI also covers the native browser engines. The added checks
@@ -674,5 +674,5 @@ labels remain literal while the generated joined-result label is localized.
 Track selection for platform links requires uploading the original file; no-sound
 preview/export is available by link. Subtitle preservation is limited to local
 copy exports with supported text codecs; styling is simplified and ASS/SSA or
-bitmap tracks receive clear diagnostics. MKV remains a copy-only container.
+bitmap tracks receive clear diagnostics. MKV remains a video-copy-only container for every supported source, including platform links. A mocked platform contract checks that choosing MKV retains the selected 720p ceiling, copy mode and no-sound choice; local quality normalization and subtitle constraints remain separate.
 Browser emulation does not certify physical mobile hardware or screen readers.

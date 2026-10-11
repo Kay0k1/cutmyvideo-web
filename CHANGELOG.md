@@ -7,7 +7,7 @@ Notable product changes are recorded here.
 ### Added
 - Choose a source audio track by index, language and title, or export without sound; preview and export share the selection, and source-specific choices never become defaults for another video.
 - Export selected named clips as separate files or join them in list order through the existing workflow.
-- Offer MKV and compatible text-subtitle preservation for local copy exports, with clear inclusion/exclusion summaries and actual result segment/track details.
+- Offer MP4/MKV for video copy exports from every supported source; local copy also supports compatible text-subtitle preservation, with clear inclusion/exclusion summaries and actual result segment/track details.
 - Russian and English controls, keyboard interaction, mobile layout and actionable diagnostics for platform tracks and unsupported subtitles.
 
 ### Changed
