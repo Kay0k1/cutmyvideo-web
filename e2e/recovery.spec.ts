@@ -10,7 +10,7 @@ for (const input of ['link', 'upload'] as const) {
     }
     const privateDiagnostic = 'https://private.example/?token=secret password=hidden /private/recording.mp4'
     const mutations: string[] = [], unexpected: string[] = []
-    let saved = false, listReads = 0, sourceReads = 0
+    let saved = false, listReads = 0, sourceReads = 0, previewReads = 0
     // All API traffic is controlled; this scenario does not create or decode media.
     await page.route(`**${api}/**`, route => {
       const request = route.request(), path = new URL(request.url()).pathname, method = request.method()
@@ -29,6 +29,10 @@ for (const input of ['link', 'upload'] as const) {
         sourceReads++
         return route.fulfill({ json: source })
       }
+      if (path === `${api}/sources/${source.id}/preview` && method === 'GET') {
+        previewReads++
+        return route.fulfill({ status: 404, json: { error: { code: 'preview_unavailable', message: 'Controlled preview failure' } } })
+      }
       unexpected.push(`${method} ${path}`)
       return route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'Controlled test route' } } })
     })
@@ -39,7 +43,7 @@ for (const input of ['link', 'upload'] as const) {
       await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
     } else {
       await page.getByRole('button', { name: 'Файл', exact: true }).click()
-      // Only the small accepted MP4 header is needed; the fake response has no player.
+      // Only the small accepted MP4 header is needed; preview stays unavailable.
       await page.locator('#source-file').setInputFiles({ name: 'recovery.mp4', mimeType: 'video/mp4', buffer: Buffer.from([0, 0, 0, 16, 102, 116, 121, 112, 105, 115, 111, 109, 0, 0, 0, 0]) })
     }
     const message = 'Не удалось подтвердить сохранение видео. Оно могло уже сохраниться. Проверьте «Мои видео на сервере» перед повторной отправкой. Повторите действие не раньше чем через 2 с.'
@@ -60,6 +64,7 @@ for (const input of ['link', 'upload'] as const) {
     await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
     expect(sourceReads).toBe(1)
     expect(listReads).toBe(1)
+    await expect.poll(() => previewReads).toBe(1)
     expect(mutations).toHaveLength(1)
     expect(unexpected).toEqual([])
     expect(await page.evaluate(() => Object.keys(localStorage).map(key => localStorage.getItem(key)).join('\n'))).not.toMatch(/private\.example|token=secret|password=hidden|\/private\/recording/)
