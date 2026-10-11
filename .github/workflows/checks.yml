@@ -11,7 +11,20 @@ concurrency:
   group: product-checks-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      full: ${{ steps.scope.outputs.full }}
+      image: ${{ steps.scope.outputs.image }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - run: python3 -m unittest discover -s deploy -p 'ci_policy_test.py'
+      - id: scope
+        run: python3 deploy/ci-policy.py
+
   frontend:
+    needs: scope
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -23,6 +36,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Build production website image
+        if: needs.scope.outputs.image == 'true'
         run: docker build --tag cutmy-web:ci .
       - run: npm test
       - run: npm run test:e2e-contract-types
@@ -33,14 +47,17 @@ jobs:
           for script in deploy/*.sh; do bash -n "$script"; done
           POSTGRES_PASSWORD=ci_config_only docker compose -f deploy/compose.dev.yaml config --quiet
       - name: Save distributable website
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: cutmyvideo-web-dist
           path: dist/
-          retention-days: 14
+          retention-days: 3
           if-no-files-found: error
 
   database-access:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -83,6 +100,8 @@ jobs:
             python3 -m unittest discover -s deploy -p 'database_access_test.py'
 
   integration:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     container:
@@ -177,11 +196,13 @@ jobs:
             web/test-results
             /tmp/cutmy-server.log
             /tmp/cutmy-worker.log
-          retention-days: 7
+          retention-days: 3
 
   # WebKit media decoding uses the host platform. Playwright recommends macOS
   # for video playback closest to Safari; retain the entire real-media matrix.
   integration-webkit:
+    needs: scope
+    if: needs.scope.outputs.full == 'true'
     runs-on: macos-15
     timeout-minutes: 30
     defaults:
@@ -343,4 +364,4 @@ jobs:
             ${{ runner.temp }}/cutmy-webkit-ci/worker.log
             ${{ runner.temp }}/cutmy-webkit-ci/web.log
             ${{ runner.temp }}/cutmy-webkit-ci/postgres.log
-          retention-days: 7
+          retention-days: 3

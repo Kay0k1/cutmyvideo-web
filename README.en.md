@@ -5,7 +5,7 @@
 [![Product checks](https://github.com/Kay0k1/cutmyvideo-web/actions/workflows/checks.yml/badge.svg)](https://github.com/Kay0k1/cutmyvideo-web/actions/workflows/checks.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The [cutmy.video](https://cutmy.video) product browser interface for selecting moments from video and exporting MP4 or MP3. Accepts uploaded files and accessible public links. The interface source lives in a private repository available to its owner and invited collaborators. Media processing, the HTTP API and persistent job queue live in the open-source MIT [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
+The [cutmy.video](https://cutmy.video) product browser interface for selecting moments from video and exporting MP4 or MP3. Accepts uploaded files and accessible public links. The interface source is open under the MIT license. Media processing, the HTTP API and persistent job queue live in the open-source MIT [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
 
 [Usage](#usage) · [Local development](#local-development) · [Checks](#checks) · [Deployment](#deployment) · [Contributing](#contributing-and-license)
 
@@ -32,7 +32,7 @@ The operator configures limits and the interface reads them from the API. This r
 
 ## Local development
 
-This section is for collaborators with access to the private website repository. Requires Node.js 22 (minimum 20.19), Docker with Compose, and Git authenticated for this repository. Keep both repositories beside one another. These commands run isolated local PostgreSQL, API and worker services, then the website at `http://localhost:5173`.
+Requires Node.js 22 (minimum 20.19), Docker with Compose, and Git. Keep both repositories beside one another. These commands run isolated local PostgreSQL, API and worker services, then the website at `http://localhost:5173`.
 
 ```sh
 git clone https://github.com/Kay0k1/cutmyvideo-core.git core
@@ -97,6 +97,6 @@ The website pins stable [cutmyvideo-core v1.0.2](https://github.com/Kay0k1/cutmy
 
 ## Contributing and license
 
-Invited collaborators can propose changes: [CONTRIBUTING.md](CONTRIBUTING.md), [issues](https://github.com/Kay0k1/cutmyvideo-web/issues), [CHANGELOG.md](CHANGELOG.md). Report vulnerabilities through [SECURITY.md](SECURITY.md). Code in this private repository uses [MIT](LICENSE); Geologica keeps its separate [SIL Open Font License](public/licenses/geologica.txt).
+Contributions are welcome: [CONTRIBUTING.md](CONTRIBUTING.md), [issues](https://github.com/Kay0k1/cutmyvideo-web/issues), [CHANGELOG.md](CHANGELOG.md). Report vulnerabilities through [SECURITY.md](SECURITY.md). Website code uses [MIT](LICENSE); Geologica keeps its separate [SIL Open Font License](public/licenses/geologica.txt).
 
 TRON, Solana, Ethereum and Bitcoin addresses are available in [Support](https://cutmy.video/?panel=support&lang=en). The website copies addresses; transfers happen in your wallet.

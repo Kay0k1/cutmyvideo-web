@@ -5,7 +5,7 @@
 [![Product checks](https://github.com/Kay0k1/cutmyvideo-web/actions/workflows/checks.yml/badge.svg)](https://github.com/Kay0k1/cutmyvideo-web/actions/workflows/checks.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Продуктовый веб-интерфейс [cutmy.video](https://cutmy.video) для ручного выбора моментов из видео и экспорта MP4 или MP3. Работает с загруженными файлами и доступными публичными ссылками. Исходный код интерфейса хранится в закрытом репозитории и доступен владельцу и приглашённым участникам. Обработку медиа, HTTP API и очередь заданий предоставляет открытое MIT-ядро [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
+Продуктовый веб-интерфейс [cutmy.video](https://cutmy.video) для ручного выбора моментов из видео и экспорта MP4 или MP3. Работает с загруженными файлами и доступными публичными ссылками. Исходный код интерфейса открыт под лицензией MIT. Обработку медиа, HTTP API и очередь заданий предоставляет открытое MIT-ядро [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
 
 [Использование](#использование) · [Локальный запуск](#локальный-запуск) · [Проверки](#проверки) · [Размещение](#размещение) · [Участие](#участие-и-лицензия)
 
@@ -32,7 +32,7 @@
 
 ## Локальный запуск
 
-Этот раздел предназначен для участников с доступом к закрытому репозиторию сайта. Нужны Node.js 22 (минимум 20.19), Docker с Compose и Git с авторизацией для этого репозитория. Репозитории должны находиться рядом. Команды ниже запускают отдельные локальные PostgreSQL, API и worker, затем интерфейс на `http://localhost:5173`.
+Нужны Node.js 22 (минимум 20.19), Docker с Compose и Git. Репозитории должны находиться рядом. Команды ниже запускают отдельные локальные PostgreSQL, API и worker, затем интерфейс на `http://localhost:5173`.
 
 ```sh
 git clone https://github.com/Kay0k1/cutmyvideo-core.git core
@@ -97,6 +97,6 @@ CI запускает unit/build/deploy и аудит всех npm-зависи�
 
 ## Участие и лицензия
 
-Приглашённые участники могут предлагать изменения: [CONTRIBUTING.md](CONTRIBUTING.md), [issues](https://github.com/Kay0k1/cutmyvideo-web/issues), [CHANGELOG.md](CHANGELOG.md). Уязвимости сообщайте через [SECURITY.md](SECURITY.md). Код в этом закрытом репозитории использует [MIT](LICENSE); Geologica — по отдельной [SIL Open Font License](public/licenses/geologica.txt).
+Предлагайте изменения: [CONTRIBUTING.md](CONTRIBUTING.md), [issues](https://github.com/Kay0k1/cutmyvideo-web/issues), [CHANGELOG.md](CHANGELOG.md). Уязвимости сообщайте через [SECURITY.md](SECURITY.md). Код сайта использует [MIT](LICENSE); Geologica — по отдельной [SIL Open Font License](public/licenses/geologica.txt).
 
 Адреса TRON, Solana, Ethereum и Bitcoin доступны в [разделе поддержки](https://cutmy.video/?panel=support). Сайт помогает скопировать адрес; перевод выполняется в вашем кошельке.

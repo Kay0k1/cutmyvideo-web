@@ -2,7 +2,7 @@ blank_issues_enabled: true
 contact_links:
   - name: Security reporting policy
     url: https://github.com/Kay0k1/cutmyvideo-web/blob/main/SECURITY.md
-    about: Collaborators should request a private channel before sharing vulnerability details.
+    about: Report vulnerabilities privately; do not include details in public issues.
   - name: Core media processing issues
     url: https://github.com/Kay0k1/cutmyvideo-core/issues
     about: CLI, codecs, extraction, API and media processing live in the core repository.
