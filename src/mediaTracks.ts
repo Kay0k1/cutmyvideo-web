@@ -33,7 +33,11 @@ export function includedTrackIndices(tracks: MediaTrack[], output: OutputSetting
 
 export function trackLabel(track: MediaTrack, t: (text: string, values?: Record<string, string | number>) => string): string {
   const kinds: Record<MediaTrack['type'], string> = { video: 'Видео', audio: 'Аудио', subtitle: 'Субтитры', data: 'Данные', attachment: 'Вложение' };
+  const channels = track.channels ?? 0;
+  const ending = channels % 10, hundred = channels % 100;
+  const channelMessage = ending === 1 && hundred !== 11 ? '{count} канал'
+    : ending >= 2 && ending <= 4 && (hundred < 12 || hundred > 14) ? '{count} канала' : '{count} каналов';
   return `${t(kinds[track.type] ?? 'Дорожка')} #${track.index} · ${[track.language, track.title, track.codec,
-    track.channels ? track.channels === 1 ? t('1 канал') : t('{count} каналов', { count: track.channels }) : '',
+    channels ? channels === 1 ? t('1 канал') : t(channelMessage, { count: channels }) : '',
     track.sample_rate ? `${track.sample_rate} Hz` : ''].filter(Boolean).join(' · ')}`;
 }

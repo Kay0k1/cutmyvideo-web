@@ -2,6 +2,8 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  '{count} канал': '{count} channels',
+  '{count} канала': '{count} channels',
   'Для сохранения субтитров площадки загрузите исходный файл и выберите копирование.': 'Upload the original file and choose copy mode to preserve platform subtitles.',
   'Проверить дорожки снова': 'Inspect tracks again',
   'Указаны дорожки исходного файла; формат текстовых субтитров может измениться.': 'Source-file tracks are listed; the text-subtitle format may change.',
