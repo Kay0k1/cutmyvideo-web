@@ -4,6 +4,11 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+### Changed
+- Open the MIT website source and contributor documentation; report vulnerabilities through private security advisories.
+- Keep full database and Chromium/Firefox/native WebKit checks for code pull requests, tags and manual runs; main pushes run frontend/image verification without repeating the full matrix. Documentation-only pull requests retain frontend checks.
+- Publish static build artifacts only for tags/manual runs and retain CI artifacts for three days.
+
 ## 0.2.2 — 2026-10-12
 
 ### Fixed
