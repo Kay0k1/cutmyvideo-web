@@ -18,7 +18,7 @@ jobs:
       full: ${{ steps.scope.outputs.full }}
       image: ${{ steps.scope.outputs.image }}
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: python3 -m unittest discover -s deploy -p 'ci_policy_test.py'
       - id: scope
         run: python3 deploy/ci-policy.py
@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: '22'
@@ -61,12 +61,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: web
       - id: core-ref
         run: echo "sha=$(cat web/core.version)" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: Kay0k1/cutmyvideo-core
           ref: ${{ steps.core-ref.outputs.sha }}
@@ -136,12 +136,12 @@ jobs:
     steps:
       - name: Prepare browser user directory
         run: chown "$(id -u):$(id -g)" -- "$HOME"
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: web
       - id: core-ref
         run: echo "sha=$(cat web/core.version)" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: Kay0k1/cutmyvideo-core
           ref: ${{ steps.core-ref.outputs.sha }}
@@ -231,12 +231,12 @@ jobs:
             printf 'DATA_DIR=%s\n' "$cutmy_ci_path/data"
             printf 'PLAYWRIGHT_BROWSERS_PATH=%s\n' "$cutmy_ci_path/browsers"
           } >> "$GITHUB_ENV"
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: web
       - id: core-ref
         run: echo "sha=$(cat web/core.version)" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: Kay0k1/cutmyvideo-core
           ref: ${{ steps.core-ref.outputs.sha }}
