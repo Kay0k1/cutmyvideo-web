@@ -22,6 +22,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Build production website image
+        run: docker build --tag cutmy-web:ci .
       - run: npm test
       - run: npm run test:e2e-contract-types
       - run: npm run test:deploy
