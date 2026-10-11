@@ -5,6 +5,9 @@ import { chooseOption, goToClips, goToExport, goToMoment, goToSource, showExactT
 // Text-only resizing leaves the viewport and layout media queries unchanged.
 // It complements the 320 CSS-pixel reflow matrix; device scale is not text zoom.
 async function resizeText(page: Page, scale = 2) {
+  // Lazy selectors replace their loading trigger with a new DOM node. Capture
+  // the final control so that replacement cannot discard the measured size.
+  await expect(page.locator('.select-control[aria-busy="true"]')).toHaveCount(0)
   return page.evaluate(scale => {
     for (const element of document.querySelectorAll<HTMLElement>('[data-qa-text-resize]')) {
       element.style.fontSize = element.dataset.qaTextResize ?? ''
@@ -74,6 +77,52 @@ async function assertReflow(page: Page, description: string, textScale?: number)
   expect(result.unscaledText, `${description}: all visible text received the requested font scaling`).toEqual([])
   return result
 }
+
+test('200% text measures the final selector when its lazy module is delayed', async ({ page }) => {
+  const source = { id: 'src_text_resize', title: 'Delayed audio selector', kind: 'upload', duration_ms: 12000,
+    width: 640, height: 360, preview_url: '/text-resize-fixture.mp4', embed_url: null, thumbnail_url: null, preview_kind: 'native' }
+  let releaseModule!: () => void
+  const moduleGate = new Promise<void>(resolve => { releaseModule = resolve })
+  await page.route(/\/RadixSelectControl(?:-[^/]+)?\.(?:js|tsx)(?:\?.*)?$/, async route => {
+    await moduleGate
+    await route.continue()
+  })
+  await page.route('**/api/v1/session', route => route.fulfill({ json: { ok: true } }))
+  await page.route('**/api/v1/sources/' + source.id, route => route.fulfill({ json: source }))
+  await page.route('**/api/v1/sources/' + source.id + '/tracks', route => route.fulfill({ json: { tracks: [
+    { index: 0, type: 'video', codec: 'h264' }, { index: 1, type: 'audio', codec: 'aac', default: true },
+  ] } }))
+  await page.route('**/text-resize-fixture.mp4', async route => route.fulfill({
+    contentType: 'video/mp4', body: await readFile(process.env.CUTMY_E2E_MEDIA!),
+  }))
+  await page.addInitScript(sourceID => {
+    localStorage.setItem('cutmyvideo.locale', 'en')
+    localStorage.setItem('cutmy.workbench.v1', JSON.stringify({ workflow_version: 2, step: 2, source_id: sourceID,
+      ranges: [{ id: 'range_text_resize', label: 'Clip 1', start_ms: 1000, end_ms: 4000 }],
+      selected_id: 'range_text_resize', selected_range_ids: ['range_text_resize'],
+      output: { format: 'mp4', quality: '1080p', cut_mode: 'accurate' } }))
+  }, source.id)
+  await page.goto('/?lang=en')
+  const selector = page.locator('#audio-track-preview')
+  await expect(selector).toHaveAttribute('aria-busy', 'true')
+  await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(1)
+  const baseline = await selector.evaluate(element => parseFloat(getComputedStyle(element).fontSize))
+  const resizing = resizeText(page)
+  try {
+    // A rendering turn while the module remains held proves that measurement
+    // waits for replacement, rather than scaling the soon-to-be-discarded node.
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    expect(await selector.evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBe(baseline)
+    await expect(selector).toHaveAttribute('aria-busy', 'true')
+  } finally {
+    releaseModule()
+    await resizing
+  }
+  await expect(selector).not.toHaveAttribute('aria-busy', 'true')
+  expect(await selector.evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBe(baseline * 2)
+  await expect(selector).toHaveAttribute('data-qa-text-resize-computed', String(baseline))
+  await assertReflow(page, 'Delayed source selector at 200% text', 2)
+})
 
 for (const width of [320, 390, 1280]) {
   test(`200% text remains readable through all steps at ${width}px without changing the viewport`, async ({ page }, testInfo) => {
