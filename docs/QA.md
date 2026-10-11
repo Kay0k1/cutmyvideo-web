@@ -1,15 +1,24 @@
 # Acceptance and UX review
 
-## Stable core v1.0.2 — 12 October 2026
+## Core v1.1.0 — 12 October 2026
 
-The integration pin is the immutable release commit
+[core.version](../core.version) is the authoritative immutable integration
+revision. Production Compose must use the matching release version, source
+commit and build timestamp. The deployment helper requires the exact core
+checkout to match that file; Product checks on the selected pin must pass before
+activation. A core release does not automatically deploy the website.
+
+This stage adds named batch plans, separate or joined results, consistent source
+audio selection, silent video, MKV copying and compatible text-subtitle
+preservation. The new browser/media verification is recorded below. Historical
+results describe their original revisions and do not replace checks of the
+current pin.
+
+## Historical stable core v1.0.2 — 12 October 2026
+
+The v1.0.2 verification used immutable release commit
 `4e34a17fce228742b9f63fee95c8062dd50371e5`, including bounded database waits,
 durable publication, stable HTTP errors, storage recovery and media selection.
-Production Compose passes the published version, commit and build timestamp to
-the unchanged core Dockerfile. The deployment helper requires the exact core
-checkout to match `core.version`; Product checks on this pin must pass before
-activation. A core release does not automatically deploy the website.
-Historical results below describe their original versions.
 
 The database-role job checks the current ordered version/checksum ledger under
 the existing ordinary application role. Removing one version marker must make
