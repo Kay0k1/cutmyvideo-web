@@ -515,7 +515,7 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
   .moment-layout .player-frame video, .moment-layout .youtube-player { height: auto; aspect-ratio: 16 / 9; max-height: min(430px, calc(100dvh - 80px)); }
 }
 
-.source-cleanup-choice { display: flex; gap: 10px; align-items: center; margin-top: 16px; font-size: .875rem; color: var(--ink); }
+.source-cleanup-choice { display: flex; gap: 10px; align-items: center; min-height: 44px; margin-top: 16px; font-size: .875rem; color: var(--ink); }
 .source-cleanup-choice input { min-height: 20px; width: 20px; padding: 0; accent-color: var(--accent); }
 .source-cleanup-hint { margin-bottom: 10px; }
 .crop-export-conflict { color: var(--error); margin: 12px 0; font-size: .875rem; }
