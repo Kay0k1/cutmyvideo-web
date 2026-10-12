@@ -76,8 +76,8 @@ services:
       # Keep these release identifiers aligned with the immutable core.version pin.
       args:
         VERSION: v1.1.0+ux.20261012
-        VCS_REF: 3bf98be77e092cdd3d8346655b23a39a31308cec
-        BUILD_TIME: "2026-10-12T11:42:14Z"
+        VCS_REF: 578c479e8fd6a31a4253fd8b163155c6fffb48fd
+        BUILD_TIME: "2026-10-12T12:27:00Z"
     command: [server]
     depends_on:
       postgres:
