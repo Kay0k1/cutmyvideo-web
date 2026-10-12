@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatTimecode } from './timecode';
 import { useLanguage } from './Language';
-import { parseWaveform, waveformPath } from './waveform';
-import type { WaveformWindow } from './waveform';
+import { parseWaveform, waveformPath } from './waveformData';
+import type { WaveformWindow } from './waveformData';
 import './Waveform.css';
 
 /** Only settled, visible source windows are decoded; the overview fills gradually. */

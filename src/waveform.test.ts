@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseWaveform, waveformPath } from './waveform';
+import { parseWaveform, waveformPath } from './waveformData';
 
 const valid = { start_ms: 30000, end_ms: 30250, step_ms: 100, has_audio: true, audio_track: 2, peaks: [0, .5, 1] };
 describe('source waveform', () => {

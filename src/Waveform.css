@@ -7,3 +7,7 @@
 .waveform-overview:focus-visible { outline: 2px solid var(--accent, #397758); outline-offset: 2px; }
 .waveform-position { position: absolute; top: 0; bottom: 0; width: 1px; background: currentColor; }
 .waveform-hint { margin-top: 3px; opacity: .8; }
+@media (any-pointer: coarse), (max-width: 680px) {
+  .waveform-overview { height: 44px; padding: 14.5px 0; background-clip: content-box; }
+  .waveform-position { top: 14.5px; bottom: 14.5px; }
+}
