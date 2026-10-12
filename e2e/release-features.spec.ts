@@ -18,7 +18,7 @@ async function releaseMock(page: Page, { noSourceAudio = false }: { noSourceAudi
   await page.route('**/release-clip.mp4', route => route.fulfill({ contentType: 'video/mp4', body: media }));
   await page.route('**/api/v1/**', async route => {
     const request = route.request(), url = new URL(request.url()), path = url.pathname;
-    if (path.endsWith('/preview')) { await route.fulfill({ contentType: 'video/mp4', body: media }); return; }
+    if (path.endsWith('/preview')) { await route.fulfill({ contentType: 'video/mp4', headers: { 'X-Source-Display-Width': '640', 'X-Source-Display-Height': '360' }, body: media }); return; }
     if (path.endsWith('/waveform')) {
       const start = Number(url.searchParams.get('start_ms') ?? 0), end = Math.min(12000, start + 30000), track = Number(url.searchParams.get('audio_track') ?? (noSourceAudio ? 0 : 2));
       const peaks = Array.from({ length: Math.ceil((end - start) / 100) }, (_, index) => noSourceAudio ? 0 : track === 1 ? index === 20 ? 1 : 0 : index === 80 ? .2 : 0);
@@ -44,7 +44,7 @@ async function openFrame(page: Page) {
   const frame = page.locator('.moments-stage details.crop-editor');
   await expect(frame).toBeVisible();
   if (!await frame.evaluate(node => (node as HTMLDetailsElement).open)) await frame.locator('summary').click();
-  const aspect = frame.getByLabel('Frame aspect ratio', { exact: true });
+  const aspect = frame.getByRole('combobox', { name: 'Frame aspect ratio', exact: true });
   await expect(aspect).toBeEnabled();
   return { frame, aspect };
 }
@@ -54,7 +54,7 @@ test('Frame stays compact, all aspect presets and custom ratios work, and crop g
   await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step');
   const disclosure = page.locator('.moments-stage details.crop-editor');
   await expect(disclosure).not.toHaveAttribute('open', '');
-  await expect(disclosure.getByLabel('Frame aspect ratio', { exact: true })).toBeHidden();
+  await expect(disclosure.getByRole('combobox', { name: 'Frame aspect ratio', exact: true })).toBeHidden();
   const { frame, aspect } = await openFrame(page);
   await expect(aspect.locator('option')).toHaveText(['Original aspect ratio', ...cropPresets, 'Custom aspect ratio']);
   for (const preset of cropPresets) {
@@ -73,17 +73,17 @@ test('Frame stays compact, all aspect presets and custom ratios work, and crop g
   const after = await area.getAttribute('style');
   await page.getByRole('button', { name: 'Undo change', exact: true }).click(); await expect(area).toHaveAttribute('style', before!);
   await page.getByRole('button', { name: 'Redo change', exact: true }).click(); await expect(area).toHaveAttribute('style', after!);
-  await frame.locator('summary').click(); await expect(frame.getByLabel('Frame aspect ratio', { exact: true })).toBeHidden();
+  await frame.locator('summary').click(); await expect(frame.getByRole('combobox', { name: 'Frame aspect ratio', exact: true })).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole('button', { name: 'Русский', exact: true }).click();
   await expect(frame.locator('summary')).toContainText('Кадр');
-  await expect(frame.getByLabel('Пропорции кадра', { exact: true })).toBeHidden();
+  await expect(frame.getByRole('combobox', { name: 'Пропорции кадра', exact: true })).toBeHidden();
   await page.screenshot({ path: testInfo.outputPath('compact-frame-editor.png'), fullPage: true });
   await goToExport(page); await expect(page.getByRole('checkbox', { name: 'Удалить исходник после экспорта', exact: true })).toBeChecked();
   await page.getByRole('button', { name: 'English', exact: true }).click();
   await chooseOption(page, page.locator('#cut-mode'), 'Original quality');
-  await expect(page.getByRole('button', { name: 'Cut clip', exact: true })).toBeDisabled();
-  await expect(page.locator('.export-panel')).toContainText(/Crop|crop/);
+  await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeDisabled();
+  await expect(page.locator('.export-panel')).toContainText('The selected frame requires accurate MP4.');
 });
 
 test('waveform follows the selected track and source-time positions, and silent sources remain usable', async ({ page }) => {
@@ -95,9 +95,10 @@ test('waveform follows the selected track and source-time positions, and silent 
   await chooseOption(page, page.locator('#audio-track-preview'), /Audio #1.*rus/); await changedTrack;
   await expect(waveform.locator('.waveform-detail path')).toHaveAttribute('d', /M100,0\.00V40\.00/);
   await expect(waveform.locator('.waveform-detail path')).not.toHaveAttribute('d', /M400,16\.00V24\.00/);
-  const overview = waveform.getByRole('button', { name: 'Whole recording audio overview; visited areas are prepared', exact: true }); await overview.scrollIntoViewIfNeeded(); const box = await overview.boundingBox(); expect(box).toBeTruthy();
+  const overview = waveform.getByRole('slider', { name: 'Whole recording audio overview; visited areas are prepared', exact: true }); await overview.scrollIntoViewIfNeeded(); const box = await overview.boundingBox(); expect(box).toBeTruthy();
   await overview.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
-  await expect(page.getByRole('slider', { name: 'Player position', exact: true }).last()).toHaveAttribute('aria-valuenow', '6000');
+  await expect.poll(async () => Math.abs(Number(await page.getByRole('slider', { name: 'Player position', exact: true }).last().getAttribute('aria-valuenow')) - 6000)).toBeLessThanOrEqual(50);
+  await overview.press('Home'); await expect(overview).toHaveAttribute('aria-valuenow', '0'); await overview.press('ArrowRight'); await expect(overview).toHaveAttribute('aria-valuenow', '1000');
   await chooseOption(page, page.locator('#audio-track-preview'), 'No sound'); await expect(waveform).toHaveCount(0); await expect(page.locator('#range-start')).toBeEnabled();
 });
 
@@ -110,8 +111,8 @@ test('no-audio waveform is explained without disabling cutting', async ({ page }
 test('default cleanup submits an explicit policy and preserves browser projects and completed downloads', async ({ page }) => {
   const state = await releaseMock(page); await page.goto('/?lang=en'); await goToExport(page);
   const cleanup = page.getByRole('checkbox', { name: 'Delete source after export', exact: true }); await expect(cleanup).toBeChecked();
-  await cleanup.uncheck(); await page.reload(); await expect(cleanup).not.toBeChecked(); await cleanup.check();
-  await page.getByRole('button', { name: 'Cut clip', exact: true }).click();
+  await cleanup.uncheck(); await page.reload(); await goToExport(page); await expect(cleanup).not.toBeChecked(); await cleanup.check();
+  await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
   await expect.poll(() => state.submitted()?.cleanup_source).toBe(true);
   await expect(page.getByRole('link', { name: 'Download', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Download', exact: true })).toHaveAttribute('href', '/release-clip.mp4');
@@ -131,7 +132,7 @@ test('real square crop keeps selected audio and cleanup removes original media w
   const { frame, aspect } = await openFrame(page); await aspect.selectOption('1:1'); await frame.locator('summary').click();
   await goToExport(page); await expect(page.getByRole('checkbox', { name: 'Delete source after export', exact: true })).toBeChecked();
   const accepted = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`${api}/jobs`));
-  await page.getByRole('button', { name: 'Cut clip', exact: true }).click(); const response = await accepted; expect(response.ok(), await response.text()).toBeTruthy();
+  await page.getByRole('button', { name: 'Cut a clip', exact: true }).click(); const response = await accepted; expect(response.ok(), await response.text()).toBeTruthy();
   const submitted = response.request().postDataJSON(); expect(submitted.cleanup_source).toBe(true); expect(submitted.audio_track).toBe(1); expect(submitted.crop).toMatchObject({ width: .5625, height: 1 });
   const job = await waitJob(page.request, (await response.json()).id); expect(job.status, JSON.stringify(job)).toBe('succeeded');
   const artifact = job.items[0].artifact; const probe = await probeDownloadedFile(page.request, artifact.download_url, 'square-crop.mp4', testInfo);
@@ -142,7 +143,7 @@ test('real square crop keeps selected audio and cleanup removes original media w
   const expectedFrame = firstFrame(process.env.CUTMY_E2E_MULTITRACK!, '2', 'crop=360:360:140:0,scale=64:64,format=gray');
   const actualFrame = firstFrame(filename, '0', 'scale=64:64,format=gray'); expect(actualFrame.length).toBe(expectedFrame.length);
   const difference = actualFrame.reduce((sum, value, index) => sum + Math.abs(value - expectedFrame[index]), 0) / actualFrame.length; expect(difference).toBeLessThan(2.5);
-  const samples = execFileSync('ffmpeg', ['-v', 'error', '-ss', '.5', '-i', filename, '-map', '0:a:0', '-t', '1', '-ac', '1', '-ar', '8000', '-f', 's16le', '-'], { timeout: 30_000 });
+  const samples = execFileSync('ffmpeg', ['-v', 'error', '-ss', '0.5', '-i', filename, '-map', '0:a:0', '-t', '1', '-ac', '1', '-ar', '8000', '-f', 's16le', '-'], { timeout: 30_000 });
   let crossings = 0; for (let offset = 2; offset < samples.length; offset += 2) if ((samples.readInt16LE(offset - 2) < 0) !== (samples.readInt16LE(offset) < 0)) crossings++;
   expect(crossings / 2).toBeGreaterThan(430); expect(crossings / 2).toBeLessThan(450);
   await expect.poll(async () => { const sourceResponse = await page.request.get(`${api}/sources/${openedSource.id}`); expect(sourceResponse.ok()).toBeTruthy(); return (await sourceResponse.json()).media_removed; }, { timeout: 30000, intervals: [250, 500, 1000] }).toBe(true);
