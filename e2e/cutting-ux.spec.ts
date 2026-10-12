@@ -217,6 +217,10 @@ test('foreground preview retries brief contention promptly with bounded attempts
 });
 
 test('a new seek cancels an obsolete foreground retry before it prepares more media', async ({ page }) => {
+  await page.clock.install();
+  // This assertion isolates foreground retries; speculative continuation is
+  // covered separately by the window-preview cache and promotion scenarios.
+  await page.addInitScript(() => Object.defineProperty(navigator, 'connection', { configurable: true, value: { saveData: true } }));
   await prepare(page);
   const windowSource = { ...source, duration_ms: 60000, preview_url: null, preview_kind: 'window' };
   const requests: number[] = [];
@@ -224,6 +228,9 @@ test('a new seek cancels an obsolete foreground retry before it prepares more me
   await page.route(`**${api}/sources/${source.id}/preview?*`, async route => {
     const start = Number(new URL(route.request().url()).searchParams.get('start_ms'));
     requests.push(start);
+    // Freeze before completing the third busy reply so UI interaction cannot
+    // accidentally race the next retry on a loaded browser runner.
+    if (start === 0 && requests.filter(value => value === 0).length === 3) await page.clock.pauseAt(new Date());
     return start === 0 ? route.fulfill({ status: 503, json: { error: { code: 'server_busy', message: 'Busy obsolete window' } } })
       : route.fulfill({ contentType: 'video/mp4', body: await readFile(process.env.CUTMY_E2E_MEDIA!) });
   });
@@ -234,11 +241,12 @@ test('a new seek cancels an obsolete foreground retry before it prepares more me
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(node, '32000');
     node.dispatchEvent(new Event('input', { bubbles: true }));
   });
+  await page.clock.runFor(200);
   const video = page.locator('.window-player video');
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(2, 1);
   await expect(seek).toHaveValue('32000');
-  await page.waitForTimeout(1200);
+  await page.clock.runFor(1200);
   expect(requests.filter(start => start === 0)).toHaveLength(3);
   expect(requests.filter(start => start === 30000)).toHaveLength(1);
 });

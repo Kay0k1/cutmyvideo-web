@@ -98,6 +98,10 @@ async function prepare(page: Page, saved: Record<string, unknown> = {}) {
     localStorage.setItem('cutmy.workbench.v1', JSON.stringify({ workflow_version: 2, step: 4, source_id: sourceID,
       ranges: [{ id: 'range_resources', label: '', start_ms: 0, end_ms: 3000 }], selected_id: 'range_resources', selected_range_ids: ['range_resources'],
       ...saved }))
+    // This fixture represents a previously saved legacy draft. The initial
+    // empty page already completed migration, so reset that marker before the
+    // first restoration; later reloads must use the actual migrated project.
+    localStorage.removeItem('cutmy.projects.v2.ready')
   }, { sourceID: source.id, saved })
 }
 
@@ -211,7 +215,10 @@ test('resource lifecycle: malformed IDs and oversized JSON never start restore r
   await page.route(`**${api}/sources/**`, route => { restores++; return route.abort() })
   await page.route(`**${api}/jobs/**`, route => { restores++; return route.abort() })
   await page.reload(); await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled(); expect(restores).toBe(0)
-  await page.evaluate(() => localStorage.setItem('cutmy.workbench.v1', '{"source_id":"src_resources","padding":"' + 'x'.repeat(256 * 1024) + '"}'))
+  await page.evaluate(() => {
+    localStorage.setItem('cutmy.workbench.v1', '{"source_id":"src_resources","padding":"' + 'x'.repeat(256 * 1024) + '"}')
+    localStorage.removeItem('cutmy.projects.v2.ready')
+  })
   await page.reload(); await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled(); expect(restores).toBe(0)
 })
 

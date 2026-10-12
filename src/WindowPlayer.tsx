@@ -7,7 +7,12 @@ import type { Source } from './types';
 import type { PlayerControls } from './Player';
 import { usePlaybackClock } from './usePlaybackClock';
 
-type PendingWindow = { start: number; controller: AbortController; promise: Promise<PreviewWindow>; background: boolean };
+type PendingWindow = {
+  start: number; end: number; controller: AbortController;
+  promise: Promise<PreviewWindow>; background: boolean;
+  promotion?: Promise<PreviewWindow>; foregroundStart?: number; foregroundWindow?: number;
+};
+const speculativePromotionWaitMS = 400;
 
 // Keep source time independent of the short preview files. Recently visited
 // intervals stay in a bounded cache; only the next interval is speculative.
@@ -51,10 +56,10 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     setLoading(busy); setFailed(error);
   }
 
-  function cancelRequests(exceptStart?: number, nextStart?: number) {
+  function cancelRequests(exceptStart?: number, nextStart?: number, alreadyCached = false) {
     window.clearTimeout(prefetchTimer.current); prefetchTimer.current = undefined;
     for (const [key, request] of pending.current) {
-      if (request.start !== exceptStart && request.start !== nextStart) { request.controller.abort(); pending.current.delete(key); }
+      if (alreadyCached && request.promotion || !(exceptStart !== undefined && request.start <= exceptStart && request.end > exceptStart) && request.start !== nextStart) { request.controller.abort(); pending.current.delete(key); }
     }
     setPrefetching([...pending.current.values()].some(request => request.background));
   }
@@ -64,17 +69,19 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     const key = `${start}:${end}`;
     const cached = cache.current!.get(start, end);
     if (cached) return Promise.resolve(cached);
-    const existing = pending.current.get(key);
+    const existing = pending.current.get(key) ?? (!background
+      ? [...pending.current.values()].find(request => request.start <= start && request.end >= end)
+      : undefined);
     if (existing) {
       if (!background) {
         existing.background = false;
         setPrefetching([...pending.current.values()].some(request => request.background));
       }
-      return existing.promise;
+      return existing.start === start && existing.end === end ? existing.promise : promoteCovering(existing, start, windowMS);
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 120000);
-    const request: PendingWindow = { start, controller, background, promise: null! };
+    const request: PendingWindow = { start, end, controller, background, promise: null! };
     // Yield once so the request is registered before synchronous failures finish.
     request.promise = Promise.resolve().then(async () => {
       let response: Response | undefined;
@@ -119,6 +126,30 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     return request.promise;
   }
 
+  function promoteCovering(request: PendingWindow, start: number, windowMS: number): Promise<PreviewWindow> {
+    // Rapid seeks within this rendition share the same bounded wait. If it is
+    // still queued, the replacement must serve the latest requested position.
+    request.foregroundStart = start; request.foregroundWindow = windowMS;
+    if (request.promotion) return request.promotion;
+    const deadline = new Error('speculation deadline');
+    let timer: number;
+    const timeout = new Promise<never>((_, reject) => { timer = window.setTimeout(() => reject(deadline), speculativePromotionWaitMS); });
+    const replace = () => {
+      if (!mounted.current || !enabled.current || request.controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+      request.controller.abort();
+      for (const [key, current] of pending.current) if (current === request) pending.current.delete(key);
+      return requestWindow(request.foregroundStart!, false, request.foregroundWindow!);
+    };
+    request.promotion = Promise.race([request.promise, timeout]).then(entry => {
+      const requiredStart = request.foregroundStart!, requiredEnd = Math.min(source.duration_ms, requiredStart + request.foregroundWindow!);
+      return entry.start <= requiredStart && entry.end >= requiredEnd ? entry : replace();
+    }, error => {
+      if (error !== deadline) throw error;
+      return replace();
+    }).finally(() => window.clearTimeout(timer));
+    return request.promotion;
+  }
+
   function schedulePrefetch() {
     window.clearTimeout(prefetchTimer.current);
     const current = state.current;
@@ -160,7 +191,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     const start = Math.floor(target / QUICK_PREVIEW_WINDOW_MS) * QUICK_PREVIEW_WINDOW_MS;
     const generation = ++current.generation;
     const cached = cache.current!.covering(target);
-    cancelRequests(start, cached ? Math.floor(cached.end / PREVIEW_WINDOW_MS) * PREVIEW_WINDOW_MS : undefined);
+    cancelRequests(start, cached ? Math.floor(cached.end / PREVIEW_WINDOW_MS) * PREVIEW_WINDOW_MS : undefined, !!cached);
     if (cached) { show(cached); return; }
     status(true);
     try {
@@ -261,7 +292,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
       <label className="window-player-seek">
         <span className="window-player-position"><span>{t('Позиция в видео')}</span><span>{formatTimecode(position)} / {formatTimecode(source.duration_ms)}</span></span>
         <span className="window-player-rail">
-          <span className="window-player-buffered" aria-hidden="true">{buffered.map(range => <span key={range.start} style={{ left: `${range.start / source.duration_ms * 100}%`, width: `${(range.end-range.start) / source.duration_ms * 100}%` }} />)}</span>
+          <span className="window-player-buffered" aria-hidden="true">{buffered.map(range => <span key={`${range.start}:${range.end}`} style={{ left: `${range.start / source.duration_ms * 100}%`, width: `${(range.end-range.start) / source.duration_ms * 100}%` }} />)}</span>
           <input type="range" min="0" max={source.duration_ms} step="100" value={position} aria-label={t('Позиция в видео')} aria-valuetext={formatTimecode(position)} onChange={event => seek(Number(event.target.value))} />
         </span>
       </label>
