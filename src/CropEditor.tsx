@@ -31,7 +31,8 @@ function cropLabel(crop: CropRect | undefined, width: number, height: number, or
 }
 
 export function CropEditor(props: CropEditorProps) {
-  const { value, onChange, displayWidth: width, displayHeight: height, locale, disabled, previewContainer, onBeginChange, onEndChange, onOpenChange } = props;
+  const { value, displayWidth: width, displayHeight: height, locale, disabled, previewContainer, onBeginChange, onEndChange, onOpenChange } = props;
+  function onChange(next?: CropRect) { props.onChange(next && next.x === 0 && next.y === 0 && next.width === 1 && next.height === 1 ? undefined : next); }
   const t = copy[locale];
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -89,7 +90,7 @@ export function CropEditor(props: CropEditorProps) {
       </>}
       <p className="field-hint">{disabled ? t.mode : !knownGeometry ? t.pending : t.hint}</p>
     </div>
-    {open && !locked && previewContainer && <CropOverlay {...props} previewContainer={previewContainer} />}
+    {open && !locked && previewContainer && <CropOverlay {...props} onChange={onChange} previewContainer={previewContainer} />}
   </details>;
 }
 

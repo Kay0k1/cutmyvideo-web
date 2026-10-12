@@ -11,7 +11,7 @@
 .crop-custom > span { align-self: center; padding-top: 22px; }
 .crop-custom input { width: 100%; }
 .crop-controls .crop-size { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; }
-.crop-size input { min-height: 44px; padding: 0; width: 100%; }
+.crop-size input { min-height: 44px; padding: 0; width: 100%; accent-color: var(--accent); }
 .crop-controls .field-hint { margin-top: 0; }
 .crop-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .crop-actions .text-button:last-child { margin-left: auto; }
