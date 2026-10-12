@@ -175,6 +175,8 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
   await page.locator('#range-end').fill('00:00:08.500')
   await page.locator('#range-end').press('Tab')
   await goToExport(page)
+  // The viewport matrix revisits and plays the original after this export.
+  await page.getByRole('checkbox', { name: 'Удалить исходник после экспорта', exact: true }).uncheck()
   const created = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: labels.cut }).click()
   const creation = await created
