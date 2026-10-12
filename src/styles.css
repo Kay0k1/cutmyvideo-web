@@ -506,3 +506,9 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 @media (max-width: 480px) { .boundary-steps > div { flex-basis: 100%; } .storyboard-frames { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } .storyboard-frames button { max-width: none; min-height: 44px; } .draft-recovery { padding: 14px; } }
 
 .copy-boundary-warning { margin-top: 14px; padding: 10px 12px; background: var(--soft); border-left: 3px solid var(--trim-line); color: var(--ink); font-size: .8125rem; line-height: 1.6; }
+
+@media (min-width: 1140px) {
+  .editing-panel { overflow: clip; }
+  .moment-layout > .player-frame { align-self: start; min-height: 0; position: sticky; top: 16px; }
+  .moment-layout .player-frame video, .moment-layout .youtube-player { height: auto; aspect-ratio: 16 / 9; max-height: min(430px, calc(100dvh - 80px)); }
+}

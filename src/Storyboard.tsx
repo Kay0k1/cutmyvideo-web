@@ -39,7 +39,7 @@ export function Storyboard({ sourceID, duration, current, active, onSeek }: { so
       try {
         const response = await fetch(`/api/v1/sources/${encodeURIComponent(sourceID)}/storyboard?start_ms=${start}&priority=background`, { credentials: 'same-origin', signal: controller.signal });
         if (!response.ok) {
-          if ([429, 503].includes(response.status) && attempt < 2 && !controller.signal.aborted) retry = window.setTimeout(() => { void prepare(attempt + 1); }, 1500);
+          if ([429, 503].includes(response.status) && attempt < 9 && !controller.signal.aborted) retry = window.setTimeout(() => { void prepare(attempt + 1); }, 1500);
           return;
         }
         const frameCount = Number(response.headers.get('X-Storyboard-Frames'));

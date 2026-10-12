@@ -83,7 +83,8 @@ export const Player = memo(forwardRef<PlayerControls, {
   noAudio?: boolean;
   onTime(ms: number): void;
   onAvailable(available: boolean): void;
-}>(({ source, active, audioTrack, noAudio, onTime, onAvailable }, ref) => {
+  onSourceUnavailable(id: string, verify?: boolean): void;
+}>(({ source, active, audioTrack, noAudio, onTime, onAvailable, onSourceUnavailable }, ref) => {
   const { t } = useLanguage();
   const video = useRef<HTMLVideoElement>(null);
   const host = useRef<HTMLDivElement>(null);
@@ -216,7 +217,7 @@ export const Player = memo(forwardRef<PlayerControls, {
   </div>;
 
   return <div className="player-frame">
-    {useWindow ? <WindowPlayer key={`${source.id}:${audioTrack ?? 'default'}:${noAudio ?? false}`} ref={windowPlayer} source={source} audioTrack={audioTrack} noAudio={noAudio} active={active} poster={poster} initialPosition={lastTime.current.ms} onTime={ms => callbacks.current.onTime(ms)} onAvailable={onAvailable} /> : source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
+    {useWindow ? <WindowPlayer key={`${source.id}:${audioTrack ?? 'default'}:${noAudio ?? false}`} ref={windowPlayer} source={source} audioTrack={audioTrack} noAudio={noAudio} active={active} poster={poster} initialPosition={lastTime.current.ms} onTime={ms => callbacks.current.onTime(ms)} onAvailable={onAvailable} onSourceUnavailable={onSourceUnavailable} /> : source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
       onLoadedMetadata={() => { if (video.current && lastTime.current.ms > 0) video.current.currentTime = lastTime.current.ms / 1000; callbacks.current.onAvailable(true); }}
       onTimeUpdate={() => { if (!video.current?.seeking) callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000)); }}
       onError={() => { setServerPreview(true); callbacks.current.onAvailable(false); }} />

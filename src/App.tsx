@@ -169,6 +169,19 @@ export default function App() {
     if (available && restoredPosition.current !== null) { player.current?.seek(restoredPosition.current); restoredPosition.current = null; }
   }, []);
 
+  const sourceUnavailable = useCallback(async (id: string, verify = false) => {
+    if (!source || source.id !== id || currentSourceID.current !== id) return;
+    if (verify) {
+      try { await api.source(id); return; }
+      catch (error) { if (!(error instanceof ApiError) || !(error.httpStatus === 404 || error.httpStatus === 410 || ['not_found', 'expired', 'source_expired', 'source_unavailable'].includes(error.code))) return; }
+      if (currentSourceID.current !== id) return;
+    }
+    player.current?.pause(); previewEnd.current = null; setPreviewing(false);
+    setRecoverableSource({ id, title: source.title, duration_ms: source.duration_ms }); setKeepRecoveredCuts(false);
+    setSource(null); setStep(1);
+    setSourceError('Источник больше недоступен. Фрагменты сохранены. Загрузите ту же запись или откройте её ссылку, чтобы продолжить.');
+  }, [source]);
+
   const setFields = useCallback((range: ClipRange) => {
     setStartText(formatTimecode(range.start_ms, true));
     setEndText(formatTimecode(range.end_ms, true));
@@ -301,6 +314,7 @@ export default function App() {
       onResult: fresh => {
         const nextSnapshot = JSON.stringify(fresh);
         if (nextSnapshot !== snapshot) { snapshot = nextSnapshot; setJob(fresh); }
+        if (source && fresh.items.some(item => item.error_code === 'source_expired')) void sourceUnavailable(source.id);
         setJobError(''); return activeJob(fresh);
       },
       delay: fresh => fresh.status === 'waiting_storage' ? 10000 : fresh.status === 'queued' ? 5000 : 1500,
@@ -462,7 +476,7 @@ export default function App() {
     const range = nextRanges.find(range => range.id === selectedId) ?? nextRanges[0];
     player.current?.pause(); previewEnd.current = null; restoredPosition.current = null;
     setSource(opened); setRanges(nextRanges); setSelectedId(range.id); if (!recovered) setFields(range);
-    setSelectedRangeIds(recovered ? selectedRangeIds : [range.id]); setRevealId(range.id); setSimpleView(simpleRangeView(opened.duration_ms, range)); setPrecisionOpen(opened.preview_kind === 'none' || (!opened.preview_url && !opened.embed_url));
+    setSelectedRangeIds(recovered ? selectedRangeIds : [range.id]); setRevealId(range.id); setSimpleView(simpleRangeView(opened.duration_ms, range)); setPrecisionOpen(!!recovered || opened.preview_kind === 'none' || (!opened.preview_url && !opened.embed_url));
     position.set(0); setViewCenter((range.start_ms + range.end_ms) / 2); setSpan(Math.min(opened.duration_ms, preferences.timeline_span)); if (!recovered) setOutput(withoutSourceAudio(preferences.output));
     setRecoverableSource(null);
     exportAttempt.current = null;
@@ -480,7 +494,12 @@ export default function App() {
     try {
       const fresh = await api.source(previous.id, controller.signal);
       if (!controller.signal.aborted && activateSource(fresh)) setNotice('Источник открыт. Укажите границы фрагмента.');
-    } catch (error) { if (!controller.signal.aborted) setSourceError(errorMessage(error)); }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        if (previous.id === currentSourceID.current && error instanceof ApiError && (error.httpStatus === 410 || ['not_found', 'expired', 'source_expired', 'source_unavailable'].includes(error.code))) void sourceUnavailable(previous.id);
+        else setSourceError(errorMessage(error));
+      }
+    }
     finally { if (sourceController.current === controller) { sourceController.current = null; setSourceBusy(false); } }
   }
 
@@ -556,9 +575,16 @@ export default function App() {
     changeBounds(start, end); revealBoundary(which === 'start' ? start : end);
   }
 
+  function revealPlayer() {
+    const element = document.querySelector<HTMLElement>('.player-frame');
+    if (!element) return;
+    const bounds = element.getBoundingClientRect();
+    if (bounds.top < 0 || bounds.bottom > window.innerHeight) element.scrollIntoView({ block: 'center', behavior: 'instant' });
+  }
+
   function audition(which: 'start' | 'end') {
     const range = validateFields(true); if (!range || !playerAvailable) return;
-    commitFields();
+    commitFields(); revealPlayer();
     const [start, end] = boundaryAudition(which === 'start' ? range.start_ms : range.end_ms, duration);
     player.current?.pause(); player.current?.seek(start);
     previewEnd.current = end; setPreviewing(true); player.current?.play();
@@ -568,7 +594,7 @@ export default function App() {
     if (previewing) { player.current?.pause(); previewEnd.current = null; setPreviewing(false); return; }
     const range = validateFields(true);
     if (!range || !playerAvailable) return;
-    commitFields(); player.current?.seek(range.start_ms); previewEnd.current = range.end_ms;
+    commitFields(); revealPlayer(); player.current?.seek(range.start_ms); previewEnd.current = range.end_ms;
     setPreviewing(true); player.current?.play();
   }
 
@@ -594,7 +620,10 @@ export default function App() {
       exportAttempt.current = null;
       setJobRangeNumbers(requestedOutput.output_mode === 'joined' ? [1] : included.map(item => committed.findIndex(original => original.id === item.id) + 1)); setJoinedJob(requestedOutput.output_mode === 'joined'); setJob(created);
     }
-    catch (error) { setJobError(errorMessage(error, 'export')); }
+    catch (error) {
+      if (error instanceof ApiError && (error.httpStatus === 404 || error.httpStatus === 410 || ['expired', 'source_expired', 'source_unavailable'].includes(error.code))) void sourceUnavailable(source.id);
+      setJobError(errorMessage(error, 'export'));
+    }
     finally { mutationPending.current = false; setSubmitting(false); }
   }
 
@@ -689,7 +718,7 @@ export default function App() {
         <div className="editing-panel">
           <div className="media-heading"><div className="source-title"><Icon name="file" size={18} /><span title={source.title}>{source.title}</span>{sourceProvider && <span className="source-provider">{t(sourceProvider)}</span>}</div><span className="source-meta">{qualityLabel && <>{qualityLabel}<span className="meta-separator"> / </span></>}{formatTimecode(duration)}</span></div>
           <div className="moment-layout">
-          <Player ref={player} source={source} audioTrack={previewAudioTrack} noAudio={output.no_audio} active={step === 2} onAvailable={playerAvailability} onTime={playbackPosition} />
+          <Player ref={player} source={source} audioTrack={previewAudioTrack} noAudio={output.no_audio} active={step === 2} onAvailable={playerAvailability} onTime={playbackPosition} onSourceUnavailable={sourceUnavailable} />
           {selected && <div className="moment-controls">
             <AudioTrackSelector id="audio-track-preview" output={output} tracks={tracks} loading={tracksLoading} error={tracksError} disabled={busy} onChange={changeAudio} onRetry={() => setTrackRevision(value => value + 1)} />
             <div className="moment-boundaries"><div><label htmlFor="range-start">{t('Начало')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время начала: {time}', { time: displayTimecode(selected.start_ms) })} onClick={() => editTime('start')}>{displayTimecode(selected.start_ms)}<Icon name="edit" size={14} /></button><input ref={startField} id="range-start" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span>{t('Начало здесь')}<kbd>I</kbd></button></div><div><label htmlFor="range-end">{t('Конец')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время конца: {time}', { time: displayTimecode(selected.end_ms) })} onClick={() => editTime('end')}>{displayTimecode(selected.end_ms)}<Icon name="edit" size={14} /></button><input ref={endField} id="range-end" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={endText} onChange={event => { setEndText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span>{t('Конец здесь')}<kbd>O</kbd></button></div><div className="moment-duration"><span>{t('Длительность')}</span><strong>{durationLabel(selected.end_ms - selected.start_ms, locale)}</strong></div></div>

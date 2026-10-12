@@ -7,8 +7,9 @@ const source = { id: 'src_cutting_controls', title: 'Recorded interview', kind: 
   preview_kind: 'native', preview_url: `${api}/sources/src_cutting_controls/file`, embed_url: null, thumbnail_url: null };
 const ranges = [{ id: 'range_opening', label: 'Opening', start_ms: 1000, end_ms: 3000 }, { id: 'range_ending', label: 'Ending', start_ms: 10000, end_ms: 12000 }];
 
-async function prepare(page: Page, saved: Record<string, unknown> = {}, expired = false, reopenedDuration = source.duration_ms) {
+async function prepare(page: Page, saved: Record<string, unknown> = {}, expired = false, reopenedDuration = source.duration_ms, busyStoryboards = 0) {
   const media = await readFile(process.env.CUTMY_E2E_MEDIA!);
+  let storyboardRequests = 0;
   await page.route(`**${api}/**`, async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === `${api}/session`) return route.fulfill({ json: { ok: true } });
@@ -24,6 +25,7 @@ async function prepare(page: Page, saved: Record<string, unknown> = {}, expired 
     }
     if (path.endsWith('/tracks')) return route.fulfill({ json: { tracks: [{ index: 0, type: 'video', codec: 'h264' }, { index: 1, type: 'audio', codec: 'aac' }] } });
     if (path.endsWith('/storyboard')) {
+      if (++storyboardRequests <= busyStoryboards) return route.fulfill({ status: 503, json: { error: { code: 'server_busy', message: 'Foreground preview is preparing' } } });
       const sprite = execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', process.env.CUTMY_E2E_MEDIA!, '-vf', 'fps=1/5,scale=160:90,tile=6x1:nb_frames=3', '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'mjpeg', 'pipe:1'], { timeout: 15000 });
       return route.fulfill({ contentType: 'image/jpeg', body: sprite, headers: { 'X-Preview-Start-MS': '0', 'X-Preview-End-MS': '12000', 'X-Storyboard-Step-MS': '5000', 'X-Storyboard-Frames': '3' } });
     }
@@ -139,6 +141,78 @@ test('copy mode explains shifted boundaries before opening optional export contr
   await expect(page.getByRole('note')).toContainText('фактические границы будут указаны');
 });
 
+test('a source expiring during export offers recovery immediately without losing cuts', async ({ page }) => {
+  await prepare(page, { ranges: [{ ...ranges[0], start_ms: 1125, end_ms: 3875 }, ranges[1]], start_text: '1.125', end_text: '3.875', output: { format: 'mp3', quality: 'best', cut_mode: 'accurate' } });
+  await page.route(`**${api}/jobs`, route => route.request().method() === 'POST'
+    ? route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'Source expired while editing' } } }) : route.fallback());
+  await stepButton(page, 4).click();
+  await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Clips saved', exact: true })).toBeVisible();
+  await expect(page.locator('.draft-recovery')).toContainText('00:00:01.125 — 00:00:03.875');
+  await page.getByRole('checkbox', { name: 'Restore saved clips in the video you open', exact: true }).check();
+  await page.getByLabel('Video link', { exact: true }).fill('https://video.example/recording.mp4');
+  await page.getByRole('button', { name: 'Open video', exact: true }).click();
+  await expect(page.locator('#range-start')).toHaveValue('1.125');
+  await expect(page.locator('#range-end')).toHaveValue('3.875');
+  await page.getByRole('button', { name: 'Clip list', exact: true }).click();
+  await expect(page.getByLabel('Clip 1 name', { exact: true })).toHaveValue('Opening');
+  await expect(page.getByLabel('Clip 2 name', { exact: true })).toHaveValue('Ending');
+  await expect(page.getByRole('checkbox', { name: 'Select clip 1', exact: true })).not.toBeChecked();
+  await expect(page.getByRole('checkbox', { name: 'Select clip 2', exact: true })).toBeChecked();
+  await stepButton(page, 4).click();
+  await expect(page.locator('.format-picker button.active')).toContainText('MP3');
+});
+
+test('frames still prepare after three refusals while foreground preview is busy', async ({ page }) => {
+  await prepare(page, {}, false, source.duration_ms, 3);
+  await expect(page.getByRole('button', { name: /^Go to frame/ })).toHaveCount(3);
+  await page.getByRole('button', { name: 'Go to frame 00:00:10', exact: true }).click();
+  await expect(page.locator('#overview')).toHaveValue('10000');
+});
+
+test('foreground preview retries brief contention promptly with bounded attempts', async ({ page }) => {
+  await prepare(page);
+  const windowSource = { ...source, duration_ms: 60000, preview_url: null, preview_kind: 'window' };
+  const requests: number[] = [];
+  await page.route(`**${api}/sources/${source.id}`, route => route.fulfill({ json: windowSource }));
+  await page.route(`**${api}/sources/${source.id}/preview?*`, async route => {
+    requests.push(Date.now());
+    return requests.length <= 3 ? route.fulfill({ status: 503, json: { error: { code: 'server_busy', message: 'Inspecting source metadata' } } })
+      : route.fulfill({ contentType: 'video/mp4', body: await readFile(process.env.CUTMY_E2E_MEDIA!) });
+  });
+  await page.reload();
+  await expect.poll(() => page.locator('.window-player video').evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+  expect(requests).toHaveLength(4);
+  expect(requests[3] - requests[0]).toBeLessThan(2400);
+});
+
+test('a new seek cancels an obsolete foreground retry before it prepares more media', async ({ page }) => {
+  await prepare(page);
+  const windowSource = { ...source, duration_ms: 60000, preview_url: null, preview_kind: 'window' };
+  const requests: number[] = [];
+  await page.route(`**${api}/sources/${source.id}`, route => route.fulfill({ json: windowSource }));
+  await page.route(`**${api}/sources/${source.id}/preview?*`, async route => {
+    const start = Number(new URL(route.request().url()).searchParams.get('start_ms'));
+    requests.push(start);
+    return start === 0 ? route.fulfill({ status: 503, json: { error: { code: 'server_busy', message: 'Busy obsolete window' } } })
+      : route.fulfill({ contentType: 'video/mp4', body: await readFile(process.env.CUTMY_E2E_MEDIA!) });
+  });
+  const thirdBusy = page.waitForResponse(response => response.url().includes('/preview?start_ms=0') && requests.filter(start => start === 0).length === 3);
+  await page.reload(); await thirdBusy;
+  const seek = page.getByRole('slider', { name: 'Position in video', exact: true });
+  await seek.evaluate(node => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(node, '32000');
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const video = page.locator('.window-player video');
+  await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+  await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(2, 1);
+  await expect(seek).toHaveValue('32000');
+  await page.waitForTimeout(1200);
+  expect(requests.filter(start => start === 0)).toHaveLength(3);
+  expect(requests.filter(start => start === 30000)).toHaveLength(1);
+});
+
 test('a real upload keeps precise boundaries from audition through decoded download', async ({ page }, testInfo) => {
   await page.goto('/?lang=en');
   const uploaded = page.waitForResponse(response => response.url().endsWith(`${api}/uploads`) && response.request().method() === 'POST');
@@ -174,7 +248,8 @@ test('a real upload keeps precise boundaries from audition through decoded downl
     const job = await waitJob(page.request, (await exported.json()).id);
     expect(job.status).toBe('succeeded');
     const artifact = job.items[0].artifact;
-    expect(artifact.actual_start_ms).toBe(1225); expect(artifact.actual_end_ms).toBe(3875);
+    expect(artifact.actual_start_ms).toBe(1225);
+    expect(Math.abs(artifact.actual_end_ms - 3875)).toBeLessThanOrEqual(40); // One frame at the fixture's 25 fps.
     const decoded = await probeDownloadedFile(page.request, artifact.download_url, 'precise-cut.mp4', testInfo);
     expect(Number(decoded.format.duration)).toBeCloseTo(2.65, 1);
     execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', testInfo.outputPath('precise-cut.mp4'), '-f', 'null', '-'], { timeout: 15000 });
