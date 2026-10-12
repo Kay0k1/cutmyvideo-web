@@ -198,6 +198,7 @@ export default function App() {
   const navigation = useWorkflowHistory({ ready: sessionReady, step, panel, onNavigate: navigateHistory });
 
   const playbackPosition = useCallback((ms: number, confirmed = true) => {
+    if (confirmed && restoredPosition.current !== null && Math.abs(ms - restoredPosition.current) > 250) return;
     const active = sequence.current;
     if (active) {
       const range = active.ranges[active.index];
@@ -1161,7 +1162,7 @@ export default function App() {
         <div className="editing-panel">
           <div className="media-heading"><div className="source-title"><Icon name="file" size={18} /><span title={source.title}>{source.title}</span>{sourceProvider && <span className="source-provider">{t(sourceProvider)}</span>}</div><span className="source-meta">{qualityLabel && <>{qualityLabel}<span className="meta-separator"> / </span></>}{formatTimecode(duration)}</span></div>
           <div className="moment-layout">
-          <Player ref={player} source={source} audioTrack={previewAudioTrack} noAudio={output.no_audio} forceWindow={(cropOpen || !!output.crop) && !source.preview_url} onGeometry={mediaGeometry} active={step === 2} onAvailable={playerAvailability} onTime={playbackPosition} onSourceUnavailable={sourceUnavailable} />
+          <Player ref={player} source={source} initialPosition={position.getSnapshot()} audioTrack={previewAudioTrack} noAudio={output.no_audio} forceWindow={(cropOpen || !!output.crop) && !source.preview_url} onGeometry={mediaGeometry} active={step === 2} onAvailable={playerAvailability} onTime={playbackPosition} onSourceUnavailable={sourceUnavailable} />
           {sequenceIndex !== null && output.crop && cropContainer && <CropPreview crop={output.crop} container={cropContainer} />}
           {selected && <div className="moment-controls">
             <div className="moment-collection-actions" role="group" aria-label={t('Нарезка фрагментов')}>

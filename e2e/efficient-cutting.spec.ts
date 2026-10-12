@@ -270,6 +270,54 @@ for (const playhead of [0, 3000, 12000]) test(`library add opens an editable cut
   await expect(page.getByRole('checkbox', { name: 'Выбрать фрагмент 2', exact: true })).toBeChecked();
 });
 
+for (const savedPosition of [3000, 8000]) test(`restored playhead ${savedPosition} survives delayed native seek acknowledgment and audio preview handoff`, async ({ page }) => {
+  const media = await readFile(process.env.CUTMY_E2E_MEDIA!);
+  let releaseTracks!: () => void, releaseMetadata!: () => void;
+  const tracksReady = new Promise<void>(resolve => { releaseTracks = resolve; });
+  const metadataReady = new Promise<void>(resolve => { releaseMetadata = resolve; });
+  try {
+    await prepare(page, { ranges: [{ ...cuts[0], start_ms: 0, end_ms: 12000 }], selected_id: 'later', selected_range_ids: ['later'], current_ms: savedPosition, precision_open: true }, async () => {
+      await page.route(`**/api/v1/sources/${source.id}`, route => route.fulfill({ json: { ...source, duration_ms: 12000 } }));
+      await page.route('**/tracks', async route => {
+        await tracksReady;
+        await route.fulfill({ json: { tracks: [{ index: 0, type: 'video', codec: 'h264' }, { index: 1, type: 'audio', codec: 'aac' }, { index: 2, type: 'audio', codec: 'aac', default: true }] } }).catch(() => {});
+      });
+      await page.route('**/efficient-source.mp4', async route => {
+        await metadataReady;
+        await route.fulfill({ contentType: 'video/mp4', body: media }).catch(() => {});
+      });
+    });
+    const native = page.locator('.player-frame > video');
+    await native.evaluate(node => {
+      // Model a requested seek whose clock is not yet acknowledged. Install
+      // this before metadata; WindowPlayer's later blob node remains untouched.
+      Object.defineProperty(node, 'currentTime', { configurable: true, get: () => 0, set: value => { (node as HTMLVideoElement & { requestedSeek?: number }).requestedSeek = value; } });
+    });
+    releaseMetadata();
+    await expect.poll(() => native.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+    await expect.poll(() => native.evaluate(node => (node as HTMLVideoElement & { requestedSeek?: number }).requestedSeek)).toBe(savedPosition / 1000);
+    expect(await native.evaluate(node => (node as HTMLVideoElement).currentTime)).toBe(0);
+    expect(await native.evaluate(node => (node as HTMLVideoElement).seeking)).toBe(false);
+    // App has sent and consumed its restore command. The native stale zero
+    // must not replace the requested position before the audio mode changes.
+    await native.evaluate(node => {
+      Object.defineProperty(node, 'seeking', { configurable: true, value: true });
+      node.dispatchEvent(new Event('seeking'));
+      Object.defineProperty(node, 'seeking', { configurable: true, value: false });
+    });
+    await native.evaluate(node => node.dispatchEvent(new Event('timeupdate')));
+    await expect(page.locator('#overview')).toHaveValue(String(savedPosition));
+    releaseTracks();
+    const windowSeek = page.locator('.window-player-seek input');
+    await expect(windowSeek).toHaveValue(String(savedPosition));
+    await expect.poll(() => page.locator('.window-player video').evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+    await expect(windowSeek).toHaveValue(String(savedPosition));
+    await expect(page.locator('#overview')).toHaveValue(String(savedPosition));
+    await goToClips(page); await page.getByRole('button', { name: 'Добавить фрагмент', exact: true }).click();
+    await expect(page.locator('#range-start')).toHaveValue(savedPosition === 3000 ? '00:00:03.000' : '00:00:08.000');
+  } finally { releaseTracks(); releaseMetadata(); }
+});
+
 for (const failure of ['slow', 'temporary', 'expired'] as const) test(`saved prior files survive ${failure} metadata reads according to their availability`, async ({ page }) => {
   const file = (id: string, index: number) => ({ id, filename: `${cuts[index].label}.mp4`, download_url: `/retained-${id}.mp4`, size_bytes: 100, actual_start_ms: cuts[index].start_ms, actual_end_ms: cuts[index].end_ms });
   const previous = { id: 'prior-ready', status: 'failed', stage: 'failed', message: '', items: [{ ...cuts[0], id: 'old-ready-item', status: 'succeeded', artifact: file('old-ready', 0) }, { ...cuts[2], id: 'old-failed-item', status: 'failed', artifact: null }] };

@@ -31,6 +31,7 @@ interface YoutubeInstance {
   pendingSeek: number | null;
   seekDeadline: number;
   pendingPause: boolean;
+  readyRestore: number | null;
   syncPolling(): void;
   fail(): void;
 }
@@ -80,6 +81,7 @@ function embedId(url: string | null): string | null {
 export const Player = memo(forwardRef<PlayerControls, {
   source: Source | null;
   active: boolean;
+  initialPosition?: number;
   audioTrack?: number;
   noAudio?: boolean;
   forceWindow?: boolean;
@@ -87,14 +89,17 @@ export const Player = memo(forwardRef<PlayerControls, {
   onTime(ms: number, confirmed?: boolean): void;
   onAvailable(available: boolean): void;
   onSourceUnavailable(id: string, verify?: boolean): void;
-}>(({ source, active, audioTrack, noAudio, forceWindow, onGeometry, onTime, onAvailable, onSourceUnavailable }, ref) => {
+}>(({ source, active, initialPosition = 0, audioTrack, noAudio, forceWindow, onGeometry, onTime, onAvailable, onSourceUnavailable }, ref) => {
   const { t } = useLanguage();
   const video = useRef<HTMLVideoElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const youtube = useRef<YoutubeInstance | null>(null);
   const callbacks = useRef({ onTime, onAvailable });
-  const lastTime = useRef({ id: source?.id, ms: 0 });
-  if (lastTime.current.id !== source?.id) lastTime.current = { id: source?.id, ms: 0 };
+  const nativeSeek = useRef<{ node: HTMLVideoElement; ms: number } | null>(null);
+  const nativeReady = useRef<HTMLVideoElement | null>(null);
+  const startingPosition = Number.isFinite(initialPosition) ? Math.min(source?.duration_ms ?? 0, Math.max(0, initialPosition)) : 0;
+  const lastTime = useRef({ id: source?.id, ms: startingPosition });
+  if (lastTime.current.id !== source?.id) { lastTime.current = { id: source?.id, ms: startingPosition }; nativeSeek.current = null; nativeReady.current = null; }
   callbacks.current = { onTime: (ms, confirmed = true) => { lastTime.current.ms = ms; onTime(ms, confirmed); }, onAvailable };
   const pollingActive = useRef(active);
   pollingActive.current = active;
@@ -102,7 +107,18 @@ export const Player = memo(forwardRef<PlayerControls, {
   const windowPlayer = useRef<PlayerControls>(null);
   const useWindow = forceWindow || audioTrack !== undefined || noAudio === true || serverPreview || (!!source && !source.preview_url && !embedId(source.embed_url));
   const poster = source && source.thumbnail_url === `/api/v1/sources/${encodeURIComponent(source.id)}/thumbnail` ? source.thumbnail_url : undefined;
-  usePlaybackClock(video, active && !useWindow && !!source?.preview_url, () => { if (!video.current?.seeking) callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000), true); }, source?.id);
+  usePlaybackClock(video, active && !useWindow && !!source?.preview_url, () => nativeTime(video.current), source?.id);
+
+  function nativeTime(node: HTMLVideoElement | null) {
+    if (!node || node !== video.current || node !== nativeReady.current || node.readyState < HTMLMediaElement.HAVE_METADATA || node.seeking) return;
+    const ms = Math.round(node.currentTime * 1000);
+    const requested = nativeSeek.current;
+    // Loading a source can publish an old zero clock after a seek was requested.
+    // Keep that intent for audio/window handoff until the native clock confirms it.
+    if (requested?.node === node && Math.abs(ms - requested.ms) > 250) return;
+    nativeSeek.current = null;
+    callbacks.current.onTime(ms, true);
+  }
 
   function readyCommand(command: (player: YTPlayer) => void) {
     const instance = youtube.current;
@@ -115,10 +131,11 @@ export const Player = memo(forwardRef<PlayerControls, {
   useImperativeHandle(ref, () => ({
     seek: ms => {
       if (windowPlayer.current) { windowPlayer.current.seek(ms); return; }
-      if (video.current) video.current.currentTime = ms / 1000;
+      if (video.current) { nativeSeek.current = { node: video.current, ms }; video.current.currentTime = ms / 1000; }
       const instance = youtube.current;
+      const alreadyRequested = instance?.ready && instance.readyRestore === ms;
       if (instance && !instance.failed && !instance.disposed) { instance.pendingSeek = ms; instance.seekDeadline = performance.now() + 5000; }
-      readyCommand(player => player.seekTo(ms / 1000, true));
+      if (!alreadyRequested) readyCommand(player => player.seekTo(ms / 1000, true));
       callbacks.current.onTime(ms, false);
     },
     play: () => { if (windowPlayer.current) { windowPlayer.current.play(); return; } void video.current?.play().catch(() => undefined); readyCommand(player => player.playVideo()); },
@@ -137,6 +154,7 @@ export const Player = memo(forwardRef<PlayerControls, {
   }), []);
 
   useEffect(() => { youtube.current?.syncPolling(); }, [active]);
+  useEffect(() => { if (useWindow) { nativeReady.current = null; nativeSeek.current = null; } }, [useWindow]);
 
   useEffect(() => {
     const visibility = () => {
@@ -157,7 +175,7 @@ export const Player = memo(forwardRef<PlayerControls, {
     const id = embedId(source?.embed_url ?? null);
     if (!id || source?.preview_url || !host.current) return;
     let timer: number | undefined;
-    const instance: YoutubeInstance = { player: null, ready: false, failed: false, disposed: false, pendingSeek: lastTime.current.ms || null, seekDeadline: 0, pendingPause: false, syncPolling: () => {
+    const instance: YoutubeInstance = { player: null, ready: false, failed: false, disposed: false, pendingSeek: lastTime.current.ms || null, seekDeadline: 0, pendingPause: false, readyRestore: null, syncPolling: () => {
       window.clearInterval(timer); timer = undefined;
       if (document.hidden || !pollingActive.current || !instance.ready || instance.failed || instance.disposed) return;
       timer = window.setInterval(() => {
@@ -201,7 +219,9 @@ export const Player = memo(forwardRef<PlayerControls, {
             if (instance.pendingPause) readyCommand(player => player.pauseVideo());
             instance.pendingPause = false;
             if (!instance.ready) return;
-            callbacks.current.onAvailable(true);
+            // Seeded restoration is already sent. Later user previews still seek.
+            instance.readyRestore = pendingSeek;
+            try { callbacks.current.onAvailable(true); } finally { instance.readyRestore = null; }
             if (!instance.ready || instance.failed || instance.disposed || youtube.current !== instance) return;
             instance.syncPolling();
           },
@@ -230,9 +250,29 @@ export const Player = memo(forwardRef<PlayerControls, {
 
   return <div className="player-frame">
     {useWindow ? <WindowPlayer key={`${source.id}:${audioTrack ?? 'default'}:${noAudio ?? false}`} ref={windowPlayer} source={source} audioTrack={audioTrack} noAudio={noAudio} active={active} poster={poster} initialPosition={lastTime.current.ms} onTime={(ms, confirmed) => callbacks.current.onTime(ms, confirmed)} onAvailable={onAvailable} onGeometry={onGeometry} onSourceUnavailable={onSourceUnavailable} /> : source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
-      onLoadedMetadata={() => { if (video.current) onGeometry?.(video.current.videoWidth, video.current.videoHeight); if (video.current && lastTime.current.ms > 0) video.current.currentTime = lastTime.current.ms / 1000; callbacks.current.onAvailable(true); }}
-      onTimeUpdate={() => { if (!video.current?.seeking) callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000)); }}
-      onError={() => { setServerPreview(true); callbacks.current.onAvailable(false); }} />
+      onLoadedMetadata={event => {
+        const node = event.currentTarget;
+        if (node !== video.current || node.readyState < HTMLMediaElement.HAVE_METADATA) return;
+        nativeReady.current = node;
+        onGeometry?.(node.videoWidth, node.videoHeight);
+        nativeSeek.current = { node, ms: lastTime.current.ms };
+        if (node.currentTime * 1000 !== lastTime.current.ms) node.currentTime = lastTime.current.ms / 1000;
+        callbacks.current.onAvailable(true);
+      }}
+      onTimeUpdate={event => nativeTime(event.currentTarget)} onSeeked={event => {
+        const node = event.currentTarget;
+        if (node !== video.current || node !== nativeReady.current || node.readyState < HTMLMediaElement.HAVE_METADATA || node.seeking) return;
+        nativeSeek.current = null;
+        nativeTime(node);
+      }}
+      onSeeking={event => {
+        const node = event.currentTarget, ms = Math.round(node.currentTime * 1000);
+        if (node !== video.current || node !== nativeReady.current || node.readyState < HTMLMediaElement.HAVE_METADATA || !node.seeking) return;
+        if (nativeSeek.current?.node !== node) {
+          nativeSeek.current = { node, ms }; callbacks.current.onTime(ms, false);
+        }
+      }}
+      onError={event => { if (event.currentTarget === video.current) { setServerPreview(true); callbacks.current.onAvailable(false); } }} />
       : <div ref={host} className="youtube-player" />}
 
   </div>;
