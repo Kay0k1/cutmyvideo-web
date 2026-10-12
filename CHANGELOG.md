@@ -4,6 +4,20 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+### Added
+- Save and add the next clip, previous/next clip navigation and input-safe shortcuts beside the player; compact controls remain accessible on phones.
+- Draft playback of the selected sequence in list order, with boundary seek feedback, selected audio and read-only crop framing.
+- Download all ready clips as a streaming ZIP and retry only failed intervals, retaining earlier successes across navigation, cleanup and reload.
+
+### Changed
+- Projects use per-record compare-and-save under browser locks, independent tab views, deletion tombstones and explicit same-project conflict recovery. Legacy projects migrate without overwriting their original records.
+- Short foreground preview windows load first, while bounded background windows retain ordinary playback and revisit coverage.
+
+### Fixed
+- Playback in a stale tab can no longer erase another tab's projects or resurrect deleted work.
+- Optimistic seeks and delayed external-player clocks cannot prematurely advance a draft sequence.
+
+
 ## 0.4.0 — 2026-10-12
 
 ### Added

@@ -4,6 +4,24 @@ import { PreviewWindowCache } from './previewWindowCache';
 const windowAt = (start: number, bytes = 8) => ({ start, end: start + 30_000, url: `blob:${start}`, bytes });
 
 describe('preview media ownership', () => {
+  it('retains a quick window while its longer replacement loads and reuses covering windows', () => {
+    const release = vi.fn();
+    const cache = new PreviewWindowCache(release, 64, 4);
+    const quick = { start: 36_000, end: 42_000, url: 'blob:quick', bytes: 8 };
+    const full = { start: 30_000, end: 60_000, url: 'blob:full', bytes: 20 };
+    cache.add(quick, quick.start); cache.add(full, quick.start);
+    expect(release).not.toHaveBeenCalled();
+    expect(cache.covering(37_000)).toBe(full);
+    expect(cache.covering(59_999)).toBe(full);
+    expect(cache.covering(60_000)).toBeUndefined();
+    expect(cache.get(36_000, 42_000)).toBe(quick);
+    cache.add({ start: 36_000, end: 66_000, url: 'blob:overlap', bytes: 20 }, quick.start);
+    expect(cache.get(36_000)).toHaveProperty('url', 'blob:overlap');
+    expect(cache.get(36_000, 42_000)).toBe(quick);
+    cache.clear();
+    expect(release.mock.calls.flat().sort()).toEqual(['blob:full', 'blob:overlap', 'blob:quick']);
+  });
+
   it('keeps frequently revisited intervals and releases the oldest unused object URLs', () => {
     const release = vi.fn();
     const cache = new PreviewWindowCache(release, 64, 3);

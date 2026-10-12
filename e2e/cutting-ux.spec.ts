@@ -1,3 +1,4 @@
+import { readBrowserDraft } from './browserProjectStorage';
 import { expect, test, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
@@ -34,15 +35,14 @@ async function prepare(page: Page, saved: Record<string, unknown> = {}, expired 
       ? route.fulfill({ status: 410, json: { error: { code: 'expired', message: 'Expired fixture' } } }) : route.fulfill({ json: source });
     return route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'Controlled fixture' } } });
   });
-  await page.goto('/?lang=en');
-  await expect(page.getByRole('button', { name: 'Open video', exact: true })).toBeEnabled();
-  await page.evaluate(({ source, ranges, saved }) => {
-    window.dispatchEvent(new Event('pagehide'));
+  await page.addInitScript(({ source, ranges, saved }) => {
+    if (localStorage.getItem('cutting-fixture-seeded')) return;
     localStorage.setItem('cutmy.workbench.v1', JSON.stringify({ workflow_version: 2, step: 2, source_id: source.id,
       source_title: source.title, source_duration_ms: source.duration_ms, ranges, selected_id: ranges[0].id,
       selected_range_ids: [ranges[1].id], precision_open: true, ...saved }));
+    localStorage.setItem('cutting-fixture-seeded', 'yes');
   }, { source, ranges, saved });
-  await page.reload();
+  await page.goto('/?lang=en');
 }
 
 test('small cut steps, boundary checks and frame search use actual source positions', async ({ page }) => {
@@ -140,7 +140,7 @@ test('an expired draft with no export selection survives rejecting a shorter rep
   await expect(page.locator('.draft-recovery')).toContainText('00:00:01.125 — 00:00:03.875');
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Clips saved', exact: true })).toBeVisible();
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).selected_range_ids)).toEqual([]);
+  expect(await readBrowserDraft(page).then(saved => saved.selected_range_ids)).toEqual([]);
   await expect(page.locator('.draft-recovery li')).toHaveCount(2);
 });
 

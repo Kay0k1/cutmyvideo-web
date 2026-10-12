@@ -29,6 +29,7 @@ interface YoutubeInstance {
   failed: boolean;
   disposed: boolean;
   pendingSeek: number | null;
+  seekDeadline: number;
   pendingPause: boolean;
   syncPolling(): void;
   fail(): void;
@@ -83,7 +84,7 @@ export const Player = memo(forwardRef<PlayerControls, {
   noAudio?: boolean;
   forceWindow?: boolean;
   onGeometry?(width: number, height: number): void;
-  onTime(ms: number): void;
+  onTime(ms: number, confirmed?: boolean): void;
   onAvailable(available: boolean): void;
   onSourceUnavailable(id: string, verify?: boolean): void;
 }>(({ source, active, audioTrack, noAudio, forceWindow, onGeometry, onTime, onAvailable, onSourceUnavailable }, ref) => {
@@ -94,14 +95,14 @@ export const Player = memo(forwardRef<PlayerControls, {
   const callbacks = useRef({ onTime, onAvailable });
   const lastTime = useRef({ id: source?.id, ms: 0 });
   if (lastTime.current.id !== source?.id) lastTime.current = { id: source?.id, ms: 0 };
-  callbacks.current = { onTime: ms => { lastTime.current.ms = ms; onTime(ms); }, onAvailable };
+  callbacks.current = { onTime: (ms, confirmed = true) => { lastTime.current.ms = ms; onTime(ms, confirmed); }, onAvailable };
   const pollingActive = useRef(active);
   pollingActive.current = active;
   const [serverPreview, setServerPreview] = useState(false);
   const windowPlayer = useRef<PlayerControls>(null);
   const useWindow = forceWindow || audioTrack !== undefined || noAudio === true || serverPreview || (!!source && !source.preview_url && !embedId(source.embed_url));
   const poster = source && source.thumbnail_url === `/api/v1/sources/${encodeURIComponent(source.id)}/thumbnail` ? source.thumbnail_url : undefined;
-  usePlaybackClock(video, active && !useWindow && !!source?.preview_url, () => callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000)), source?.id);
+  usePlaybackClock(video, active && !useWindow && !!source?.preview_url, () => { if (!video.current?.seeking) callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000), true); }, source?.id);
 
   function readyCommand(command: (player: YTPlayer) => void) {
     const instance = youtube.current;
@@ -116,9 +117,9 @@ export const Player = memo(forwardRef<PlayerControls, {
       if (windowPlayer.current) { windowPlayer.current.seek(ms); return; }
       if (video.current) video.current.currentTime = ms / 1000;
       const instance = youtube.current;
-      if (instance && !instance.ready && !instance.failed && !instance.disposed) instance.pendingSeek = ms;
-      else readyCommand(player => player.seekTo(ms / 1000, true));
-      callbacks.current.onTime(ms);
+      if (instance && !instance.failed && !instance.disposed) { instance.pendingSeek = ms; instance.seekDeadline = performance.now() + 5000; }
+      readyCommand(player => player.seekTo(ms / 1000, true));
+      callbacks.current.onTime(ms, false);
     },
     play: () => { if (windowPlayer.current) { windowPlayer.current.play(); return; } void video.current?.play().catch(() => undefined); readyCommand(player => player.playVideo()); },
     pause: () => {
@@ -156,7 +157,7 @@ export const Player = memo(forwardRef<PlayerControls, {
     const id = embedId(source?.embed_url ?? null);
     if (!id || source?.preview_url || !host.current) return;
     let timer: number | undefined;
-    const instance: YoutubeInstance = { player: null, ready: false, failed: false, disposed: false, pendingSeek: lastTime.current.ms || null, pendingPause: false, syncPolling: () => {
+    const instance: YoutubeInstance = { player: null, ready: false, failed: false, disposed: false, pendingSeek: lastTime.current.ms || null, seekDeadline: 0, pendingPause: false, syncPolling: () => {
       window.clearInterval(timer); timer = undefined;
       if (document.hidden || !pollingActive.current || !instance.ready || instance.failed || instance.disposed) return;
       timer = window.setInterval(() => {
@@ -164,7 +165,15 @@ export const Player = memo(forwardRef<PlayerControls, {
         let seconds: number;
         try { seconds = instance.player.getCurrentTime(); } catch { instance.fail(); return; }
         if (!Number.isFinite(seconds) || seconds < 0) { instance.fail(); return; }
-        callbacks.current.onTime(Math.round(seconds * 1000));
+        const ms = Math.round(seconds * 1000);
+        if (instance.pendingSeek !== null) {
+          if (Math.abs(ms - instance.pendingSeek) > 250) {
+            if (performance.now() >= instance.seekDeadline) instance.fail();
+            return;
+          }
+          instance.pendingSeek = null;
+        }
+        callbacks.current.onTime(ms, true);
       }, 150);
     }, fail: () => {
       if (instance.disposed || youtube.current !== instance) return;
@@ -187,9 +196,10 @@ export const Player = memo(forwardRef<PlayerControls, {
             const iframe = host.current?.querySelector('iframe');
             if (iframe && source?.title) iframe.title = source.title;
             const pendingSeek = instance.pendingSeek;
+            instance.seekDeadline = performance.now() + 5000;
             if (pendingSeek !== null) readyCommand(player => player.seekTo(pendingSeek / 1000, true));
             if (instance.pendingPause) readyCommand(player => player.pauseVideo());
-            instance.pendingSeek = null; instance.pendingPause = false;
+            instance.pendingPause = false;
             if (!instance.ready) return;
             callbacks.current.onAvailable(true);
             if (!instance.ready || instance.failed || instance.disposed || youtube.current !== instance) return;
@@ -219,7 +229,7 @@ export const Player = memo(forwardRef<PlayerControls, {
   </div>;
 
   return <div className="player-frame">
-    {useWindow ? <WindowPlayer key={`${source.id}:${audioTrack ?? 'default'}:${noAudio ?? false}`} ref={windowPlayer} source={source} audioTrack={audioTrack} noAudio={noAudio} active={active} poster={poster} initialPosition={lastTime.current.ms} onTime={ms => callbacks.current.onTime(ms)} onAvailable={onAvailable} onGeometry={onGeometry} onSourceUnavailable={onSourceUnavailable} /> : source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
+    {useWindow ? <WindowPlayer key={`${source.id}:${audioTrack ?? 'default'}:${noAudio ?? false}`} ref={windowPlayer} source={source} audioTrack={audioTrack} noAudio={noAudio} active={active} poster={poster} initialPosition={lastTime.current.ms} onTime={(ms, confirmed) => callbacks.current.onTime(ms, confirmed)} onAvailable={onAvailable} onGeometry={onGeometry} onSourceUnavailable={onSourceUnavailable} /> : source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
       onLoadedMetadata={() => { if (video.current) onGeometry?.(video.current.videoWidth, video.current.videoHeight); if (video.current && lastTime.current.ms > 0) video.current.currentTime = lastTime.current.ms / 1000; callbacks.current.onAvailable(true); }}
       onTimeUpdate={() => { if (!video.current?.seeking) callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000)); }}
       onError={() => { setServerPreview(true); callbacks.current.onAvailable(false); }} />

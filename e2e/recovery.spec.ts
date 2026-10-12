@@ -1,3 +1,4 @@
+import { readBrowserDraft, replaceBrowserDraft } from './browserProjectStorage';
 import { expect, test, type Page } from '@playwright/test'
 import { api, goToExport, goToSource, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
 
@@ -86,17 +87,9 @@ async function draft(page: Page) {
 
 test('malformed saved clips do not discard the valid source and remaining clips', async ({ page }) => {
   await draft(page)
-  await page.evaluate(() => {
-    // Flush the live draft before deliberately replacing saved state.
-    window.dispatchEvent(new Event('pagehide'))
-    const key = 'cutmy.workbench.v1'
-    const saved = JSON.parse(localStorage.getItem(key)!)
+  const saved = await readBrowserDraft(page)
     saved.ranges = [null, 42, {}, saved.ranges[0], { ...saved.ranges[0], start_ms: 4000, end_ms: 5000 }]
-    localStorage.setItem(key, JSON.stringify(saved))
-    const store = JSON.parse(localStorage.getItem('cutmy.projects.v1')!)
-    store.projects.find((project: { id: string }) => project.id === store.active_id).draft = saved
-    localStorage.setItem('cutmy.projects.v1', JSON.stringify(store))
-  })
+  await replaceBrowserDraft(page, saved)
   await page.reload()
   await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
   await showExactTimes(page)
@@ -109,17 +102,9 @@ test('malformed saved clips do not discard the valid source and remaining clips'
 test('saved output settings normalize MP3 copy mode and omit unknown request fields', async ({ page }) => {
   await draft(page)
   await goToExport(page)
-  await page.evaluate(() => {
-    // Flush the live draft before deliberately replacing saved state.
-    window.dispatchEvent(new Event('pagehide'))
-    const key = 'cutmy.workbench.v1'
-    const saved = JSON.parse(localStorage.getItem(key)!)
+  const saved = await readBrowserDraft(page)
     saved.output = { format: 'mp3', quality: 'best', cut_mode: 'copy', old_setting: true }
-    localStorage.setItem(key, JSON.stringify(saved))
-    const store = JSON.parse(localStorage.getItem('cutmy.projects.v1')!)
-    store.projects.find((project: { id: string }) => project.id === store.active_id).draft = saved
-    localStorage.setItem('cutmy.projects.v1', JSON.stringify(store))
-  })
+  await replaceBrowserDraft(page, saved)
   await page.reload()
   await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
   const created = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
@@ -150,7 +135,7 @@ test('a lost export response can be retried without creating a duplicate server 
   await expect.poll(() => jobs.length).toBe(1)
   const completed = await waitJob(page.request, jobs[0])
   expect(completed.status).toBe('succeeded')
-  const sourceID = await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).source_id)
+  const sourceID = await readBrowserDraft(page).then(saved => saved.source_id)
   await expect.poll(async () => (await (await page.request.get(`${api}/sources/${sourceID}`)).json()).media_removed).toBe(true)
   await page.reload()
   await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
@@ -173,17 +158,9 @@ test('an expired active job stops polling and releases the export controls', asy
       items: [{ id: 'item_expired', label: '', start_ms: 1000, end_ms: 3000, status: 'queued', artifact: null }],
     } }) : route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'Expired' } } })
   })
-  await page.evaluate(() => {
-    // Flush the live draft before deliberately replacing saved state.
-    window.dispatchEvent(new Event('pagehide'))
-    const key = 'cutmy.workbench.v1'
-    const saved = JSON.parse(localStorage.getItem(key)!)
+  const saved = await readBrowserDraft(page)
     saved.job_id = 'job_expired'; saved.step = 4
-    localStorage.setItem(key, JSON.stringify(saved))
-    const store = JSON.parse(localStorage.getItem('cutmy.projects.v1')!)
-    store.projects.find((project: { id: string }) => project.id === store.active_id).draft = saved
-    localStorage.setItem('cutmy.projects.v1', JSON.stringify(store))
-  })
+  await replaceBrowserDraft(page, saved)
   await page.reload()
   await expect(page.getByRole('alert')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled()

@@ -1,3 +1,4 @@
+import { readBrowserDraft } from './browserProjectStorage';
 import { expect, test, type Page } from '@playwright/test'
 import { api, showExactTimes, stepButton, uploadThroughUI } from './helpers'
 
@@ -117,7 +118,7 @@ test('resource lifecycle: deletion explains all consequences, respects dismissal
   await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step')
   await expect(remove).not.toBeVisible(); expect(deletes).toBe(1)
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1') || '{}'))).not.toHaveProperty('source_id')
+  expect(await readBrowserDraft(page)).not.toHaveProperty('source_id')
 })
 
 test('resource lifecycle: source-in-use conflict keeps the editable source and explains recovery', async ({ page }) => {
@@ -185,7 +186,7 @@ test('resource lifecycle: a transient restore failure preserves the saved draft 
   await page.reload()
   await expect(page.getByRole('button', { name: 'Повторить подключение', exact: true })).toBeVisible()
   await page.waitForTimeout(1200)
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).source_id)).toBe(source.id)
+  expect(await readBrowserDraft(page).then(saved => saved.source_id)).toBe(source.id)
   await page.getByRole('button', { name: 'Повторить подключение', exact: true }).click()
   await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
   await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled()
@@ -200,7 +201,7 @@ test('resource lifecycle: results survive subsequent reloads after their source 
   await page.reload(); await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
   await expect(page.locator('.file-description')).toContainText('Удаление после')
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).job_id)).toBe(job.id)
+  expect(await readBrowserDraft(page).then(saved => saved.job_id)).toBe(job.id)
   await page.reload(); await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
 })
 
@@ -279,7 +280,7 @@ test('resource lifecycle: leaving the source list during deletion still clears t
   await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step')
   await expect(stepButton(page, 2)).toBeDisabled()
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1') || '{}'))).not.toHaveProperty('source_id')
+  expect(await readBrowserDraft(page)).not.toHaveProperty('source_id')
 })
 
 test('resource lifecycle: real multipart export results and source are explicitly removed together', async ({ page }) => {
@@ -299,7 +300,7 @@ test('resource lifecycle: real multipart export results and source are explicitl
   await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
   const uploadEvidence = await page.evaluate(() => (window as typeof window & { uploadEvidence: { nativeFile: boolean; progress: number; loaded: number } }).uploadEvidence)
   expect(uploadEvidence.nativeFile).toBe(true); expect(uploadEvidence.progress).toBeGreaterThan(0); expect(uploadEvidence.loaded).toBeGreaterThan(0)
-  const storedSource = await page.evaluate(() => { window.dispatchEvent(new Event('pagehide')); return JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).source_id as string })
+  const storedSource = await readBrowserDraft(page).then(saved => saved.source_id as string)
   await stepButton(page, 4).click()
   const createdResponse = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
@@ -445,7 +446,7 @@ test('background exports: replacing a source ignores the previous job poll alrea
     await stepButton(page, 4).click()
     await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled()
     await expect(page.locator('.job-status')).toHaveCount(0)
-    const draft = await page.evaluate(() => { window.dispatchEvent(new Event('pagehide')); return JSON.parse(localStorage.getItem('cutmy.workbench.v1')!) })
+    const draft = await readBrowserDraft(page)
     expect(draft.source_id).toBe(replacement.id)
     expect(draft.job_id).toBeUndefined()
   } finally { release() }

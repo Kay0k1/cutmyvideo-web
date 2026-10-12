@@ -1,3 +1,4 @@
+import { readBrowserDraft } from './browserProjectStorage';
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
 import { chooseOption, goToExport, goToMoment } from './helpers'
@@ -93,7 +94,7 @@ test('keyboard no-sound selection reaches the same preview and export and disabl
   await expect(page.getByRole('button', { name: 'MP3 Audio', exact: true })).toBeDisabled()
   await expect(page.locator('#audio-track-export')).toContainText('No sound')
   await goToMoment(page)
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).output)).toMatchObject({ no_audio: true })
+  await expect.poll(() => readBrowserDraft(page).then(saved => saved.output)).toMatchObject({ no_audio: true })
 })
 
 test('platform and unsupported subtitles explain available choices without silent fallback', async ({ page }) => {
@@ -127,7 +128,7 @@ test('platform copy offers MKV while retaining explicit quality and no-sound set
   await expect.poll(() => submitted).toMatchObject({ format: 'mkv', quality: '720p', cut_mode: 'copy', no_audio: true })
   expect(submitted).not.toHaveProperty('audio_track')
   expect(submitted).not.toHaveProperty('subtitle_mode')
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).output.quality)).toBe('720p')
+  expect(await readBrowserDraft(page).then(saved => saved.output.quality)).toBe('720p')
 })
 
 test('unsupported subtitle tracks remain excluded and preservation is disabled', async ({ page }) => {

@@ -1,3 +1,4 @@
+import { readBrowserDraft, replaceBrowserDraft } from './browserProjectStorage';
 import { expect, test } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { api, goToExport, goToSource, probeDownloadedFile, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
@@ -149,15 +150,8 @@ test('YouTube navigation and controls wait for readiness and ignore replaced or 
   await ready(2)
   await expect(preview).toBeEnabled()
 
-  await page.evaluate(() => {
-    window.dispatchEvent(new Event('pagehide'))
-    const saved = JSON.parse(localStorage.getItem('cutmy.workbench.v1')!)
-    saved.current_ms = 8000
-    localStorage.setItem('cutmy.workbench.v1', JSON.stringify(saved))
-    const store = JSON.parse(localStorage.getItem('cutmy.projects.v1')!)
-    store.projects.find((project: { id: string }) => project.id === store.active_id).draft = saved
-    localStorage.setItem('cutmy.projects.v1', JSON.stringify(store))
-  })
+  const savedPosition = await readBrowserDraft(page); savedPosition.current_ms = 8000;
+  await replaceBrowserDraft(page, savedPosition);
   await page.reload()
   await expect.poll(() => page.evaluate(() => (window as YoutubeProbeWindow).__youtubeProbe.instances.length)).toBe(1)
   await showExactTimes(page)
@@ -328,7 +322,7 @@ test('playback coalesces draft writes, flushes the latest position and suspends 
     const probe = { polls: 0, writes: 0 }
     const write = Storage.prototype.setItem
     Storage.prototype.setItem = function (key, value) {
-      if (key === 'cutmy.workbench.v1') probe.writes++
+      if (key.startsWith('cutmy.project.view.v2.')) probe.writes++
       return write.call(this, key, value)
     }
     class Player {
@@ -370,7 +364,7 @@ test('playback coalesces draft writes, flushes the latest position and suspends 
   // retains the exact playback time supplied by React.
   const current = Number(await page.locator('#overview').getAttribute('value'))
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).current_ms)).toBe(current)
+  expect(await readBrowserDraft(page).then(saved => saved.current_ms)).toBe(current)
 
   await goToSource(page)
   const inactivePolls = await page.evaluate(() => (window as ProbeWindow).__playbackProbe.polls)

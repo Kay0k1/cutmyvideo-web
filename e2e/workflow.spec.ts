@@ -1,3 +1,4 @@
+import { readBrowserDraft } from './browserProjectStorage';
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
 import { addClip, api, goToClips, goToExport, goToMoment, goToSource, probeDownloadedFile, setTheme, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
@@ -270,18 +271,14 @@ test('a surviving completed download stays usable when source restoration return
 
 test('a legacy three-step draft restores its real completed export in the fourth step', async ({ page }, testInfo) => {
   const { job } = await completedExport(page)
-  await page.evaluate(() => {
-    // Flush the live draft before deliberately replacing saved state.
-    window.dispatchEvent(new Event('pagehide'))
-    const key = 'cutmy.workbench.v1'
-    const draft = JSON.parse(localStorage.getItem(key) || '{}')
-    delete draft.workflow_version
-    delete draft.selected_range_ids
-    draft.step = 3
+  const legacyDraft = await readBrowserDraft(page)
+  delete legacyDraft.workflow_version; delete legacyDraft.selected_range_ids; legacyDraft.step = 3
+  await page.evaluate(draft => {
     // Simulate the historical browser which only had the single draft store.
-    localStorage.removeItem('cutmy.projects.v1')
-    localStorage.setItem(key, JSON.stringify(draft))
-  })
+    for (const key of Object.keys(localStorage)) if (key.startsWith('cutmy.project.v2.')) localStorage.removeItem(key)
+    localStorage.removeItem('cutmy.projects.v2.ready'); localStorage.removeItem('cutmy.projects.v1'); sessionStorage.clear()
+    localStorage.setItem('cutmy.workbench.v1', JSON.stringify(draft))
+  }, legacyDraft)
   await page.reload()
   await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toHaveAttribute('href', job.items[0].artifact.download_url)
