@@ -2,6 +2,7 @@ import { restoreRanges, rangeSelection } from './clipCollection';
 import { maxClientRanges } from './limits';
 import { storedResourceId } from './browserStorage';
 import type { ClipRange } from './types';
+import { formatTimecode, parseTimecode } from './timecode';
 
 export interface RecoverableSource { id: string; title: string; duration_ms: number; }
 
@@ -27,4 +28,10 @@ export function recoverCuttingDraft(saved: Record<string, unknown>): { source: R
 /** Audition both sides of a cut, clamped to the source's first/last frame. */
 export function boundaryAudition(boundary: number, duration: number): [number, number] {
   return [Math.max(0, boundary - 1500), Math.min(duration, boundary + 1500)];
+}
+
+/** Committed values use canonical times; preserve only unfinished edits. */
+export function restoredTimeText(value: unknown, committedMS: number): string {
+  return typeof value === 'string' && value.length <= 64 && parseTimecode(value) !== committedMS
+    ? value : formatTimecode(committedMS, true);
 }

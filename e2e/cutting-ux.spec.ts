@@ -87,6 +87,16 @@ test('uncommitted exact entry survives reload and arrow shortcuts leave fields a
   await expect(page.locator('.trim-handle.start')).toHaveAttribute('aria-valuenow', '1000');
 });
 
+test('committed short times restore canonically while malformed saved clips are discarded', async ({ page }) => {
+  await prepare(page, { start_text: '1', end_text: '3', ranges: [null, 42, {}, ranges[0], { ...ranges[0], start_ms: 4000, end_ms: 5000 }] });
+  await expect(page.locator('#range-start')).toHaveValue('00:00:01.000');
+  await expect(page.locator('#range-end')).toHaveValue('00:00:03.000');
+  await expect(page.locator('.trim-handle.start')).toHaveAttribute('aria-valuenow', '1000');
+  await expect(page.locator('.trim-handle.end')).toHaveAttribute('aria-valuenow', '3000');
+  await page.getByRole('button', { name: 'Clip list', exact: true }).click();
+  await expect(page.locator('.range-list > li')).toHaveCount(1);
+});
+
 test('expired sources retain names and exact cuts across reload and reconnect', async ({ page }) => {
   await prepare(page, { output: { format: 'mp3', quality: 'best', cut_mode: 'accurate' } }, true);
   await expect(page.getByRole('heading', { name: 'Clips saved', exact: true })).toBeVisible();
@@ -152,8 +162,8 @@ test('a source expiring during export offers recovery immediately without losing
   await page.getByRole('checkbox', { name: 'Restore saved clips in the video you open', exact: true }).check();
   await page.getByLabel('Video link', { exact: true }).fill('https://video.example/recording.mp4');
   await page.getByRole('button', { name: 'Open video', exact: true }).click();
-  await expect(page.locator('#range-start')).toHaveValue('1.125');
-  await expect(page.locator('#range-end')).toHaveValue('3.875');
+  await expect(page.locator('#range-start')).toHaveValue('00:00:01.125');
+  await expect(page.locator('#range-end')).toHaveValue('00:00:03.875');
   await page.getByRole('button', { name: 'Clip list', exact: true }).click();
   await expect(page.getByLabel('Clip 1 name', { exact: true })).toHaveValue('Opening');
   await expect(page.getByLabel('Clip 2 name', { exact: true })).toHaveValue('Ending');

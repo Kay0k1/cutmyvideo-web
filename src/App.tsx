@@ -33,7 +33,7 @@ import { SourceLibrary } from './SourceLibrary';
 import { JobLibrary } from './JobLibrary';
 import { RetentionNotice } from './RetentionNotice';
 import { useWorkflowHistory } from './workflowHistory';
-import { boundaryAudition, recoverCuttingDraft } from './cuttingDraft';
+import { boundaryAudition, recoverCuttingDraft, restoredTimeText } from './cuttingDraft';
 import type { RecoverableSource } from './cuttingDraft';
 import type { WorkbenchPanel, WorkflowRoute } from './workflowHistory';
 
@@ -234,7 +234,7 @@ export default function App() {
               const valid = restoreRanges(saved.ranges, original.duration_ms, maxClientRanges);
               const restoredRanges = valid.length || Array.isArray(saved.ranges) && saved.ranges.length === 0 ? valid : [newRange(original.duration_ms, 0, currentLimits)];
               const active = restoredRanges.find(range => range.id === saved.selected_id) ?? restoredRanges[0];
-              setSource(original); setRanges(restoredRanges); setSelectedId(active?.id ?? ''); if (active) { setFields(active); restoreTimeFields(saved, active.id); }
+              setSource(original); setRanges(restoredRanges); setSelectedId(active?.id ?? ''); if (active) { setFields(active); restoreTimeFields(saved, active); }
               setSelectedRangeIds(rangeSelection(restoredRanges, saved.selected_range_ids)); setRevealId(active?.id ?? '');
               setPrecisionOpen(saved.precision_open === true || original.preview_kind === 'none' || (!original.preview_url && !original.embed_url));
               sourceStep = !active && (savedStep === 2 || savedStep === undefined) ? 3 : savedStep ?? 2;
@@ -254,7 +254,7 @@ export default function App() {
                 setRecoverableSource(recovered.source); setKeepRecoveredCuts(false);
                 setRanges(recovered.ranges); setSelectedId(recovered.selectedId); setSelectedRangeIds(recovered.selectedIds);
                 const active = recovered.ranges.find(range => range.id === recovered.selectedId)!;
-                setFields(active); restoreTimeFields(saved, active.id);
+                setFields(active); restoreTimeFields(saved, active);
                 const restoredOutput = readOutputSettings(saved.output); if (restoredOutput) setOutput(restoredOutput);
               }
               setSourceError(recovered ? 'Источник больше недоступен. Фрагменты сохранены. Загрузите ту же запись или откройте её ссылку, чтобы продолжить.' : 'Предыдущий источник больше недоступен. Откройте его заново.');
@@ -273,10 +273,10 @@ export default function App() {
     return () => { disposed = true; controller.abort(); };
   }, [sessionAttempt, setFields]);
 
-  function restoreTimeFields(saved: Record<string, unknown>, id: string) {
-    if (saved.selected_id !== id) return;
-    if (typeof saved.start_text === 'string' && saved.start_text.length <= 64) setStartText(saved.start_text);
-    if (typeof saved.end_text === 'string' && saved.end_text.length <= 64) setEndText(saved.end_text);
+  function restoreTimeFields(saved: Record<string, unknown>, range: ClipRange) {
+    if (saved.selected_id !== range.id) return;
+    setStartText(restoredTimeText(saved.start_text, range.start_ms));
+    setEndText(restoredTimeText(saved.end_text, range.end_ms));
   }
 
   function draftSnapshot() {
