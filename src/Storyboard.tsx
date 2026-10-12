@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from './Language';
 import { formatTimecode } from './timecode';
 
-type Strip = { url: string; start: number; end: number; step: number; frames: number; bytes: number };
+type Strip = { sourceID: string; url: string; start: number; end: number; step: number; frames: number; bytes: number };
 const windowMS = 30000;
 
 /** Six real frames from the current area, prepared only after seeking settles. */
@@ -49,7 +49,7 @@ export function Storyboard({ sourceID, duration, current, active, onSeek }: { so
         if (!Number.isInteger(frameCount) || frameCount < 1 || frameCount > 6 || frameStep !== 5000 || actualStart !== start || actualEnd <= start || actualEnd > Math.min(duration, start + windowMS)) return;
         const blob = await response.blob();
         if (controller.signal.aborted || !blob.type.startsWith('image/') || blob.size > 1024 * 1024) return;
-        const entry = { url: URL.createObjectURL(blob), start, end: actualEnd, step: frameStep, frames: frameCount, bytes: blob.size };
+        const entry = { sourceID, url: URL.createObjectURL(blob), start, end: actualEnd, step: frameStep, frames: frameCount, bytes: blob.size };
         entries.set(start, entry);
         while (entries.size > 8 || [...entries.values()].reduce((sum, entry) => sum + entry.bytes, 0) > 8 * 1024 * 1024) {
           const oldest = entries.keys().next().value!;
@@ -66,7 +66,7 @@ export function Storyboard({ sourceID, duration, current, active, onSeek }: { so
     return () => { controller.abort(); window.clearTimeout(timer); window.clearTimeout(timeout); window.clearTimeout(retry); document.removeEventListener('visibilitychange', hidden); };
   }, [sourceID, duration, start, active, visible]);
 
-  if (!strip || strip.start !== start) return null;
+  if (!strip || strip.sourceID !== sourceID || strip.start !== start) return null;
   return <div className="storyboard" aria-label={t('Кадры рядом с позицией плеера')}>
     <span className="storyboard-label">{t('Кадры рядом с позицией плеера')}</span>
     <div className="storyboard-frames">{Array.from({ length: strip.frames }, (_, index) => {
