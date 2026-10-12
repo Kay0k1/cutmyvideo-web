@@ -1,6 +1,28 @@
 # Acceptance and UX review
 
-## Core v1.1.0 — 12 October 2026
+## Web 0.4 / Core 1.2 — 12 October 2026
+
+The editor saves independent browser projects, restores retained jobs after original
+cleanup, supports ordered clips and bounded undo/redo, and keeps frame controls
+collapsed until opened. All standard aspect presets and custom ratios use upright
+original geometry. Selected-audio waveform windows preserve audible frequencies
+and opposite-phase channels while remaining bounded to thirty seconds.
+
+Default successful-export cleanup removes originals and analysis caches while
+retaining browser projects and ready downloads under their existing retention.
+An explicit opt-out supports further editing from the same original. A lost
+acknowledgement replays the same body and key even after removal; legacy pending
+attempts retain their original policy. Storage quota or cancelled navigation
+cannot silently discard the current project.
+
+Current checks include real desktop/mobile cropped multi-track exports with
+independent frame, audio and file decoding; project reload/download after cleanup;
+exact request replay; native disclosure keyboard use; bounded storage and reader
+admission; and coordinated migration 005 → 006 database/media restoration. The
+core pin below remains authoritative. Older verification sections retain their
+original scope.
+
+## Historical Core v1.1.0 — 12 October 2026
 
 [core.version](../core.version) is the authoritative immutable integration
 revision. Production Compose must use the matching release version, source
