@@ -1,3 +1,5 @@
+import { jobRequestBody } from './api';
+import { recoverCuttingDraft } from './cuttingDraft';
 import { draftStorageKey, maxDraftCharacters, readStoredRecord, storedResourceId } from './browserStorage';
 import { restoreRanges } from './clipCollection';
 import { readOutputSettings } from './preferences';
@@ -7,6 +9,8 @@ import type { ClipRange, OutputSettings, Source } from './types';
 export const projectsStorageKey = 'cutmy.projects.v1';
 export const maxProjectCharacters = 4 * 1024 * 1024;
 export const maxProjects = 100;
+export class ProjectStorageLimitError extends Error {}
+
 export interface CuttingProject { id: string; updated_at: number; draft: Record<string, unknown>; }
 export interface ProjectStore { version: 1; active_id: string | null; projects: CuttingProject[]; }
 const maximumDuration = 366 * 24 * 60 * 60 * 1000;
@@ -31,17 +35,17 @@ export function readProjects(): ProjectStore {
     if (!legacy.source_duration_ms && Array.isArray(legacy.ranges)) legacy.source_duration_ms = legacy.ranges.reduce((max: number, item) => typeof item?.end_ms === 'number' && Number.isSafeInteger(item.end_ms) ? Math.max(max, item.end_ms) : max, 0);
     if (validProjectDraft(legacy)) projects.push({ id: legacy.source_id as string, updated_at: Date.now(), draft: legacy });
   }
-  return { version: 1, active_id: storedResourceId(saved.active_id) && projects.some(project => project.id === saved.active_id) ? saved.active_id : projects[0]?.id ?? null, projects };
+  return { version: 1, active_id: saved.version === 1 && saved.active_id === null ? null : storedResourceId(saved.active_id) && projects.some(project => project.id === saved.active_id) ? saved.active_id : projects[0]?.id ?? null, projects };
 }
 
 export function upsertProject(store: ProjectStore, id: string, draft: Record<string, unknown>): ProjectStore {
   if (!validProjectDraft(draft)) return store;
   const existing = store.projects.findIndex(project => project.id === id);
-  if (existing < 0 && store.projects.length >= maxProjects) throw new Error('Слишком много проектов. Сохраните планы и удалите ненужные проекты.');
+  if (existing < 0 && store.projects.length >= maxProjects) throw new ProjectStorageLimitError('Слишком много проектов. Сохраните планы и удалите ненужные проекты.');
   const project = { id, updated_at: Date.now(), draft };
   const next = { ...store, active_id: id, projects: existing < 0 ? [project, ...store.projects] : store.projects.map((value, index) => index === existing ? project : value) };
   const encoded = JSON.stringify(next);
-  if (encoded.length > maxProjectCharacters) throw new Error('Хранилище проектов заполнено. Сохраните планы и удалите ненужные проекты.');
+  if (encoded.length > maxProjectCharacters) throw new ProjectStorageLimitError('Хранилище проектов заполнено. Сохраните планы и удалите ненужные проекты.');
   return next;
 }
 
@@ -73,4 +77,31 @@ export function importCuttingPlan(raw: string, duration: number, createID: () =>
   const ranges = restoreRanges(candidate, duration, maxClientRanges);
   if (ranges.length !== plan.ranges.length) throw new Error('В плане есть некорректные интервалы или моменты за пределами записи.');
   return { input: plan.input, ranges, output };
+}
+
+/** Retry identity is part of a project, including when navigating away and back. */
+export function restoredExportAttempt(saved: Record<string, unknown>): { fingerprint: string; key: string } | null {
+  const value = saved.export_attempt;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const { fingerprint, key } = value as Record<string, unknown>;
+  return typeof fingerprint === 'string' && fingerprint.length <= 128 * 1024 && storedResourceId(key) ? { fingerprint, key } : null;
+}
+
+/** Recreate a known request; never replay untrusted stored JSON as a body. */
+export function matchingRetryOutput(sourceID: string, ranges: ClipRange[], output: OutputSettings, attempt: { fingerprint: string; key: string } | null): OutputSettings | null {
+  if (!storedResourceId(sourceID) || !attempt || !ranges.length) return null;
+  if (jobRequestBody(sourceID, ranges, output) === attempt.fingerprint) return output;
+  const originalQuality = { ...output, quality: 'best' as const };
+  return output.cut_mode === 'copy' && jobRequestBody(sourceID, ranges, originalQuality) === attempt.fingerprint ? originalQuality : null;
+}
+
+/** 0.3 unknown-acceptance retries kept media; preserve that body and policy. */
+export function restoredProjectOutput(saved: Record<string, unknown>): OutputSettings | null {
+  const output = readOutputSettings(saved.output);
+  if (!output || output.cleanup_source !== undefined) return output;
+  const attempt = restoredExportAttempt(saved), recovered = recoverCuttingDraft(saved);
+  if (!attempt || !recovered) return output;
+  const ranges = recovered.ranges.filter(range => recovered.selectedIds.includes(range.id));
+  const legacy = { ...output, cleanup_source: false };
+  return matchingRetryOutput(recovered.source.id, ranges, legacy, attempt) ?? output;
 }

@@ -154,6 +154,9 @@ test('YouTube navigation and controls wait for readiness and ignore replaced or 
     const saved = JSON.parse(localStorage.getItem('cutmy.workbench.v1')!)
     saved.current_ms = 8000
     localStorage.setItem('cutmy.workbench.v1', JSON.stringify(saved))
+    const store = JSON.parse(localStorage.getItem('cutmy.projects.v1')!)
+    store.projects.find((project: { id: string }) => project.id === store.active_id).draft = saved
+    localStorage.setItem('cutmy.projects.v1', JSON.stringify(store))
   })
   await page.reload()
   await expect.poll(() => page.evaluate(() => (window as YoutubeProbeWindow).__youtubeProbe.instances.length)).toBe(1)

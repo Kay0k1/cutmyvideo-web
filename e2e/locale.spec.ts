@@ -55,6 +55,9 @@ test('language switching preserves the real source, ranges and export', async ({
   await testInfo.attach('English editor', { path: testInfo.outputPath('english-editor.png'), contentType: 'image/png' })
 
   await goToExport(page)
+  // This language scenario revisits its source after a completed export.
+  await page.getByRole('checkbox', { name: 'Delete source after export', exact: true }).uncheck()
+  await expect(page.getByRole('checkbox', { name: 'Delete source after export', exact: true })).not.toBeChecked()
   const creationPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
   const creation = await creationPromise

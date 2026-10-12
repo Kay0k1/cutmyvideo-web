@@ -2,6 +2,7 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  'Запрос экспорта сохранён. Повторите его, чтобы получить уже принятое задание; новое видео не создаётся.': 'Your export request is saved. Retry it to recover the accepted job; no new video is created.',
   'Исходник удалён после экспорта. Проект и готовые клипы сохранены. Откройте запись заново для новой нарезки.': 'The original was removed after export. Your project and completed clips remain available. Reopen the recording to make new cuts.',
   'Область кадра слишком мала или выходит за изображение. Измените кадр или сбросьте его.': 'The crop area is too small or outside the image. Adjust it or reset the frame.',
 

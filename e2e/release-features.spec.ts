@@ -55,6 +55,12 @@ test('Frame stays compact, all aspect presets and custom ratios work, and crop g
   const disclosure = page.locator('.moments-stage details.crop-editor');
   await expect(disclosure).not.toHaveAttribute('open', '');
   await expect(disclosure.getByRole('combobox', { name: 'Frame aspect ratio', exact: true })).toBeHidden();
+  await disclosure.locator('summary').focus(); await disclosure.locator('summary').press('Space');
+  await expect(disclosure.getByRole('combobox', { name: 'Frame aspect ratio', exact: true })).toBeVisible();
+  await disclosure.locator('summary').press('Space');
+  await expect(disclosure.getByRole('combobox', { name: 'Frame aspect ratio', exact: true })).toBeHidden();
+  await disclosure.locator('summary').press('Enter');
+  await expect(disclosure.getByRole('combobox', { name: 'Frame aspect ratio', exact: true })).toBeVisible();
   const { frame, aspect } = await openFrame(page);
   await expect(aspect.locator('option')).toHaveText(['Original aspect ratio', ...cropPresets, 'Custom aspect ratio']);
   for (const preset of cropPresets) {
@@ -73,7 +79,7 @@ test('Frame stays compact, all aspect presets and custom ratios work, and crop g
   const after = await area.getAttribute('style');
   await page.getByRole('button', { name: 'Undo change', exact: true }).click(); await expect(area).toHaveAttribute('style', before!);
   await page.getByRole('button', { name: 'Redo change', exact: true }).click(); await expect(area).toHaveAttribute('style', after!);
-  await frame.locator('summary').click(); await expect(frame.getByRole('combobox', { name: 'Frame aspect ratio', exact: true })).toBeHidden();
+  await frame.locator('summary').focus(); await frame.locator('summary').press('Space'); await expect(frame.getByRole('combobox', { name: 'Frame aspect ratio', exact: true })).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.getByRole('button', { name: 'Русский', exact: true }).click();
   await expect(frame.locator('summary')).toContainText('Кадр');
