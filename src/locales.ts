@@ -20,6 +20,7 @@ export const english: Record<string, string> = {
   "Конец на 0,1 с позже": "End 0.1 s later",
   "перемотка или ручка: 0,1 с;": "seek or trim handle: 0.1 s;",
   "Кадры рядом с позицией плеера": "Frames near the playhead",
+  "Кадры недоступны": "Frames unavailable",
   "Перейти к кадру {time}": "Go to frame {time}",
   "с": "s",
   '{count} канал': '{count} channels',

@@ -7,7 +7,7 @@ const source = { id: 'src_cutting_controls', title: 'Recorded interview', kind: 
   preview_kind: 'native', preview_url: `${api}/sources/src_cutting_controls/file`, embed_url: null, thumbnail_url: null };
 const ranges = [{ id: 'range_opening', label: 'Opening', start_ms: 1000, end_ms: 3000 }, { id: 'range_ending', label: 'Ending', start_ms: 10000, end_ms: 12000 }];
 
-async function prepare(page: Page, saved: Record<string, unknown> = {}, expired = false, reopenedDuration = source.duration_ms, busyStoryboards = 0) {
+async function prepare(page: Page, saved: Record<string, unknown> = {}, expired = false, reopenedDuration = source.duration_ms, busyStoryboards = 0, storyboardReady?: Promise<void>) {
   const media = await readFile(process.env.CUTMY_E2E_MEDIA!);
   let storyboardRequests = 0;
   await page.route(`**${api}/**`, async route => {
@@ -26,6 +26,7 @@ async function prepare(page: Page, saved: Record<string, unknown> = {}, expired 
     if (path.endsWith('/tracks')) return route.fulfill({ json: { tracks: [{ index: 0, type: 'video', codec: 'h264' }, { index: 1, type: 'audio', codec: 'aac' }] } });
     if (path.endsWith('/storyboard')) {
       if (++storyboardRequests <= busyStoryboards) return route.fulfill({ status: 503, json: { error: { code: 'server_busy', message: 'Foreground preview is preparing' } } });
+      await storyboardReady;
       const sprite = execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', process.env.CUTMY_E2E_MEDIA!, '-vf', 'fps=1/5,scale=160:90,tile=6x1:nb_frames=3', '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'mjpeg', 'pipe:1'], { timeout: 15000 });
       return route.fulfill({ contentType: 'image/jpeg', body: sprite, headers: { 'X-Preview-Start-MS': '0', 'X-Preview-End-MS': '12000', 'X-Storyboard-Step-MS': '5000', 'X-Storyboard-Frames': '3' } });
     }
@@ -178,6 +179,25 @@ test('frames still prepare after three refusals while foreground preview is busy
   await expect(page.getByRole('button', { name: /^Go to frame/ })).toHaveCount(3);
   await page.getByRole('button', { name: 'Go to frame 00:00:10', exact: true }).click();
   await expect(page.locator('#overview')).toHaveValue('10000');
+});
+
+test('late frame preparation keeps scrolled precision controls in place on a short phone', async ({ page }) => {
+  let release!: () => void;
+  const storyboardReady = new Promise<void>(resolve => { release = resolve; });
+  await page.setViewportSize({ width: 360, height: 640 });
+  await prepare(page, { precision_open: false }, false, source.duration_ms, 0, storyboardReady);
+  const precision = page.getByRole('button', { name: 'Exact time and timeline', exact: true });
+  await expect(precision).toBeVisible();
+  await precision.scrollIntoViewIfNeeded();
+  const before = await precision.boundingBox();
+  expect(before).not.toBeNull();
+  release();
+  await expect(page.getByRole('button', { name: /^Go to frame/ })).toHaveCount(3);
+  const after = await precision.boundingBox();
+  expect(after).not.toBeNull();
+  expect(Math.abs(after!.y - before!.y)).toBeLessThanOrEqual(1);
+  expect(after!.y).toBeGreaterThanOrEqual(-1);
+  expect(after!.y + after!.height).toBeLessThanOrEqual(641);
 });
 
 test('foreground preview retries brief contention promptly with bounded attempts', async ({ page }) => {
