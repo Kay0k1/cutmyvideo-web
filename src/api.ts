@@ -106,7 +106,9 @@ export function jobRequestBody(source_id: string, ranges: ClipRange[], output: O
     ...(output.output_mode === 'joined' ? { output_mode: 'joined' } : {}),
     ...(output.audio_track !== undefined ? { audio_track: output.audio_track } : {}),
     ...(output.no_audio ? { no_audio: true } : {}),
-    ...(output.subtitle_mode === 'preserve' ? { subtitle_mode: 'preserve' } : {}) });
+    ...(output.subtitle_mode === 'preserve' ? { subtitle_mode: 'preserve' } : {}),
+    ...(output.crop ? { crop: { x: output.crop.x, y: output.crop.y, width: output.crop.width, height: output.crop.height } } : {}),
+    ...(output.cleanup_source !== false ? { cleanup_source: true } : {}) });
 }
 
 export const api = {
@@ -114,7 +116,7 @@ export const api = {
   jobs: (signal?: AbortSignal) => request<{ jobs: JobSummary[] }>('/jobs', { signal }),
   sources: (signal?: AbortSignal) => request<{ sources: Source[] }>('/sources', { signal }),
   source: (id: string, signal?: AbortSignal) => request<Source>(`/sources/${encodeURIComponent(id)}`, { signal }),
-  tracks: (id: string, signal?: AbortSignal) => request<{ tracks: MediaTrack[] }>(`/sources/${encodeURIComponent(id)}/tracks`, { signal }),
+  tracks: (id: string, signal?: AbortSignal) => request<{ tracks: MediaTrack[]; display_width?: number; display_height?: number }>(`/sources/${encodeURIComponent(id)}/tracks`, { signal }),
   open: (url: string, signal: AbortSignal) => request<Source>('/sources', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }), signal,
   }, 123 * 60 * 1000),
@@ -170,6 +172,8 @@ export function errorMessage(error: unknown, action: 'source' | 'source-create' 
     source_in_use: 'Видео используется активным заданием. Дождитесь завершения или отмените обработку перед удалением.',
     server_busy: 'Сервис открывает другие видео. Попробуйте ещё раз через минуту.',
     storage_limit: 'Недостаточно места для видео. Выберите файл меньшего размера или дождитесь удаления старых файлов.',
+    source_removed: 'Исходник удалён после экспорта. Проект и готовые клипы сохранены. Откройте запись заново для новой нарезки.',
+    crop_invalid: 'Область кадра слишком мала или выходит за изображение. Измените кадр или сбросьте его.',
     source_unavailable: 'Видео недоступно или требует входа. Проверьте ссылку либо загрузите файл.',
     source_too_large: 'Файл превышает лимит сервиса. Выберите файл меньшего размера.',
     unsupported_media: 'В файле не найдено поддерживаемое видео или аудио. Выберите другой файл.',

@@ -111,7 +111,16 @@ bypass IP admission or allocate owner entries for rejected mutations. JSON
 metadata must finish arriving within ten seconds; uploads retain their separate
 source preparation timeout.
 
-Sources and results have a 24-hour retention target. Cleanup runs in the worker
+Sources and results have a 24-hour retention target. The editor now enables
+successful-export original cleanup by default, with an explicit opt-out. After
+all requested clips succeed and concurrent operations settle, it removes the
+original, thumbnail and preview caches while retaining source metadata, browser
+projects, job records and ready clips under their existing retention deadlines.
+A failed or cancelled concurrent export preserves the original. Reader leases
+protect active media responses; physical removal is durable, retryable and
+charged until completed. Another cut from a removed original requires reopening
+that recording; the saved project can then be applied to it.
+Expiry cleanup runs in the worker
 every five minutes; independent cron also calls `cutmy maintenance` inside API
 when the worker is unavailable. Active jobs pin resources. This is not an exact
 deletion deadline. Owner storage admission covers staged sources and thumbnails
@@ -139,6 +148,34 @@ from successful media processing; uploaded MP4 remains a useful fallback.
 core and product commits. Set `CUTMY_SSH_TARGET`, `CUTMY_SSH_KEY`, and optionally
 `CUTMY_CORE_DIR`; it does not need GitHub credentials on the server.
 The core checkout must match `core.version`, the revision verified by product CI.
+
+Core 1.2 introduces ordered migration 006. A core supporting only 005 refuses
+that schema, so the previous 005 image is not an automatic recovery target after
+this upgrade. Before migration, stop media writers and hold the deployment lock
+while capturing a coordinated private database/media snapshot. Verify restoration
+with the original 005 image in isolated resources. See the core's migration 006
+upgrade guide for the tested database/media recovery contract.
+
+For this release, first prepare and build a compatibility release containing
+the exact new 006 core and the previous 0.3 website with its core pin updated.
+Test migration of a restored production snapshot with that exact image. After
+the final 005 snapshot, keep writers stopped. Under the exclusive deployment
+lock, atomically pin `RELEASE_TAG` in the private production environment to the
+compatibility release first, then atomically pin `current` to that release.
+Release the lock before activation or any systemd action. The first activation
+must therefore see both a 006-compatible previous release and environment;
+changing only the symlink leaves a reboot able to select the old 005 image.
+Keep the original 005 environment and release in the coordinated backup packet.
+Then activate the compatibility release. Every automatic failure path must use
+the new compatible image, even if migration has already happened.
+Verify its health, a real export/download and a restored 006 database/media pair.
+The previous website keeps legacy original retention because it does not send
+`cleanup_source`. Then activate the full 0.4 website with that same core: its
+automatic fallback points to the verified 006 compatibility release. Keep this
+release and the coordinated 005 snapshot until production verification ends.
+Returning to 005 requires fresh coordinated restoration of its database and
+media snapshot; do not drop schema markers or reuse a database-only dump after
+intentional source removal.
 
 Build and test both repositories before updating the active release. Upload
 source archives, not local credentials or `.git` directories. Record both commit
@@ -173,7 +210,8 @@ bash /opt/cutmy/current/web/deploy/activate.sh \
 Container changes are not an atomic, zero-downtime operation. Run external HTTPS,
 real export and download checks before announcing a deployment. Reverting an
 image does not undo database migrations or restore deleted/expired media. The
-current additions to source metadata are additive; future schema changes still
+current additions to source metadata are additive, but the ordered schema guard
+requires a 006-compatible core after this release. Future schema changes still
 need an explicit compatibility review.
 
 ## Backups

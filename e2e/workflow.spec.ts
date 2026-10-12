@@ -14,6 +14,8 @@ async function completedExport(page: Page) {
   await page.getByLabel('Конец', { exact: true }).fill('00:00:03.750')
   await page.getByLabel('Конец', { exact: true }).press('Tab')
   await goToExport(page)
+  // These scenarios return to the source after export to continue editing.
+  await page.getByRole('checkbox', { name: 'Удалить исходник после экспорта', exact: true }).uncheck()
   const jobPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
   const creation = await jobPromise
@@ -276,6 +278,8 @@ test('a legacy three-step draft restores its real completed export in the fourth
     delete draft.workflow_version
     delete draft.selected_range_ids
     draft.step = 3
+    // Simulate the historical browser which only had the single draft store.
+    localStorage.removeItem('cutmy.projects.v1')
     localStorage.setItem(key, JSON.stringify(draft))
   })
   await page.reload()

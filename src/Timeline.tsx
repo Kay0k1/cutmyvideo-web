@@ -5,9 +5,10 @@ import type { ClipRange } from './types';
 import { formatTimecode } from './timecode';
 import { keyboardTrimValue, pointerSeekValue, pointerTrimValue } from './timelineControls';
 import type { PlaybackPosition } from './playbackPosition';
+import { Waveform } from './Waveform';
 import { Storyboard } from './Storyboard';
 
-export function Timeline({ duration, position, ranges, selected, view, showOverview = true, sourceID, active, onSeek, onRange, onReveal }: {
+export function Timeline({ duration, position, ranges, selected, view, showOverview = true, sourceID, active, audioTrack, noAudio, onSeek, onRange, onReveal, onBeginChange, onEndChange }: {
   duration: number;
   position: PlaybackPosition;
   ranges: ClipRange[];
@@ -16,9 +17,13 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
   showOverview?: boolean;
   sourceID: string;
   active: boolean;
+  audioTrack?: number;
+  noAudio?: boolean;
   onSeek(ms: number): void;
   onRange(start: number, end: number): void;
   onReveal(ms: number): void;
+  onBeginChange?(): void;
+  onEndChange?(): void;
 }) {
   const { t } = useLanguage();
   const current = useSyncExternalStore(position.subscribe, position.getSnapshot);
@@ -56,7 +61,7 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
     event.preventDefault(); move(which, next); onReveal(next);
   };
   const endDrag = (which: 'start' | 'end', pointer: number) => {
-    if (drag.current?.which === which && drag.current.pointer === pointer) { drag.current = null; setDragging(null); }
+    if (drag.current?.which === which && drag.current.pointer === pointer) { drag.current = null; setDragging(null); onEndChange?.(); }
   };
   const endScrub = (pointer: number) => {
     if (scrub.current?.pointer === pointer) { scrub.current = null; setScrubbing(false); }
@@ -75,6 +80,7 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
       onPointerDown={event => {
         if (event.button !== 0 || drag.current || scrub.current) return;
         event.stopPropagation(); event.currentTarget.focus({ preventScroll: true });
+        onBeginChange?.();
         drag.current = { which, pointer: event.pointerId, x: event.clientX, value, width: track.current!.getBoundingClientRect().width, span };
         setDragging(which); event.currentTarget.setPointerCapture(event.pointerId);
       }}
@@ -133,6 +139,7 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
       {current >= view[0] && current <= view[1] && <div className="playhead" style={{ left: `${pct(current)}%` }} aria-hidden="true" />}
     </div>
     <div className="tick-labels" aria-hidden="true"><span>{formatTimecode(view[0])}</span><span>{formatTimecode((view[0] + view[1]) / 2)}</span><span>{formatTimecode(view[1])}</span></div>
+    <Waveform sourceID={sourceID} duration={duration} current={current} view={view} active={active} audioTrack={audioTrack} noAudio={noAudio} onSeek={ms => { onSeek(ms); onReveal(ms); }} />
     <Storyboard sourceID={sourceID} duration={duration} current={current} active={active} onSeek={ms => { onSeek(ms); onReveal(ms); }} />
     <p id="trim-hint" className="sr-only">{t('Двигайте ручки начала и конца. Стрелки меняют время на 0,1 секунды, Shift — на секунду.')}</p>
     <p id="seek-hint" className="sr-only">{t('Нажмите на шкалу или двигайте указатель, чтобы перемотать. Стрелки — 0,1 секунды, Shift — секунда; Home и End — начало и конец видео.')}</p>

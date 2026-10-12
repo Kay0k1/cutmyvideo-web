@@ -22,6 +22,10 @@ test('real joined MKV keeps selected audio and rebased subtitles; separate no-so
   await chooseOption(page, page.locator('#cut-mode'), 'Original quality')
   await chooseOption(page, page.locator('#copy-container'), 'MKV')
   await chooseOption(page, page.locator('#subtitle-mode'), 'Preserve text subtitles')
+  // This scenario deliberately reuses its original for a second export.
+  const cleanup = page.getByRole('checkbox', { name: 'Delete source after export', exact: true })
+  await cleanup.uncheck()
+  await expect(cleanup).not.toBeChecked()
   const accepted = page.waitForResponse(response => response.url().endsWith('/api/v1/jobs') && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
   const response = await accepted

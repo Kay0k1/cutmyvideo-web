@@ -11,6 +11,9 @@ describe('cutting draft recovery', () => {
     expect(recoverCuttingDraft({ source_id: 'src_old', ranges, selected_range_ids: [] })?.selectedIds).toEqual([]);
     expect(recoverCuttingDraft({ source_id: 'src_old', ranges })?.source.duration_ms).toBe(12000);
   });
+  it('recovers intentionally empty projects when source metadata is available', () => {
+    expect(recoverCuttingDraft({ source_id: 'src_empty', source_title: 'Empty project', source_duration_ms: 12000, ranges: [], selected_range_ids: [] })).toEqual({ source: { id: 'src_empty', title: 'Empty project', duration_ms: 12000 }, ranges: [], selectedId: '', selectedIds: [] });
+  });
   it('rejects invalid identities, malformed cuts and unbounded metadata', () => {
     expect(recoverCuttingDraft({ source_id: '../../secret', ranges })).toBeNull();
     expect(recoverCuttingDraft({ source_id: 'src_old', ranges: [{ ...ranges[0], end_ms: Number.MAX_SAFE_INTEGER }] })).toBeNull();

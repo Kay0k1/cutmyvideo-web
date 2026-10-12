@@ -18,10 +18,10 @@ export function recoverCuttingDraft(saved: Record<string, unknown>): { source: R
     }, 0) : 0;
   if (!duration) return null;
   const ranges = restoreRanges(saved.ranges, duration, maxClientRanges);
-  if (!ranges.length) return null;
+  if (!ranges.length && !(Array.isArray(saved.ranges) && saved.ranges.length === 0)) return null;
   const title = typeof saved.source_title === 'string' && saved.source_title.length <= 500 && !/[\u0000-\u001f\u007f]/.test(saved.source_title) ? saved.source_title : '';
   return { source: { id: saved.source_id, title, duration_ms: duration }, ranges,
-    selectedId: ranges.find(range => range.id === saved.selected_id)?.id ?? ranges[0].id,
+    selectedId: ranges.find(range => range.id === saved.selected_id)?.id ?? ranges[0]?.id ?? '',
     selectedIds: rangeSelection(ranges, saved.selected_range_ids) };
 }
 

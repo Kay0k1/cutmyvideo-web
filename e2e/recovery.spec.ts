@@ -93,6 +93,9 @@ test('malformed saved clips do not discard the valid source and remaining clips'
     const saved = JSON.parse(localStorage.getItem(key)!)
     saved.ranges = [null, 42, {}, saved.ranges[0], { ...saved.ranges[0], start_ms: 4000, end_ms: 5000 }]
     localStorage.setItem(key, JSON.stringify(saved))
+    const store = JSON.parse(localStorage.getItem('cutmy.projects.v1')!)
+    store.projects.find((project: { id: string }) => project.id === store.active_id).draft = saved
+    localStorage.setItem('cutmy.projects.v1', JSON.stringify(store))
   })
   await page.reload()
   await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
@@ -113,6 +116,9 @@ test('saved output settings normalize MP3 copy mode and omit unknown request fie
     const saved = JSON.parse(localStorage.getItem(key)!)
     saved.output = { format: 'mp3', quality: 'best', cut_mode: 'copy', old_setting: true }
     localStorage.setItem(key, JSON.stringify(saved))
+    const store = JSON.parse(localStorage.getItem('cutmy.projects.v1')!)
+    store.projects.find((project: { id: string }) => project.id === store.active_id).draft = saved
+    localStorage.setItem('cutmy.projects.v1', JSON.stringify(store))
   })
   await page.reload()
   await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
@@ -141,13 +147,20 @@ test('a lost export response can be retried without creating a duplicate server 
   const submit = page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })
   await submit.click()
   await expect(page.getByRole('alert')).toBeVisible()
+  await expect.poll(() => jobs.length).toBe(1)
+  const completed = await waitJob(page.request, jobs[0])
+  expect(completed.status).toBe('succeeded')
+  const sourceID = await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).source_id)
+  await expect.poll(async () => (await (await page.request.get(`${api}/sources/${sourceID}`)).json()).media_removed).toBe(true)
   await page.reload()
   await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
-  await expect(submit).toBeEnabled()
-  await submit.click()
+  const retry = page.getByRole('button', { name: /^(Вырезать фрагмент|Повторить экспорт)$/ })
+  await expect(retry).toBeEnabled()
+  await retry.click()
   await expect.poll(() => jobs.length).toBe(2)
   expect(keys[1]).toBe(keys[0])
   expect(jobs[1]).toBe(jobs[0])
+  await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
 })
 
 test('an expired active job stops polling and releases the export controls', async ({ page }) => {
@@ -167,6 +180,9 @@ test('an expired active job stops polling and releases the export controls', asy
     const saved = JSON.parse(localStorage.getItem(key)!)
     saved.job_id = 'job_expired'; saved.step = 4
     localStorage.setItem(key, JSON.stringify(saved))
+    const store = JSON.parse(localStorage.getItem('cutmy.projects.v1')!)
+    store.projects.find((project: { id: string }) => project.id === store.active_id).draft = saved
+    localStorage.setItem('cutmy.projects.v1', JSON.stringify(store))
   })
   await page.reload()
   await expect(page.getByRole('alert')).toBeVisible()

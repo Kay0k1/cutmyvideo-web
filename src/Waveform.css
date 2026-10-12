@@ -1,0 +1,13 @@
+.audio-waveform { min-height: 81px; margin: 8px 0; color: var(--muted); }
+.waveform-label, .waveform-hint { display: block; font-size: .75rem; line-height: 1.3; }
+.waveform-detail { width: 100%; height: 36px; display: block; background: var(--soft); border-radius: 4px; }
+.audio-waveform path { stroke: var(--accent, #397758); stroke-width: 1; fill: none; }
+.waveform-overview { position: relative; padding: 0; width: 100%; height: 15px; display: block; border: 0; border-radius: 3px; background: var(--soft); cursor: pointer; }
+.waveform-overview svg { display: block; width: 100%; height: 12px; }
+.waveform-overview:focus-visible { outline: 2px solid var(--accent, #397758); outline-offset: 2px; }
+.waveform-position { position: absolute; top: 0; bottom: 0; width: 1px; background: currentColor; }
+.waveform-hint { margin-top: 3px; opacity: .8; }
+@media (any-pointer: coarse), (max-width: 680px) {
+  .waveform-overview { height: 44px; padding: 14.5px 0; background-clip: content-box; }
+  .waveform-position { top: 14.5px; bottom: 14.5px; }
+}

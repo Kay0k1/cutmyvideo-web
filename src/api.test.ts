@@ -13,7 +13,7 @@ describe('batch and track API contracts', () => {
     expect(jobRequestBody('src_retry', ranges, { ...baseline, output_mode: 'separate', no_audio: false, subtitle_mode: 'omit' }))
       .toBe(jobRequestBody('src_retry', ranges, baseline));
   });
-  it('sends explicit selections unchanged while leaving older requests unchanged', async () => {
+  it('sends selections and the default cleanup policy while preserving omitted legacy selections', async () => {
     const fetchMock = vi.fn().mockImplementation(async () => Response.json({ id: 'job_contract', items: [] }));
     vi.stubGlobal('fetch', fetchMock);
     const ranges = [{ id: 'range_a', label: 'Opening', start_ms: 1000, end_ms: 2500 }, { id: 'range_b', label: 'End', start_ms: 4000, end_ms: 6000 }];
@@ -21,7 +21,7 @@ describe('batch and track API contracts', () => {
     const [url, options] = fetchMock.mock.calls[0];
     expect(url).toBe('/api/v1/jobs');
     expect(options.headers['Idempotency-Key']).toBe('key_contract');
-    expect(JSON.parse(options.body)).toEqual({ source_id: 'src_contract', ranges: ranges.map(({ label, start_ms, end_ms }) => ({ label, start_ms, end_ms })), format: 'mkv', quality: 'best', cut_mode: 'copy', output_mode: 'joined', audio_track: 2, subtitle_mode: 'preserve' });
+    expect(JSON.parse(options.body)).toEqual({ source_id: 'src_contract', ranges: ranges.map(({ label, start_ms, end_ms }) => ({ label, start_ms, end_ms })), format: 'mkv', quality: 'best', cut_mode: 'copy', output_mode: 'joined', audio_track: 2, subtitle_mode: 'preserve', cleanup_source: true });
     await api.createJob('src_contract', ranges, { format: 'mp4', quality: '1080p', cut_mode: 'accurate' }, 'key_legacy');
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('audio_track');
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).not.toHaveProperty('output_mode');

@@ -14,6 +14,8 @@ export interface Source {
   height?: number;
   expires_at?: string | null;
   retention_blocked?: boolean;
+  media_removed?: boolean;
+  media_removed_at?: string | null;
 }
 
 export interface ClipRange {
@@ -70,7 +72,10 @@ export interface Job {
 
 export interface UploadProgress { bytesPerSecond?: number; loaded: number; total: number | null; }
 
+export interface CropRect { x: number; y: number; width: number; height: number; }
+
 export interface OutputSettings {
+  crop?: CropRect;
   format: 'mp4' | 'mp3' | 'mkv';
   quality: '1080p' | '720p' | 'best';
   cut_mode: 'accurate' | 'copy';
@@ -78,6 +83,7 @@ export interface OutputSettings {
   audio_track?: number;
   no_audio?: boolean;
   subtitle_mode?: 'omit' | 'preserve';
+  cleanup_source?: boolean;
 }
 
 export interface PublicLimits { max_output_bytes?: number; max_fetch_bytes?: number; max_source_bytes: number; max_ranges: number; max_range_ms: number; max_job_ms: number; }
