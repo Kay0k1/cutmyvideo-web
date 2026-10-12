@@ -14,9 +14,10 @@ type PendingWindow = { controller: AbortController; promise: Promise<PreviewWind
 export const WindowPlayer = forwardRef<PlayerControls, {
   source: Source; active: boolean; poster?: string; initialPosition: number;
   audioTrack?: number; noAudio?: boolean;
+  onGeometry?(width: number, height: number): void;
   onTime(ms: number): void; onAvailable(available: boolean): void;
   onSourceUnavailable(id: string, verify?: boolean): void;
-}>(({ source, active, poster, initialPosition, audioTrack, noAudio, onTime, onAvailable, onSourceUnavailable }, ref) => {
+}>(({ source, active, poster, initialPosition, audioTrack, noAudio, onGeometry, onTime, onAvailable, onSourceUnavailable }, ref) => {
   const { t } = useLanguage();
   const video = useRef<HTMLVideoElement>(null);
   const callbacks = useRef({ onTime, onAvailable });
@@ -96,7 +97,9 @@ export const WindowPlayer = forwardRef<PlayerControls, {
       if (!mounted.current || controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
       if (blob.size > PREVIEW_WINDOW_MAX_BYTES || !blob.type.startsWith('video/')) throw new Error('invalid preview');
       const end = Math.min(start + PREVIEW_WINDOW_MS, source.duration_ms);
-      const entry = { start, end, url: URL.createObjectURL(blob), bytes: blob.size };
+      const originalWidth = Number(response.headers.get("X-Source-Display-Width"));
+      const originalHeight = Number(response.headers.get("X-Source-Display-Height"));
+      const entry = { start, end, ...(originalWidth >= 2 && originalHeight >= 2 && originalWidth * originalHeight <= 33554432 ? { display_width: originalWidth, display_height: originalHeight } : {}), url: URL.createObjectURL(blob), bytes: blob.size };
       cache.current!.add(entry, state.current.start);
       setBuffered(cache.current!.ranges());
       return entry;
@@ -127,6 +130,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
   function show(entry: PreviewWindow) {
     const current = state.current;
     current.start = entry.start; current.end = entry.end;
+    if (entry.display_width && entry.display_height) onGeometry?.(entry.display_width, entry.display_height);
     if (current.url === entry.url && current.ready) {
       if (video.current) video.current.currentTime = (current.position - entry.start) / 1000;
       status(false); schedulePrefetch();

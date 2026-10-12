@@ -14,6 +14,13 @@ describe('persisted export settings', () => {
     vi.stubGlobal('localStorage', { getItem: () => { throw new Error('storage unavailable'); } });
     expect(readPreferences()).toEqual(defaultPreferences);
   });
+  it('preserves an explicit cleanup opt-out and keeps source crop out of new-video defaults', () => {
+    const output = { format: 'mp4', quality: 'best', cut_mode: 'accurate', cleanup_source: false, crop: { x: .1, y: .2, width: .5, height: .5 } };
+    expect(readOutputSettings(output)).toEqual(output);
+    expect(readOutputSettings({ ...output, cleanup_source: 'false' })).toBeNull();
+    vi.stubGlobal('localStorage', { getItem: () => JSON.stringify({ output, timeline_span: 60000 }) });
+    expect(readPreferences().output).toEqual({ format: 'mp4', quality: 'best', cut_mode: 'accurate', cleanup_source: false });
+  });
   it('restores a source-specific selection only in the draft, keeping new-source defaults clean', () => {
     const output = { format: 'mkv', quality: 'best', cut_mode: 'copy', output_mode: 'joined', audio_track: 2, subtitle_mode: 'preserve' };
     expect(readOutputSettings(output)).toEqual(output);

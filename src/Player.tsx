@@ -81,10 +81,12 @@ export const Player = memo(forwardRef<PlayerControls, {
   active: boolean;
   audioTrack?: number;
   noAudio?: boolean;
+  forceWindow?: boolean;
+  onGeometry?(width: number, height: number): void;
   onTime(ms: number): void;
   onAvailable(available: boolean): void;
   onSourceUnavailable(id: string, verify?: boolean): void;
-}>(({ source, active, audioTrack, noAudio, onTime, onAvailable, onSourceUnavailable }, ref) => {
+}>(({ source, active, audioTrack, noAudio, forceWindow, onGeometry, onTime, onAvailable, onSourceUnavailable }, ref) => {
   const { t } = useLanguage();
   const video = useRef<HTMLVideoElement>(null);
   const host = useRef<HTMLDivElement>(null);
@@ -97,7 +99,7 @@ export const Player = memo(forwardRef<PlayerControls, {
   pollingActive.current = active;
   const [serverPreview, setServerPreview] = useState(false);
   const windowPlayer = useRef<PlayerControls>(null);
-  const useWindow = audioTrack !== undefined || noAudio === true || serverPreview || (!!source && !source.preview_url && !embedId(source.embed_url));
+  const useWindow = forceWindow || audioTrack !== undefined || noAudio === true || serverPreview || (!!source && !source.preview_url && !embedId(source.embed_url));
   const poster = source && source.thumbnail_url === `/api/v1/sources/${encodeURIComponent(source.id)}/thumbnail` ? source.thumbnail_url : undefined;
   usePlaybackClock(video, active && !useWindow && !!source?.preview_url, () => callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000)), source?.id);
 
@@ -217,8 +219,8 @@ export const Player = memo(forwardRef<PlayerControls, {
   </div>;
 
   return <div className="player-frame">
-    {useWindow ? <WindowPlayer key={`${source.id}:${audioTrack ?? 'default'}:${noAudio ?? false}`} ref={windowPlayer} source={source} audioTrack={audioTrack} noAudio={noAudio} active={active} poster={poster} initialPosition={lastTime.current.ms} onTime={ms => callbacks.current.onTime(ms)} onAvailable={onAvailable} onSourceUnavailable={onSourceUnavailable} /> : source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
-      onLoadedMetadata={() => { if (video.current && lastTime.current.ms > 0) video.current.currentTime = lastTime.current.ms / 1000; callbacks.current.onAvailable(true); }}
+    {useWindow ? <WindowPlayer key={`${source.id}:${audioTrack ?? 'default'}:${noAudio ?? false}`} ref={windowPlayer} source={source} audioTrack={audioTrack} noAudio={noAudio} active={active} poster={poster} initialPosition={lastTime.current.ms} onTime={ms => callbacks.current.onTime(ms)} onAvailable={onAvailable} onGeometry={onGeometry} onSourceUnavailable={onSourceUnavailable} /> : source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
+      onLoadedMetadata={() => { if (video.current) onGeometry?.(video.current.videoWidth, video.current.videoHeight); if (video.current && lastTime.current.ms > 0) video.current.currentTime = lastTime.current.ms / 1000; callbacks.current.onAvailable(true); }}
       onTimeUpdate={() => { if (!video.current?.seeking) callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000)); }}
       onError={() => { setServerPreview(true); callbacks.current.onAvailable(false); }} />
       : <div ref={host} className="youtube-player" />}

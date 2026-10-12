@@ -83,6 +83,7 @@ export interface OutputSettings {
   audio_track?: number;
   no_audio?: boolean;
   subtitle_mode?: 'omit' | 'preserve';
+  cleanup_source?: boolean;
 }
 
 export interface PublicLimits { max_output_bytes?: number; max_fetch_bytes?: number; max_source_bytes: number; max_ranges: number; max_range_ms: number; max_job_ms: number; }

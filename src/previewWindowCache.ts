@@ -10,7 +10,7 @@ export interface PreviewWindow {
   start: number;
   end: number;
   url: string;
-  bytes: number;
+  bytes: number; display_width?: number; display_height?: number;
 }
 
 // Object URLs own decoded/downloaded media until explicitly released. Bound both

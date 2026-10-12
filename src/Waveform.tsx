@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { formatTimecode } from './timecode';
 import { useLanguage } from './Language';
 import { parseWaveform, waveformPath } from './waveform';
 import type { WaveformWindow } from './waveform';
@@ -75,8 +76,14 @@ export function Waveform({ sourceID, duration, current, view, active, audioTrack
   return <div className="audio-waveform" aria-label={text('Звуковая волна выбранной дорожки', 'Selected audio waveform')}>
     <span className="waveform-label">{label}</span>
     <svg className="waveform-detail" viewBox="0 0 600 40" preserveAspectRatio="none" aria-hidden="true"><path d={detail} /></svg>
-    <button className="waveform-overview" type="button" aria-label={text('Обзор звука всей записи; подготовлены просмотренные участки', 'Whole recording audio overview; visited areas are prepared')}
-      onClick={event => { const box = event.currentTarget.getBoundingClientRect(); onSeek(Math.round(Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)) * duration)); }}>
+    <button className="waveform-overview" type="button" role="slider" aria-valuemin={0} aria-valuemax={duration} aria-valuenow={Math.min(duration, current)} aria-valuetext={formatTimecode(current, true)} aria-label={text('Обзор звука всей записи; подготовлены просмотренные участки', 'Whole recording audio overview; visited areas are prepared')}
+      onKeyDown={event => {
+        const delta = event.shiftKey ? 10000 : 1000;
+        const value = event.key === 'Home' ? 0 : event.key === 'End' ? duration : event.key === 'ArrowLeft' ? Math.max(0, current - delta) : event.key === 'ArrowRight' ? Math.min(duration, current + delta) : null;
+        if (value !== null) { event.preventDefault(); onSeek(value); }
+        else if (event.key === 'Enter' || event.key === ' ') event.preventDefault();
+      }}
+      onClick={event => { if (event.detail === 0) return; const box = event.currentTarget.getBoundingClientRect(); onSeek(Math.round(Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)) * duration)); }}>
       <svg viewBox="0 0 600 12" preserveAspectRatio="none" aria-hidden="true"><path d={overview} /></svg>
       <span className="waveform-position" style={{ left: `${Math.min(100, current / duration * 100)}%` }} aria-hidden="true" />
     </button>

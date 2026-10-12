@@ -43,8 +43,9 @@ describe('per-video cutting projects', () => {
 describe('browser plans use the strict engine v1 schema', () => {
   it('round trips range order and output settings without server IDs or credentials', () => {
     const inputRanges = [...ranges, { id: 'server-secret', label: 'First', start_ms: 0, end_ms: 1000 }];
-    const plan = exportCuttingPlan('talk.mp4', inputRanges, { ...draft.output, output_mode: 'joined', audio_track: 2 });
+    const plan = exportCuttingPlan('talk.mp4', inputRanges, { ...draft.output, output_mode: 'joined', audio_track: 2, cleanup_source: false });
     const raw = JSON.stringify(plan); expect(raw).not.toContain('server-secret'); expect(raw).not.toContain('source_id');
+    expect(raw).not.toContain('cleanup_source');
     const imported = importCuttingPlan(raw, 12000, () => crypto.randomUUID());
     expect(imported.ranges.map(({ id: _id, ...range }) => range)).toEqual(plan.ranges);
     expect(imported.output).toEqual({ ...draft.output, output_mode: 'joined', audio_track: 2 });

@@ -53,10 +53,10 @@ export function sourceMismatch(draft: Record<string, unknown>, source: Source): 
   return typeof draft.source_title === 'string' && draft.source_title !== '' && draft.source_title !== source.title;
 }
 
-export interface CuttingPlan { version: 1; input: string; ranges: { label: string; start_ms: number; end_ms: number }[]; options: Omit<OutputSettings, 'output_mode'>; output_mode?: 'separate' | 'joined'; }
+export interface CuttingPlan { version: 1; input: string; ranges: { label: string; start_ms: number; end_ms: number }[]; options: Omit<OutputSettings, 'output_mode' | 'cleanup_source'>; output_mode?: 'separate' | 'joined'; }
 /** The local engine's strict v1 schema: no resource IDs, URLs or credentials. */
 export function exportCuttingPlan(title: string, ranges: ClipRange[], output: OutputSettings): CuttingPlan {
-  const { output_mode, ...options } = output;
+  const { output_mode, cleanup_source: _cleanup, ...options } = output;
   const input = (/^https?:/i.test(title) ? 'video.mp4' : title).split(/[\\/]/).at(-1)?.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 500) || 'video.mp4';
   return { version: 1, input, ranges: ranges.map(({ label, start_ms, end_ms }) => ({ label, start_ms, end_ms })), options, ...(output_mode ? { output_mode } : {}) };
 }

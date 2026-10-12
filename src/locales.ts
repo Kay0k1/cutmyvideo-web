@@ -2,6 +2,15 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  'Исходник удалён после экспорта. Проект и готовые клипы сохранены. Откройте запись заново для новой нарезки.': 'The original was removed after export. Your project and completed clips remain available. Reopen the recording to make new cuts.',
+  'Область кадра слишком мала или выходит за изображение. Измените кадр или сбросьте его.': 'The crop area is too small or outside the image. Adjust it or reset the frame.',
+
+  "Выбранный кадр требует точного MP4. Выберите совместимый режим или сбросьте кадр.": "The selected frame requires accurate MP4. Choose that mode or reset the frame.",
+  "Выбрать точный MP4": "Use accurate MP4",
+  "Сбросить кадр": "Reset frame",
+  "Удалить исходник после экспорта": "Delete source after export",
+  "Готовые клипы и проект сохранятся. Для новой нарезки удалённую запись понадобится открыть заново.": "Completed clips and the project remain available. Reopen the deleted recording to make new cuts.",
+
   'В план входят выбранные фрагменты в порядке списка. Для CLI укажите путь к исходному файлу в поле input.': 'The plan contains selected clips in list order. For the CLI, set input to the original file path.',
   "Проекты в этом браузере": "Projects in this browser",
   "Мои проекты": "My projects",
