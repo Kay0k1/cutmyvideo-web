@@ -5,18 +5,18 @@
 [![Product checks](https://github.com/Kay0k1/cutmyvideo-web/actions/workflows/checks.yml/badge.svg)](https://github.com/Kay0k1/cutmyvideo-web/actions/workflows/checks.yml)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-The [cutmy.video](https://cutmy.video) product browser interface for selecting moments from video and exporting MP4 or MP3. Accepts uploaded files and accessible public links. The interface source is open under the MIT license. Media processing, the HTTP API and persistent job queue live in the open-source MIT [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
+The [cutmy.video](https://cutmy.video) product browser interface for selecting moments from video and exporting MP4/MP3 and MKV in copy mode. Accepts uploaded files and accessible public links. The interface source is open under the MIT license. Media processing, the HTTP API and persistent job queue live in the open-source MIT [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
 
 [Usage](#usage) · [Local development](#local-development) · [Checks](#checks) · [Deployment](#deployment) · [Contributing](#contributing-and-license)
 
 ## Usage
 
 1. **Video.** Paste a public link to a video, completed recording or clip, or choose an MP4, MOV, MKV or WebM file. The interface shows the actual title, duration, provider and limits returned by the API. A failed import preserves the previous video and draft.
-2. **Moment.** Set start/end on the timeline, mark boundaries at the player position and preview the range. Precise time fields and zoom are available separately. Seconds (`15`), total minutes (`83:10`) and hours with milliseconds (`01:23:10.250`) are accepted.
+2. **Moment.** Choose an audio track by index, language and title, or No sound; the same choice applies to preview and export. Set start/end on the timeline, mark boundaries at the player position and preview the range. Precise time fields and zoom are available separately. Seconds (`15`), total minutes (`83:10`) and hours with milliseconds (`01:23:10.250`) are accepted.
 3. **Clips, if needed.** Add and name several moments, then check those to export. Select all, duplicate, delete and undo the last deletion are available. A single moment can go straight to export.
-4. **Export.** Choose MP4 or MP3, quality and cut mode. Each checked moment becomes a separate file. Jobs continue when another video opens; **Exports and files** lists recent jobs, cancellation and retained results.
+4. **Export.** Choose MP4 or MP3, quality and cut mode, then save separate files or one joined file in the selected list order. Video copy mode offers MP4/MKV for every supported source, including platform links; uploaded files and direct links also offer compatible text-subtitle preservation. The summary shows included and omitted tracks; results show actual boundaries and track details. Jobs continue when another video opens; **Exports and files** lists recent jobs, cancellation and retained results.
 
-**Exact boundaries** re-encode video to H.264/AAC or audio to MP3. **Original quality** preserves compatible MP4 streams without re-encoding; the start can move to a preceding keyframe. Each result shows its actual boundaries. Successful files remain downloadable when another clip fails.
+**Exact boundaries** re-encode video to H.264/AAC or audio to MP3. **Original quality** preserves compatible MP4/MKV streams without re-encoding; the start can move to a preceding keyframe. Each result shows its actual boundaries. Successful files remain downloadable when another clip fails.
 
 Light, dark and system appearance, complete Russian/English copy, keyboard controls, labelled sliders and visible focus work on desktop and mobile. Drafts, stage, language, appearance and defaults are stored in the browser. Server-file access belongs to the current session: a saved local draft cannot recover access after cookies are cleared.
 
@@ -29,6 +29,8 @@ Provider recognition does not guarantee access to every video. Privacy, authenti
 Compatible files play directly in the browser; YouTube can also use its embed. For other supported sources and browser-incompatible codecs, the server prepares 30-second preview windows while retaining the complete recording timeline. Recently visited windows remain within a browser cache of 8 windows / 64 MiB; the next window is prefetched. The server reuses prepared windows after a reload, with a 512 MiB / 64-window cap and cleanup after 30 minutes without access. A new position still needs preparation. Manual time entry remains available when playback is unavailable.
 
 The operator configures limits and the interface reads them from the API. This repository's deployment configuration allows 32 GiB per source and platform fetch per job, 12 hours per range, 24 hours and 32 clips per export, and 16 GiB per output. The local example uses smaller file/storage limits. **Exports and files** lists up to 30 recent jobs, with active work first. Large downloads support HTTP Range and long connections. Sources and results normally expire after 24 hours; active jobs and retained results can keep source media longer. The interface displays the expiry returned by the server.
+
+Audio selection follows the source preview and export. Source default chooses the first default-marked audio stream, or the lowest audio index. Uploaded files and direct links expose stream index, language, title, codec, channels and sample rate; platforms require uploading the original file for track selection, while no-sound export also works by link. Export each clip separately or join selected clips in list order. Video copy mode offers MKV for every supported source. Compatible text-subtitle preservation requires an uploaded file or direct link in copy mode; subtitles are clipped and rebased for each segment, with simplified styling. ASS, SSA and image subtitles cannot be preserved. The export summary and downloaded result list identify included and omitted tracks and actual segment boundaries. Incompatible settings never silently change mode or quality.
 
 ## Local development
 

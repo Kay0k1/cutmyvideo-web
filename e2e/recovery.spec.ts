@@ -29,6 +29,9 @@ for (const input of ['link', 'upload'] as const) {
         sourceReads++
         return route.fulfill({ json: source })
       }
+      if (path === `${api}/sources/${source.id}/tracks` && method === 'GET') {
+        return route.fulfill({ json: { tracks: [] } })
+      }
       if (path === `${api}/sources/${source.id}/preview` && method === 'GET') {
         previewReads++
         return route.fulfill({ status: 404, json: { error: { code: 'preview_unavailable', message: 'Controlled preview failure' } } })

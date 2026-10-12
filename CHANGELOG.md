@@ -4,6 +4,14 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+## 0.3.0 — 2026-10-12
+
+### Added
+- Choose a source audio track by index, language and title, or export without sound; preview and export share the selection, and source-specific choices never become defaults for another video.
+- Export selected named clips as separate files or join them in list order through the existing workflow.
+- Offer MP4/MKV for video copy exports from every supported source; local copy also supports compatible text-subtitle preservation, with clear inclusion/exclusion summaries and actual result segment/track details.
+- Russian and English controls, keyboard interaction, mobile layout and actionable diagnostics for platform tracks and unsupported subtitles.
+
 ### Changed
 - Open the MIT website source and contributor documentation; report vulnerabilities through private security advisories.
 - Keep full database and Chromium/Firefox/native WebKit checks for code pull requests, tags and manual runs; main pushes run frontend/image verification without repeating the full matrix. Documentation-only pull requests retain frontend checks.

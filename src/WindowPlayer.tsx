@@ -12,8 +12,9 @@ type PendingWindow = { controller: AbortController; promise: Promise<PreviewWind
 // intervals stay in a bounded cache; only the next interval is speculative.
 export const WindowPlayer = forwardRef<PlayerControls, {
   source: Source; active: boolean; poster?: string; initialPosition: number;
+  audioTrack?: number; noAudio?: boolean;
   onTime(ms: number): void; onAvailable(available: boolean): void;
-}>(({ source, active, poster, initialPosition, onTime, onAvailable }, ref) => {
+}>(({ source, active, poster, initialPosition, audioTrack, noAudio, onTime, onAvailable }, ref) => {
   const { t } = useLanguage();
   const video = useRef<HTMLVideoElement>(null);
   const callbacks = useRef({ onTime, onAvailable });
@@ -27,6 +28,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [failureMessage, setFailureMessage] = useState('Не удалось загрузить участок видео.');
   const [position, setPosition] = useState(initialPosition);
   const [buffered, setBuffered] = useState<Array<{ start: number; end: number }>>([]);
   const [prefetching, setPrefetching] = useState(false);
@@ -69,9 +71,11 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     request.promise = Promise.resolve().then(async () => {
       let response: Response | undefined;
       for (let attempt = 0; attempt < 30; attempt++) {
-        response = await fetch(`/api/v1/sources/${encodeURIComponent(source.id)}/preview?start_ms=${start}${request.background ? '&priority=background' : ''}`, { credentials: 'same-origin', signal: controller.signal });
+        response = await fetch(`/api/v1/sources/${encodeURIComponent(source.id)}/preview?start_ms=${start}${audioTrack !== undefined ? `&audio_track=${audioTrack}` : ''}${noAudio ? '&no_audio=true' : ''}${request.background ? '&priority=background' : ''}`, { credentials: 'same-origin', signal: controller.signal });
         if (response.ok) break;
         const body = await response.json().catch(() => null);
+        if (body?.error?.code === 'tracks_unavailable') throw new Error('tracks_unavailable');
+        if (['audio_track_invalid', 'audio_track_unavailable'].includes(body?.error?.code)) throw new Error('audio_track_invalid');
         if (request.background || body?.error?.code !== 'server_busy') throw new Error('preview unavailable');
         await new Promise<void>((resolve, reject) => {
           const stop = () => { window.clearTimeout(wait); reject(new DOMException('Aborted', 'AbortError')); };
@@ -138,8 +142,11 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     try {
       const entry = await requestWindow(start, false);
       if (mounted.current && enabled.current && generation === current.generation) show(entry);
-    } catch {
+    } catch (error) {
       if (mounted.current && enabled.current && generation === current.generation) {
+        setFailureMessage(error instanceof Error && error.message === 'tracks_unavailable'
+          ? 'Чтобы выбрать аудиодорожку площадки, загрузите исходный файл. Экспорт без звука доступен.'
+          : error instanceof Error && error.message === 'audio_track_invalid' ? 'Выбранная аудиодорожка недоступна. Выберите другую дорожку.' : 'Не удалось загрузить участок видео.');
         status(false, true); current.playing = false;
       }
     }
@@ -222,7 +229,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
         }}
         onError={() => { if (url && !state.current.loading) { cache.current!.remove(state.current.start); setBuffered(cache.current!.ranges()); status(false, true); state.current.playing = false; } }} />
       {loading && <div className="window-player-status" role="status"><span className="spinner" />{t('Готовим предпросмотр…')}</div>}
-      {failed && <div className="window-player-status" role="status"><p>{t('Не удалось загрузить участок видео.')}</p><button className="button secondary" type="button" onClick={() => void load(state.current.position)}>{t('Повторить')}</button></div>}
+      {failed && <div className="window-player-status" role="status"><p>{t(failureMessage)}</p><button className="button secondary" type="button" onClick={() => void load(state.current.position)}>{t('Повторить')}</button></div>}
     </div>
     <div className="window-player-navigation">
       <label className="window-player-seek">
