@@ -167,7 +167,7 @@ test('a real upload keeps precise boundaries from audition through decoded downl
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(3.875, 2);
     await goToExport(page);
     const created = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST');
-    await page.getByRole('button', { name: 'Cut clip', exact: true }).click();
+    await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
     const exported = await created;
     expect(exported.ok(), await exported.text()).toBeTruthy();
     expect(exported.request().postDataJSON().ranges).toEqual([{ start_ms: 1225, end_ms: 3875, label: '' }]);
