@@ -3,13 +3,18 @@
 .crop-editor > summary::before { content: '▸'; }
 .crop-editor[open] > summary::before { content: '▾'; }
 .crop-editor > summary::-webkit-details-marker { display: none; }
+.crop-editor:not([open]) > .crop-controls { display: none; }
 .crop-editor .crop-current { color: var(--muted); font-weight: 350; margin-left: auto; }
 .crop-controls { display: grid; gap: 10px; padding: 8px 0; }
 .crop-controls label { display: grid; gap: 6px; font-size: .875rem; }
-.crop-controls select { width: 100%; }
+.crop-controls select {
+  width: 100%; height: max(48px, 3em); -webkit-appearance: none; appearance: none; padding-right: 32px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%; background-size: 5px 5px; background-repeat: no-repeat;
+}
 .crop-custom { display: grid; grid-template-columns: 1fr auto 1fr auto; align-items: end; gap: 8px; }
 .crop-custom > span { align-self: center; padding-top: 22px; }
-.crop-custom input { width: 100%; }
+.crop-custom input { width: 100%; min-height: 44px; height: max(48px, 3em); }
 .crop-controls .crop-size { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 12px; }
 .crop-size input { min-height: 44px; padding: 0; width: 100%; accent-color: var(--accent); }
 .crop-controls .field-hint { margin-top: 0; }

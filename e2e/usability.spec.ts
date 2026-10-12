@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
-import { chooseOption, goToClips, goToExport, goToMoment, goToSource, showExactTimes, stepButton, uploadThroughUI } from './helpers'
+import { addClip, chooseOption, goToClips, goToExport, goToMoment, goToSource, showExactTimes, stepButton, uploadThroughUI } from './helpers'
 
 // Text-only resizing leaves the viewport and layout media queries unchanged.
 // It complements the 320 CSS-pixel reflow matrix; device scale is not text zoom.
@@ -329,4 +329,65 @@ test('single-clip export keeps advanced options behind a native disclosure', asy
   await expect(page.getByRole('combobox', { name: 'Video quality', exact: true })).toBeVisible()
   await details.locator('summary').press('Space')
   await expect(page.locator('#quality')).not.toBeVisible()
+})
+
+test('new editing controls keep full touch targets on narrow phones', async ({ browser, browserName }, testInfo) => {
+  for (const width of [320, 360]) {
+    const context = await browser.newContext({ viewport: { width, height: 720 }, hasTouch: true,
+      isMobile: browserName !== 'firefox' })
+    try {
+      const page = await context.newPage()
+      const evidence: unknown[] = []
+      const measure = async (name: string, scope: string) => {
+        const controls = await page.locator(scope).evaluateAll(roots => roots.flatMap(root =>
+          [...root.querySelectorAll<HTMLElement>('button,input:not([type=file]),select,[role=slider],summary')]
+            .filter(element => {
+              const bounds = element.getBoundingClientRect()
+              return bounds.width > 0 && bounds.height > 0 && getComputedStyle(element).visibility !== 'hidden'
+            })
+            .map(element => {
+              const target = element.matches('input[type=checkbox]') ? element.closest('label') ?? element : element
+              const bounds = target.getBoundingClientRect()
+              return { name: element.getAttribute('aria-label') || target.textContent?.trim() || element.id,
+                width: bounds.width, height: bounds.height }
+            })))
+        expect(controls.length, `${name}: measured native controls`).toBeGreaterThan(0)
+        expect(controls.filter(control => control.width < 43.5 || control.height < 43.5),
+          `${name} at ${width}px: targets smaller than 44 CSS px`).toEqual([])
+        evidence.push({ name, width, controls })
+      }
+      await page.goto('/?lang=en')
+      await uploadThroughUI(page)
+      await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+      await showExactTimes(page)
+      await expect(page.locator('.audio-waveform')).toBeVisible()
+      await measure('history and waveform', '.edit-history-actions,.audio-waveform')
+      const frame = page.locator('.crop-editor')
+      await expect(frame.locator('select')).not.toBeVisible()
+      await frame.locator('summary').click()
+      await frame.locator('select').selectOption('1:1')
+      await expect(page.locator('.crop-resize')).toBeVisible()
+      await measure('crop presets, area controls and resize target', '.crop-editor,.crop-overlay')
+      await frame.locator('select').selectOption('custom')
+      await measure('custom crop dimensions and apply', '.crop-editor')
+      await frame.getByLabel('Width', { exact: true }).fill('9')
+      await frame.getByLabel('Height', { exact: true }).fill('16')
+      await frame.getByRole('button', { name: 'Apply', exact: true }).click()
+      await measure('applied custom crop and resize target', '.crop-editor,.crop-overlay')
+      await frame.locator('summary').click()
+      await expect(frame.locator('select')).not.toBeVisible()
+      await addClip(page)
+      await goToClips(page)
+      await measure('clip reordering and history', '.clip-reorder,.edit-history-actions')
+      await goToExport(page)
+      await measure('source cleanup', '.source-cleanup-choice')
+      await goToSource(page)
+      await page.getByRole('button', { name: 'My projects', exact: true }).click()
+      await expect(page.locator('.project-row-actions')).toHaveCount(1)
+      await measure('saved project and plan actions', '.project-library')
+      await testInfo.attach(`new-controls-${width}-touch-targets`, {
+        body: JSON.stringify(evidence, null, 2), contentType: 'application/json',
+      })
+    } finally { await context.close() }
+  }
 })
