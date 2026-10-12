@@ -2,6 +2,7 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  "Копирование сохраняет исходное качество. Начало может сдвинуться к ключевому кадру; фактические границы будут указаны у готового файла.": "Copying preserves original quality. The start may shift to a keyframe; actual boundaries will be shown with the finished file.",
   "Фрагменты сохранены": "Clips saved",
   "Источник больше недоступен. Фрагменты сохранены. Загрузите ту же запись или откройте её ссылку, чтобы продолжить.": "The source is no longer available. Your clips are saved. Upload the same recording or open its link to continue.",
   "Загрузите ту же запись или откройте её ссылку. Границы, названия и настройки экспорта восстановятся.": "Upload the same recording or open its link. Boundaries, names and export settings will be restored.",

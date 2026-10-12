@@ -452,12 +452,12 @@ export default function App() {
   }
 
   function activateSource(opened: Source) {
-    stopJobPolling.current?.(); stopJobPolling.current = null;
     const recovered = recoverableSource && keepRecoveredCuts;
     if (recovered && ranges.some(range => range.end_ms > opened.duration_ms)) {
       setSourceError('Эта запись короче сохранённых фрагментов. Откройте исходную запись или отключите восстановление фрагментов.');
       setStep(1); return false;
     }
+    stopJobPolling.current?.(); stopJobPolling.current = null;
     const nextRanges = recovered ? ranges : [newRange(opened.duration_ms, 0, limits)];
     const range = nextRanges.find(range => range.id === selectedId) ?? nextRanges[0];
     player.current?.pause(); previewEnd.current = null; restoredPosition.current = null;
@@ -737,6 +737,7 @@ export default function App() {
           </div>
           {invalidAudio && <p className="error-message" role="alert">{t('Выбранная аудиодорожка недоступна. Выберите другую дорожку.')}</p>}
           {incompatibleOutput && <p className="error-message" role="alert">{t('Эти настройки требуют исходного файла и режима копирования. Выберите MP4 и исключите субтитры либо загрузите исходный файл.')}</p>}
+          {videoCopy && <p className="copy-boundary-warning" role="note">{t('Копирование сохраняет исходное качество. Начало может сдвинуться к ключевому кадру; фактические границы будут указаны у готового файла.')}</p>}
           <p className="field-hint export-limits">{t('Один фрагмент — до {range}; весь экспорт — до {total}.', { range: durationLabel(limits.max_range_ms, locale), total: durationLabel(limits.max_job_ms, locale) })}</p>{limits.max_output_bytes && <p className="field-hint export-limits">{t('Готовый файл — до {limit}.', { limit: formatBytes(limits.max_output_bytes, locale) })}</p>}{exportLimitError && <p className="error-message" role="alert">{exportLimitError}</p>}<div className="export-summary"><span>{source ? countLabel(exportRanges.length, 'clip', locale) : t("Фрагменты не выбраны")}</span>{source && <strong>{durationLabel(totalDuration, locale)}</strong>}</div>
           <button className="button primary export-submit" type="submit" disabled={!source || !exportRanges.length || busy || sourceBusy || invalidDraft || !!exportLimitError || invalidAudio || incompatibleOutput}>{submitting ? <><span className="spinner" />{t("Создаём задание…")}</> : activeJob(job) ? <><span className="spinner" />{t("Идёт обработка…")}</> : <><Icon name="cut" size={18} />{repeatExport ? t('Повторить экспорт') : exportRanges.length > 1 ? t("Вырезать фрагменты") : t("Вырезать фрагмент")}</>}</button>
           {!source && <p className="export-empty-hint">{t("Сначала откройте видео.")}</p>}

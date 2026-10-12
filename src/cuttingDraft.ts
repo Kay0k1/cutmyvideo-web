@@ -8,13 +8,14 @@ export interface RecoverableSource { id: string; title: string; duration_ms: num
 /** Recover cuts even from old drafts whose source metadata was not persisted. */
 export function recoverCuttingDraft(saved: Record<string, unknown>): { source: RecoverableSource; ranges: ClipRange[]; selectedId: string; selectedIds: string[] } | null {
   if (!storedResourceId(saved.source_id)) return null;
-  const duration = typeof saved.source_duration_ms === 'number' && Number.isSafeInteger(saved.source_duration_ms) && saved.source_duration_ms > 0
+  const maximumDuration = 366 * 24 * 60 * 60 * 1000;
+  const duration = typeof saved.source_duration_ms === 'number' && Number.isSafeInteger(saved.source_duration_ms) && saved.source_duration_ms > 0 && saved.source_duration_ms <= maximumDuration
     ? saved.source_duration_ms
     : Array.isArray(saved.ranges) ? saved.ranges.reduce((maximum: number, item: unknown) => {
       const end = typeof item === 'object' && item !== null ? (item as Record<string, unknown>).end_ms : undefined;
-      return typeof end === 'number' && Number.isSafeInteger(end) && end > 0 ? Math.max(maximum, end) : maximum;
+      return typeof end === 'number' && Number.isSafeInteger(end) && end > 0 && end <= maximumDuration ? Math.max(maximum, end) : maximum;
     }, 0) : 0;
-  if (!duration || duration > 366 * 24 * 60 * 60 * 1000) return null;
+  if (!duration) return null;
   const ranges = restoreRanges(saved.ranges, duration, maxClientRanges);
   if (!ranges.length) return null;
   const title = typeof saved.source_title === 'string' && saved.source_title.length <= 500 && !/[\u0000-\u001f\u007f]/.test(saved.source_title) ? saved.source_title : '';

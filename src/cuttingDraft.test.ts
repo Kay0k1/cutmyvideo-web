@@ -15,6 +15,7 @@ describe('cutting draft recovery', () => {
     expect(recoverCuttingDraft({ source_id: '../../secret', ranges })).toBeNull();
     expect(recoverCuttingDraft({ source_id: 'src_old', ranges: [{ ...ranges[0], end_ms: Number.MAX_SAFE_INTEGER }] })).toBeNull();
     expect(recoverCuttingDraft({ source_id: 'src_old', ranges: [null, {}, { ...ranges[0], label: 'invalid\n' }] })).toBeNull();
+    expect(recoverCuttingDraft({ source_id: 'src_old', ranges: [null, { ...ranges[0], id: 'unbounded', end_ms: Number.MAX_SAFE_INTEGER }, ...ranges] })?.ranges).toEqual(ranges);
   });
 });
 

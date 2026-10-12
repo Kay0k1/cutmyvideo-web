@@ -504,3 +504,5 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 .draft-recovery label { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: .875rem; cursor: pointer; }
 .draft-recovery input { min-height: 20px; width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--accent); }
 @media (max-width: 480px) { .boundary-steps > div { flex-basis: 100%; } .storyboard-frames { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } .storyboard-frames button { max-width: none; min-height: 44px; } .draft-recovery { padding: 14px; } }
+
+.copy-boundary-warning { margin-top: 14px; padding: 10px 12px; background: var(--soft); border-left: 3px solid var(--trim-line); color: var(--ink); font-size: .8125rem; line-height: 1.6; }

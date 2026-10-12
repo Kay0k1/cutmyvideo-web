@@ -131,6 +131,14 @@ test('an expired draft with no export selection survives rejecting a shorter rep
   await expect(page.locator('.draft-recovery li')).toHaveCount(2);
 });
 
+test('copy mode explains shifted boundaries before opening optional export controls', async ({ page }) => {
+  await prepare(page, { step: 4, output: { format: 'mp4', quality: 'best', cut_mode: 'copy' } });
+  await expect(page.locator('details.export-options')).not.toHaveAttribute('open', '');
+  await expect(page.getByRole('note')).toHaveText('Copying preserves original quality. The start may shift to a keyframe; actual boundaries will be shown with the finished file.');
+  await page.getByRole('button', { name: 'Русский', exact: true }).click();
+  await expect(page.getByRole('note')).toContainText('фактические границы будут указаны');
+});
+
 test('a real upload keeps precise boundaries from audition through decoded download', async ({ page }, testInfo) => {
   await page.goto('/?lang=en');
   const uploaded = page.waitForResponse(response => response.url().endsWith(`${api}/uploads`) && response.request().method() === 'POST');
