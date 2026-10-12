@@ -1,3 +1,4 @@
+import { readBrowserDraft, readBrowserProject } from './browserProjectStorage';
 import { expect, test, type Page } from '@playwright/test';
 import { api, goToClips, goToExport, goToSource, stepButton } from './helpers';
 
@@ -8,7 +9,7 @@ async function setup(page: Page, store = projectStore(), legacy: object | null =
   await page.addInitScript(({ store, legacy }) => { if (!localStorage.getItem('safety-seeded')) { if (legacy) localStorage.setItem('cutmy.workbench.v1', JSON.stringify(legacy)); else localStorage.setItem('cutmy.projects.v1', JSON.stringify(store)); localStorage.setItem('safety-seeded', 'yes'); } }, { store, legacy });
   await page.route('**/api/v1/**', async route => {
     const path = new URL(route.request().url()).pathname;
-    const value = path.endsWith('/session') ? { ok: true } : path.endsWith('/tracks') ? { tracks: [] } : path === `${api}/sources/source-a` ? source('source-a', 'A.mp4') : path === `${api}/sources/source-b` ? source('source-b', 'B.mp4') : path === `${api}/sources` && route.request().method() === 'POST' ? source('source-c', 'C.mp4') : path === `${api}/sources` ? { sources: [] } : path === `${api}/jobs` ? { jobs: [] } : { error: { code: 'preview_unavailable', message: 'No mocked media' } };
+    const value = path.endsWith('/session') ? { ok: true } : path.endsWith('/tracks') ? { tracks: [] } : path === `${api}/sources/source-a` ? source('source-a', 'A.mp4') : path === `${api}/sources/source-b` ? source('source-b', 'B.mp4') : path === `${api}/sources/source-c` ? source('source-c', 'C.mp4') : path === `${api}/sources` && route.request().method() === 'POST' ? source('source-c', 'C.mp4') : path === `${api}/sources` ? { sources: [] } : path === `${api}/jobs` ? { jobs: [] } : { error: { code: 'preview_unavailable', message: 'No mocked media' } };
     await route.fulfill({ status: 'error' in value ? 400 : 200, json: value });
   });
 }
@@ -57,30 +58,30 @@ test('cancelling a project job read does not attach its delayed job to a replace
   await page.goto('/?lang=en'); await openProjects(page); await page.getByRole('button', { name: 'Open project “B.mp4”', exact: true }).click(); await requestStarted;
   await page.getByRole('button', { name: 'Change video', exact: true }).click(); await page.getByRole('button', { name: 'Cancel', exact: true }).click(); await openOther(page);
   await expect(page.locator('.source-title')).toContainText('C.mp4'); release(); await page.waitForTimeout(150);
-  await expect(page.locator('.source-title')).toContainText('C.mp4'); await goToExport(page); await expect(page.locator('.job-status')).toHaveCount(0); expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1') || '{}').job_id)).not.toBe('old-job');
+  await expect(page.locator('.source-title')).toContainText('C.mp4'); await goToExport(page); await expect(page.locator('.job-status')).toHaveCount(0); expect(await readBrowserDraft(page).then(saved => saved.job_id)).not.toBe('old-job');
 });
 
 test('a cleaned-up source restores an intentionally empty project and its settings', async ({ page }) => {
   const store = projectStore(); store.projects[0].draft.ranges = []; store.projects[0].draft.selected_range_ids = []; Object.assign(store.projects[0].draft.output, { crop: { x: .2, y: 0, width: .5, height: 1 }, cleanup_source: false });
   await setup(page, store); await page.route('**/api/v1/sources/source-a', route => route.fulfill({ json: source('source-a', 'A.mp4', true) }));
   await page.goto('/?lang=en'); await expect(page.getByRole('heading', { name: 'Clips saved', exact: true })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1') || '{}').source_id)).toBe('source-a');
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1') || '{}')); expect(saved.ranges).toEqual([]); expect(saved.output.crop).toEqual({ x: .2, y: 0, width: .5, height: 1 }); expect(saved.output.cleanup_source).toBe(false);
+  await expect.poll(() => readBrowserDraft(page).then(saved => saved.source_id)).toBe('source-a');
+  const saved = await readBrowserDraft(page); expect(saved.ranges).toEqual([]); expect(saved.output.crop).toEqual({ x: .2, y: 0, width: .5, height: 1 }); expect(saved.output.cleanup_source).toBe(false);
 });
 
 test('a storage quota failure preserves edits and blocks project switching until storage recovers', async ({ page }) => {
   await setup(page); await page.addInitScript(() => {
     const original = Storage.prototype.setItem;
     Object.assign(window, { safetyBlockStorage: false });
-    Storage.prototype.setItem = function(key, value) { if ((window as unknown as { safetyBlockStorage: boolean }).safetyBlockStorage && key === 'cutmy.projects.v1') throw new DOMException('quota', 'QuotaExceededError'); return original.call(this, key, value); };
+    Storage.prototype.setItem = function(key, value) { if ((window as unknown as { safetyBlockStorage: boolean }).safetyBlockStorage && key.startsWith('cutmy.project.v2.')) throw new DOMException('quota', 'QuotaExceededError'); return original.call(this, key, value); };
   });
   let otherReads = 0; await page.route('**/api/v1/sources/source-b', async route => { otherReads++; await route.fulfill({ json: source('source-b', 'B.mp4') }); });
-  await page.goto('/?lang=en'); await goToClips(page); await page.getByLabel('Clip 1 name', { exact: true }).fill('Important edit'); await page.getByLabel('Clip 1 name', { exact: true }).press('Tab');
+  await page.goto('/?lang=en'); await goToClips(page); await page.evaluate(() => Object.assign(window, { safetyBlockStorage: true })); await page.getByLabel('Clip 1 name', { exact: true }).fill('Important edit'); await page.getByLabel('Clip 1 name', { exact: true }).press('Tab');
   await page.evaluate(() => Object.assign(window, { safetyBlockStorage: true })); await openProjects(page);
   await page.getByRole('button', { name: 'Open project “B.mp4”', exact: true }).click(); await expect(page.getByRole('alert')).toContainText('Could not save your project'); expect(otherReads).toBe(0);
   await goToClips(page); await expect(page.getByLabel('Clip 1 name', { exact: true })).toHaveValue('Important edit');
   await page.evaluate(() => Object.assign(window, { safetyBlockStorage: false })); await openProjects(page); await page.getByRole('button', { name: 'Open project “B.mp4”', exact: true }).click(); await expect(page.locator('.source-title')).toContainText('B.mp4');
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.projects.v1')!).projects.find((project: any) => project.id === 'source-a').draft); expect(saved.ranges[0].label).toBe('Important edit');
+  const saved = await readBrowserProject(page, 'source-a'); expect(saved.ranges[0].label).toBe('Important edit');
 });
 
 test('a full project index blocks a new source before creating server media', async ({ page }) => {
@@ -95,7 +96,7 @@ test('retry identity is written to the project before POST and restored after na
   await page.route('**/api/v1/jobs', async route => {
     if (route.request().method() !== 'POST') { await route.fulfill({ json: { jobs: [] } }); return; }
     const key = route.request().headers()['idempotency-key']; keys.push(key);
-    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.projects.v1')!).projects.find((project: any) => project.id === 'source-a').draft);
+    const saved = await readBrowserProject(page, 'source-a');
     expect(saved.export_attempt.key).toBe(key); checkedPreflight = true;
     await route.fulfill({ status: 503, json: { error: { code: 'database_unavailable', message: 'Unknown acceptance' } } });
   });
@@ -139,4 +140,63 @@ test('a lost acknowledgement recovers the accepted job after automatic media rem
   await page.reload(); await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step');
   await page.getByRole('button', { name: 'Retry export', exact: true }).click(); await expect(page.getByRole('link', { name: 'Download', exact: true })).toHaveAttribute('href', '/completed.mp4');
   expect(keys).toHaveLength(2); expect(keys[1]).toBe(keys[0]); expect(bodies[1]).toBe(bodies[0]); expect(JSON.parse(bodies[1]).cleanup_source).toBe(true);
+});
+
+test('two real tabs keep independent projects while playback saves positions', async ({ page, context }) => {
+  await setup(page);
+  const { readFile } = await import('node:fs/promises');
+  const video = await readFile(process.env.CUTMY_E2E_MEDIA!);
+  await page.route('**/api/v1/sources/source-a', route => route.fulfill({ json: { ...source('source-a', 'A.mp4'), preview_kind: 'file', preview_url: '/tabs-preview.mp4' } }));
+  await page.route('**/tabs-preview.mp4', route => route.fulfill({ contentType: 'video/mp4', body: video }));
+  await page.goto('/?lang=en'); await expect(page.locator('video')).toBeVisible();
+  await page.getByRole('button', { name: 'Preview clip', exact: true }).click();
+  await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(1);
+  const second = await context.newPage(); await setup(second); await second.goto('/?lang=en'); await openOther(second);
+  await expect(second.locator('.source-title')).toContainText('C.mp4'); await goToClips(second);
+  await second.getByLabel('Clip 1 name', { exact: true }).fill('Second tab clip'); await second.getByLabel('Clip 1 name', { exact: true }).press('Tab');
+  await readBrowserDraft(second);
+  await readBrowserDraft(page);
+  await expect.poll(async () => (await readBrowserProject(page, 'source-c')).ranges?.[0]?.label).toBe('Second tab clip');
+  await goToClips(page); await page.getByLabel('Clip 1 name', { exact: true }).fill('First tab clip'); await page.getByLabel('Clip 1 name', { exact: true }).press('Tab'); await readBrowserDraft(page);
+  await Promise.all([page.reload(), second.reload()]);
+  await expect(page.getByLabel('Clip 1 name', { exact: true })).toHaveValue('First tab clip');
+  await expect(second.getByLabel('Clip 1 name', { exact: true })).toHaveValue('Second tab clip');
+  expect(await page.evaluate(() => sessionStorage.getItem('cutmy.project.active.v2'))).toBe('source-a');
+  expect(await second.evaluate(() => sessionStorage.getItem('cutmy.project.active.v2'))).toBe('source-c');
+  expect((await readBrowserProject(page, 'source-b')).ranges[0].label).toBe('B clip');
+});
+
+test('same-project edits in two tabs require explicit conflict recovery and preserve both versions', async ({ page, context }) => {
+  await setup(page); await page.goto('/?lang=en'); await goToClips(page);
+  const second = await context.newPage(); await setup(second); await second.goto('/?lang=en');
+  await second.getByRole('button', { name: 'My projects', exact: true }).click(); await second.getByRole('button', { name: 'Open project “A.mp4”', exact: true }).click(); await goToClips(second);
+  await page.getByLabel('Clip 1 name', { exact: true }).fill('First saved version'); await page.getByLabel('Clip 1 name', { exact: true }).press('Tab'); await readBrowserDraft(page);
+  await expect(second.getByRole('alert')).toContainText('changed in another tab');
+  await second.getByLabel('Clip 1 name', { exact: true }).fill('Second unsaved version'); await second.getByLabel('Clip 1 name', { exact: true }).press('Tab');
+  await readBrowserDraft(second);
+  expect((await readBrowserProject(page, 'source-a')).ranges[0].label).toBe('First saved version');
+  // Reload immediately after editing also retains this tab's unsaved draft.
+  await second.reload(); await expect(second.getByLabel('Clip 1 name', { exact: true })).toHaveValue('Second unsaved version');
+  await expect(second.getByRole('alert')).toContainText('changed in another tab');
+  await second.getByRole('button', { name: 'Save my changes as a copy', exact: true }).click();
+  await expect(second.getByRole('alert')).toHaveCount(0);
+  const copyID = await second.evaluate(() => sessionStorage.getItem('cutmy.project.active.v2'));
+  expect(copyID).not.toBe('source-a'); expect((await readBrowserProject(second, copyID!)).ranges[0].label).toBe('Second unsaved version');
+  expect((await readBrowserProject(second, 'source-a')).ranges[0].label).toBe('First saved version');
+  await second.reload(); await expect(second.getByLabel('Clip 1 name', { exact: true })).toHaveValue('Second unsaved version');
+});
+
+test('deleting a project in another tab cannot be undone by a stale autosave', async ({ page, context }) => {
+  await setup(page); await page.goto('/?lang=en'); await goToClips(page);
+  const second = await context.newPage(); await setup(second); await second.goto('/?lang=en');
+  await second.getByRole('button', { name: 'My projects', exact: true }).click(); second.once('dialog', dialog => dialog.accept());
+  await second.getByRole('button', { name: 'Remove project “A.mp4” from this browser', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('removed in another tab');
+  await page.getByLabel('Clip 1 name', { exact: true }).fill('Work kept after deletion'); await page.getByLabel('Clip 1 name', { exact: true }).press('Tab'); await readBrowserDraft(page);
+  const record = await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.project.v2.source-a')!)); expect(record.deleted).toBe(true); expect(record).not.toHaveProperty('draft');
+  await page.reload(); await expect(page.getByLabel('Clip 1 name', { exact: true })).toHaveValue('Work kept after deletion');
+  await expect(page.getByRole('alert')).toContainText('removed in another tab');
+  await page.getByRole('button', { name: 'Save my changes as a copy', exact: true }).click(); await expect(page.getByRole('alert')).toHaveCount(0);
+  const deleted = await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.project.v2.source-a')!)); expect(deleted.deleted).toBe(true);
+  expect((await readBrowserProject(page, 'source-b')).ranges[0].label).toBe('B clip');
 });

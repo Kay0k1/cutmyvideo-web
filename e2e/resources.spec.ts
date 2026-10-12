@@ -1,3 +1,4 @@
+import { readBrowserDraft } from './browserProjectStorage';
 import { expect, test, type Page } from '@playwright/test'
 import { api, showExactTimes, stepButton, uploadThroughUI } from './helpers'
 
@@ -97,6 +98,10 @@ async function prepare(page: Page, saved: Record<string, unknown> = {}) {
     localStorage.setItem('cutmy.workbench.v1', JSON.stringify({ workflow_version: 2, step: 4, source_id: sourceID,
       ranges: [{ id: 'range_resources', label: '', start_ms: 0, end_ms: 3000 }], selected_id: 'range_resources', selected_range_ids: ['range_resources'],
       ...saved }))
+    // This fixture represents a previously saved legacy draft. The initial
+    // empty page already completed migration, so reset that marker before the
+    // first restoration; later reloads must use the actual migrated project.
+    localStorage.removeItem('cutmy.projects.v2.ready')
   }, { sourceID: source.id, saved })
 }
 
@@ -117,7 +122,7 @@ test('resource lifecycle: deletion explains all consequences, respects dismissal
   await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step')
   await expect(remove).not.toBeVisible(); expect(deletes).toBe(1)
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1') || '{}'))).not.toHaveProperty('source_id')
+  expect(await readBrowserDraft(page)).not.toHaveProperty('source_id')
 })
 
 test('resource lifecycle: source-in-use conflict keeps the editable source and explains recovery', async ({ page }) => {
@@ -185,7 +190,7 @@ test('resource lifecycle: a transient restore failure preserves the saved draft 
   await page.reload()
   await expect(page.getByRole('button', { name: 'Повторить подключение', exact: true })).toBeVisible()
   await page.waitForTimeout(1200)
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).source_id)).toBe(source.id)
+  expect(await readBrowserDraft(page).then(saved => saved.source_id)).toBe(source.id)
   await page.getByRole('button', { name: 'Повторить подключение', exact: true }).click()
   await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
   await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled()
@@ -200,7 +205,7 @@ test('resource lifecycle: results survive subsequent reloads after their source 
   await page.reload(); await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
   await expect(page.locator('.file-description')).toContainText('Удаление после')
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).job_id)).toBe(job.id)
+  expect(await readBrowserDraft(page).then(saved => saved.job_id)).toBe(job.id)
   await page.reload(); await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
 })
 
@@ -210,7 +215,10 @@ test('resource lifecycle: malformed IDs and oversized JSON never start restore r
   await page.route(`**${api}/sources/**`, route => { restores++; return route.abort() })
   await page.route(`**${api}/jobs/**`, route => { restores++; return route.abort() })
   await page.reload(); await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled(); expect(restores).toBe(0)
-  await page.evaluate(() => localStorage.setItem('cutmy.workbench.v1', '{"source_id":"src_resources","padding":"' + 'x'.repeat(256 * 1024) + '"}'))
+  await page.evaluate(() => {
+    localStorage.setItem('cutmy.workbench.v1', '{"source_id":"src_resources","padding":"' + 'x'.repeat(256 * 1024) + '"}')
+    localStorage.removeItem('cutmy.projects.v2.ready')
+  })
   await page.reload(); await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled(); expect(restores).toBe(0)
 })
 
@@ -279,7 +287,7 @@ test('resource lifecycle: leaving the source list during deletion still clears t
   await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step')
   await expect(stepButton(page, 2)).toBeDisabled()
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
-  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.workbench.v1') || '{}'))).not.toHaveProperty('source_id')
+  expect(await readBrowserDraft(page)).not.toHaveProperty('source_id')
 })
 
 test('resource lifecycle: real multipart export results and source are explicitly removed together', async ({ page }) => {
@@ -299,7 +307,7 @@ test('resource lifecycle: real multipart export results and source are explicitl
   await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
   const uploadEvidence = await page.evaluate(() => (window as typeof window & { uploadEvidence: { nativeFile: boolean; progress: number; loaded: number } }).uploadEvidence)
   expect(uploadEvidence.nativeFile).toBe(true); expect(uploadEvidence.progress).toBeGreaterThan(0); expect(uploadEvidence.loaded).toBeGreaterThan(0)
-  const storedSource = await page.evaluate(() => { window.dispatchEvent(new Event('pagehide')); return JSON.parse(localStorage.getItem('cutmy.workbench.v1')!).source_id as string })
+  const storedSource = await readBrowserDraft(page).then(saved => saved.source_id as string)
   await stepButton(page, 4).click()
   const createdResponse = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
@@ -445,7 +453,7 @@ test('background exports: replacing a source ignores the previous job poll alrea
     await stepButton(page, 4).click()
     await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled()
     await expect(page.locator('.job-status')).toHaveCount(0)
-    const draft = await page.evaluate(() => { window.dispatchEvent(new Event('pagehide')); return JSON.parse(localStorage.getItem('cutmy.workbench.v1')!) })
+    const draft = await readBrowserDraft(page)
     expect(draft.source_id).toBe(replacement.id)
     expect(draft.job_id).toBeUndefined()
   } finally { release() }

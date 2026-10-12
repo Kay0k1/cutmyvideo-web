@@ -1,6 +1,8 @@
 import { ProjectLibrary } from './ProjectLibrary';
-import { exportCuttingPlan, importCuttingPlan, readProjects, sourceMismatch, upsertProject, projectsStorageKey, ProjectStorageLimitError, restoredExportAttempt, maxProjects, restoredProjectOutput, matchingRetryOutput } from './cuttingProjects';
+import { exportCuttingPlan, importCuttingPlan, sourceMismatch, ProjectStorageLimitError, restoredExportAttempt, maxProjects, restoredProjectOutput } from './cuttingProjects';
 import type { CuttingProject } from './cuttingProjects';
+import { readProjects, readProject, readInitialDraft, initializeProjects, saveProject, deleteStoredProject, setActiveProject, hasMigratedProjects, isProjectStorageEvent, ProjectConflictError, stageProjectSave, discardProjectView, freshProjectID } from './projectPersistence';
+import type { PersistedProject } from './projectPersistence';
 import { beginGesture, emptyHistory, finishGesture, rememberEdit, redoEdit, undoEdit } from './editHistory';
 import type { EditHistory } from './editHistory';
 import { useLanguage } from './Language';
@@ -30,6 +32,8 @@ import { duplicateRanges, markBounds, rangeSelection, removeRanges, restoreRange
 import type { WorkbenchStep } from './clipCollection';
 import { exportFailureReason, repeatsFailedExport } from './jobFailure';
 import { ExportProgress } from './ExportProgress';
+import { recoverExportRequest, unfinishedJobRanges } from './exportRetry';
+import { CropPreview } from './CropPreview';
 import { createPlaybackPosition } from './playbackPosition';
 import { coalescedTask } from './coalescedTask';
 import { draftStorageKey as storageKey, readStoredRecord, storedResourceId } from './browserStorage';
@@ -107,6 +111,9 @@ export default function App() {
   const [position] = useState(createPlaybackPosition);
   const [playerAvailable, setPlayerAvailable] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [sequenceIndex, setSequenceIndex] = useState<number | null>(null);
+  const sequence = useRef<{ ranges: ClipRange[]; index: number; awaitingSeek: boolean } | null>(null);
+  const pendingBoundary = useRef<number | null>(null);
   const [span, setSpan] = useState(preferences.timeline_span);
   const [viewCenter, setViewCenter] = useState(15000);
   const [simpleView, setSimpleView] = useState<[number, number]>([0, 60000]);
@@ -119,6 +126,10 @@ export default function App() {
   const [job, setJob] = useState<Job | null>(null);
   const [joinedJob, setJoinedJob] = useState(false);
   const [jobRangeNumbers, setJobRangeNumbers] = useState<number[]>([]);
+  const [jobCuts, setJobCuts] = useState<ClipRange[]>([]);
+  const [priorJobs, setPriorJobs] = useState<{ job: Job; numbers: number[] }[]>([]);
+  const priorJobLoadGeneration = useRef(0);
+  const priorJobReferences = useRef<{ id: string; numbers: number[] }[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [pollRevision, setPollRevision] = useState(0);
@@ -132,6 +143,9 @@ export default function App() {
   const [projects, setProjects] = useState(readProjects);
   const projectStore = useRef(projects);
   const activeProjectID = useRef<string | null>(projects.active_id);
+  const projectRevisions = useRef(new Map(projects.projects.map(project => [project.id, (project as Partial<PersistedProject>).revision ?? null])));
+  const projectSaveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const [projectConflict, setProjectConflict] = useState<ProjectConflictError | null>(null);
   const histories = useRef<Record<string, EditHistory<EditorSnapshot>>>({});
   const pendingHistoryEnd = useRef<EditHistory<EditorSnapshot> | null>(null);
   const [, refreshHistory] = useState(0);
@@ -144,6 +158,7 @@ export default function App() {
   const previewEnd = useRef<number | null>(null);
   const sourceController = useRef<AbortController | null>(null);
   const exportAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
+  const exportAttemptNumbers = useRef<number[]>([]);
   const startField = useRef<HTMLInputElement>(null);
   const endField = useRef<HTMLInputElement>(null);
   const restored = useRef(false);
@@ -155,7 +170,8 @@ export default function App() {
   latestDraft.current = draftSnapshot();
   const selected = ranges.find(range => range.id === selectedId) ?? ranges[0];
   const exportRanges = ranges.filter(range => selectedRangeIds.includes(range.id));
-  const retryOutput = !source && recoverableSource ? matchingRetryOutput(recoverableSource.id, exportRanges, output, exportAttempt.current) : null;
+  const retryRequest = !source && recoverableSource ? recoverExportRequest(recoverableSource.id, ranges, output, exportAttempt.current) : null;
+  const retryOutput = retryRequest?.output ?? null;
   const busy = activeJob(job) || submitting || deletingSource;
   const duration = source?.duration_ms ?? 0;
   const view = zoomWindow(duration, viewCenter, span);
@@ -181,12 +197,68 @@ export default function App() {
   const incompatibleOutput = incompatibleCrop || output.format === 'mkv' && !videoCopy || output.subtitle_mode === 'preserve' && !canPreserveSubtitles;
   const navigation = useWorkflowHistory({ ready: sessionReady, step, panel, onNavigate: navigateHistory });
 
-  const playbackPosition = useCallback((ms: number) => {
+  const playbackPosition = useCallback((ms: number, confirmed = true) => {
+    if (confirmed && restoredPosition.current !== null && Math.abs(ms - restoredPosition.current) > 250) return;
+    const active = sequence.current;
+    if (active) {
+      const range = active.ranges[active.index];
+      // A seek publishes synchronously. Ignore clocks from the previous media
+      // until the new target has been acknowledged, including backward cuts.
+      if (active.awaitingSeek) {
+        if (confirmed && ms >= range.start_ms - 100 && ms <= range.start_ms + 250) { active.awaitingSeek = false; position.set(Math.max(range.start_ms, ms)); }
+        return;
+      }
+      if (ms >= range.end_ms) {
+        const next = active.ranges[active.index + 1];
+        if (next) {
+          active.index++; active.awaitingSeek = true; setSequenceIndex(active.index);
+          player.current?.pause(); player.current?.seek(next.start_ms); player.current?.play();
+        } else {
+          sequence.current = null; setSequenceIndex(null); setPreviewing(false);
+          player.current?.pause(); player.current?.seek(range.end_ms); position.set(range.end_ms);
+        }
+        return;
+      }
+    }
     if (previewEnd.current !== null && ms >= previewEnd.current) {
       const end = previewEnd.current; previewEnd.current = null; setPreviewing(false);
       player.current?.pause(); player.current?.seek(end); position.set(end);
     } else position.set(Math.min(duration, ms));
   }, [duration, position]);
+
+  function stopPreview() {
+    sequence.current = null; setSequenceIndex(null);
+    previewEnd.current = null; setPreviewing(false); player.current?.pause();
+  }
+
+  async function restorePriorJobs(saved: Record<string, unknown>) {
+    const projectID = activeProjectID.current, generation = ++priorJobLoadGeneration.current;
+    const length = typeof saved.source_duration_ms === 'number' ? saved.source_duration_ms : 366 * 24 * 60 * 60 * 1000;
+    setJobCuts(restoreRanges(saved.job_ranges, length, maxClientRanges));
+    exportAttemptNumbers.current = Array.isArray(saved.export_attempt_range_numbers) ? saved.export_attempt_range_numbers.filter(value => Number.isInteger(value) && value > 0 && value <= maxClientRanges).slice(0, maxClientRanges) as number[] : [];
+    const ids = Array.isArray(saved.prior_job_ids) ? [...new Set(saved.prior_job_ids.filter(storedResourceId))].slice(-32) : [];
+    const numbers = saved.prior_job_range_numbers && typeof saved.prior_job_range_numbers === 'object' ? saved.prior_job_range_numbers as Record<string, unknown> : {};
+    // References are durable project content. Loading their current download
+    // details must not temporarily turn them into an empty saved history.
+    const references = ids.map(id => ({ id, numbers: Array.isArray(numbers[id]) ? (numbers[id] as unknown[]).slice(0, maxClientRanges).map((value, index) => typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= maxClientRanges ? value : index + 1) : [] }));
+    priorJobReferences.current = references;
+    const expired = new Set<string>();
+    const loaded = await Promise.all(references.map(async reference => {
+      try { return { job: await api.job(reference.id), numbers: reference.numbers }; }
+      catch (error) {
+        if (error instanceof ApiError && (error.httpStatus === 404 || error.httpStatus === 410)) expired.add(reference.id);
+        return null; // Network and server errors preserve the reference for reload.
+      }
+    }));
+    if (activeProjectID.current !== projectID || generation !== priorJobLoadGeneration.current) return;
+    priorJobReferences.current = priorJobReferences.current.filter(reference => !expired.has(reference.id));
+    // A selective retry can add another completed job while these reads are
+    // pending. Merge details in reference order instead of discarding that job.
+    setPriorJobs(current => priorJobReferences.current.flatMap(reference => {
+      const value = loaded.find(value => value?.job.id === reference.id) ?? current.find(value => value.job.id === reference.id);
+      return value ? [{ ...value, numbers: reference.numbers }] : [];
+    }));
+  }
 
   const mediaGeometry = useCallback((width: number, height: number) => {
     if (!source || !Number.isFinite(width) || !Number.isFinite(height) || width < 2 || height < 2 || width * height > 33554432) return;
@@ -196,7 +268,7 @@ export default function App() {
 
   const playerAvailability = useCallback((available: boolean) => {
     setPlayerAvailable(available);
-    if (!available) { previewEnd.current = null; setPreviewing(false); }
+    if (!available) { sequence.current = null; setSequenceIndex(null); previewEnd.current = null; setPreviewing(false); }
     if (available && restoredPosition.current !== null) { player.current?.seek(restoredPosition.current); restoredPosition.current = null; }
   }, []);
 
@@ -207,7 +279,7 @@ export default function App() {
       catch (error) { if (!(error instanceof ApiError) || !(error.httpStatus === 404 || error.httpStatus === 410 || ['not_found', 'expired', 'source_expired', 'source_unavailable'].includes(error.code))) return; }
       if (currentSourceID.current !== id) return;
     }
-    player.current?.pause(); previewEnd.current = null; setPreviewing(false);
+    stopPreview();
     setRecoveringDraft(latestDraft.current); setRecoverableSource({ id, title: source.title, duration_ms: source.duration_ms }); setKeepRecoveredCuts(false);
     setSource(null); setStep(1);
     setSourceError('Источник больше недоступен. Фрагменты сохранены. Загрузите ту же запись или откройте её ссылку, чтобы продолжить.');
@@ -236,7 +308,7 @@ export default function App() {
   }, [source?.id, trackRevision]);
 
   function changeAudio(selection: string) {
-    player.current?.pause(); previewEnd.current = null; setPreviewing(false);
+    stopPreview();
     setOutput(previous => withAudioSelection(previous, selection));
   }
 
@@ -250,8 +322,13 @@ export default function App() {
         if (disposed) return;
         setLimits(currentLimits);
         if (!restored.current) {
-          const saved = projectStore.current.projects.find(project => project.id === projectStore.current.active_id)?.draft ?? readStoredRecord(storageKey);
+          try { projectStore.current = await initializeProjects(); } catch { setProjectError('Не удалось сохранить проект в браузере. Скачайте план, чтобы не потерять работу.', true); }
+          if (disposed) return;
+          setProjects(projectStore.current);
+          projectRevisions.current = new Map(projectStore.current.projects.map(project => [project.id, (project as Partial<PersistedProject>).revision ?? null]));
+          const saved = readInitialDraft(projectStore.current);
           activeProjectID.current = projectStore.current.active_id ?? (storedResourceId(saved.source_id) ? saved.source_id : null);
+          void restorePriorJobs(saved);
           exportAttempt.current = restoredExportAttempt(saved);
           const savedStep = restoredStep(saved.step, saved.workflow_version);
           let sourceWasRestored = false;
@@ -289,7 +366,7 @@ export default function App() {
                 const recoveredPosition = typeof saved.current_ms === 'number' && Number.isFinite(saved.current_ms) ? Math.max(0, Math.min(recovered.source.duration_ms, saved.current_ms)) : 0;
                 position.set(recoveredPosition); restoredPosition.current = recoveredPosition;
                 const restoredOutput = restoredProjectOutput(saved); if (restoredOutput) setOutput(restoredOutput);
-                if (savedStep === 4 && restoredOutput && matchingRetryOutput(recovered.source.id, recovered.ranges.filter(range => recovered.selectedIds.includes(range.id)), restoredOutput, exportAttempt.current)) setStep(4);
+                if (savedStep === 4 && restoredOutput && recoverExportRequest(recovered.source.id, recovered.ranges, restoredOutput, exportAttempt.current)) setStep(4);
               }
               setSourceError(recovered ? 'Источник больше недоступен. Фрагменты сохранены. Загрузите ту же запись или откройте её ссылку, чтобы продолжить.' : 'Предыдущий источник больше недоступен. Откройте его заново.');
             }
@@ -307,18 +384,70 @@ export default function App() {
     return () => { disposed = true; controller.abort(); };
   }, [sessionAttempt, setFields]);
 
-  function persistCurrentProject(provided?: Record<string, unknown>): boolean {
-    const snapshot = provided ?? draftSnapshot();
+  async function persistCurrentProject(provided?: Record<string, unknown>): Promise<boolean> {
+    const snapshot = provided ?? draftSnapshot(), id = activeProjectID.current;
     if (pendingHistoryEnd.current === currentHistory()) { finishGesture(currentHistory(), editSnapshot()); pendingHistoryEnd.current = null; }
-    try {
-      if (activeProjectID.current && snapshot.source_id) {
-        const next = upsertProject(projectStore.current, activeProjectID.current, snapshot);
-        projectStore.current = next; if (step === 1) setProjects(next);
-        localStorage.setItem(projectsStorageKey, JSON.stringify(next));
+    if (!id || !snapshot.source_id) return true;
+    try { stageProjectSave(id, snapshot, projectRevisions.current.get(id) ?? null); }
+    catch { setProjectError('Не удалось сохранить проект в браузере. Скачайте план, чтобы не потерять работу.', true); return false; }
+    const save = async () => {
+      try {
+        if (!hasMigratedProjects()) {
+          const initialized = await initializeProjects();
+          for (const project of initialized.projects) if (!projectRevisions.current.get(project.id)) projectRevisions.current.set(project.id, (project as PersistedProject).revision);
+        }
+        const saved = await saveProject(id, snapshot, projectRevisions.current.get(id) ?? null, true);
+        projectRevisions.current.set(id, saved.revision);
+        const next = { ...projectStore.current, projects: [saved, ...projectStore.current.projects.filter(project => project.id !== id)] };
+        projectStore.current = next; setProjects(next);
+        if (activeProjectID.current === id) setActiveProject(id);
+        if (activeProjectID.current === id && projectErrorFromPersistence.current) setProjectError('');
+        return true;
+      } catch (error) {
+        if (activeProjectID.current !== id) return false;
+        if (error instanceof ProjectConflictError) { setProjectConflict(error); setProjectError(error.message, true); }
+        else setProjectError(error instanceof ProjectStorageLimitError ? error.message : 'Не удалось сохранить проект в браузере. Скачайте план, чтобы не потерять работу.', true);
+        return false;
       }
-      localStorage.setItem(storageKey, JSON.stringify(snapshot));
-      if (projectErrorFromPersistence.current) setProjectError(''); return true;
-    } catch (error) { setProjectError(error instanceof ProjectStorageLimitError ? error.message : 'Не удалось сохранить проект в браузере. Скачайте план, чтобы не потерять работу.', true); return false; }
+    };
+    const result = projectSaveQueue.current.then(save, save);
+    projectSaveQueue.current = result;
+    return result;
+  }
+
+  useEffect(() => {
+    const synchronize = (event: StorageEvent) => {
+      if (!isProjectStorageEvent(event.key)) return;
+      const fresh = readProjects(); projectStore.current = fresh; setProjects(fresh);
+      const id = activeProjectID.current;
+      if (!restored.current || !id || !projectRevisions.current.has(id)) return;
+      const latest = fresh.projects.find(project => project.id === id) as PersistedProject | undefined;
+      if (!latest || latest.revision !== projectRevisions.current.get(id)) {
+        const conflict = new ProjectConflictError(id, !latest);
+        setProjectConflict(conflict); setProjectError(conflict.message, true);
+      }
+    };
+    window.addEventListener('storage', synchronize);
+    return () => window.removeEventListener('storage', synchronize);
+  }, []);
+
+  async function saveProjectCopy() {
+    const snapshot = draftSnapshot(), id = `project-${crypto.randomUUID()}`;
+    if (!snapshot.source_id) return;
+    try {
+      await projectSaveQueue.current;
+      const saved = await saveProject(id, snapshot, null);
+      projectRevisions.current.set(id, saved.revision); activeProjectID.current = id; setActiveProject(id);
+      const fresh = readProjects(); projectStore.current = fresh; setProjects(fresh);
+      setProjectConflict(null); setProjectError(''); setNotice('Изменения сохранены как отдельный проект.');
+      void restorePriorJobs(snapshot);
+    } catch (error) { setProjectError(error instanceof ProjectStorageLimitError ? error.message : 'Не удалось сохранить проект в браузере. Скачайте план, чтобы не потерять работу.', true); }
+  }
+
+  async function reloadProjectVersion() {
+    const id = activeProjectID.current; if (!id) return;
+    discardProjectView(id); const fresh = readProject(id); if (!fresh) return;
+    await openProject(fresh, true);
   }
 
   function restoreProjectView(saved: Record<string, unknown>, length: number, range?: ClipRange) {
@@ -349,7 +478,8 @@ export default function App() {
     const range = snapshot.ranges.find(value => value.id === snapshot.selectedId) ?? snapshot.ranges[0];
     if (range) { setFields(range); setSelectedId(range.id); setViewCenter((range.start_ms + range.end_ms) / 2); setSimpleView(simpleRangeView(duration, range)); }
     else { setStartText(''); setEndText(''); setRangeError(''); if (step === 2) setStep(3); }
-    previewEnd.current = null; setPreviewing(false); player.current?.pause();
+    stopPreview();
+    if (range) seek(range.start_ms);
   }
   function historyAction(direction: 'undo' | 'redo') {
     const snapshot = direction === 'undo' ? undoEdit(currentHistory(), editSnapshot()) : redoEdit(currentHistory(), editSnapshot());
@@ -367,12 +497,14 @@ export default function App() {
     rememberHistory(); const next = [...ranges]; [next[index], next[target]] = [next[target], next[index]]; setRanges(next); setRevealId(id);
   }
 
-  async function openProject(project: CuttingProject) {
+  async function openProject(project: CuttingProject, discardLocal = false) {
     if (sourceBusy || submitting || deletingSource || cancelling || mutationPending.current || sourceController.current) return;
     draftWriter.current?.flush();
-    if ((source || recoverableSource) && !persistCurrentProject()) return;
+    if (!discardLocal && (source || recoverableSource) && !await persistCurrentProject()) return;
     setProjectError('');
-    const saved = projectStore.current.projects.find(value => value.id === project.id)?.draft ?? project.draft;
+    const stored = readProject(project.id);
+    if (!stored) { setProjectError('Проект удалён в другой вкладке. Текущие изменения можно сохранить как копию.'); return; }
+    const saved = stored.draft;
     const controller = new AbortController(); sourceController.current = controller;
     const current = () => !controller.signal.aborted && sourceController.current === controller;
     setSourceBusy(true); setSourceError(''); stopJobPolling.current?.(); player.current?.pause(); previewEnd.current = null; setPreviewing(false);
@@ -383,10 +515,11 @@ export default function App() {
         catch (error) { if (!current()) return; if (!(error instanceof ApiError) || !(error.httpStatus === 404 || error.httpStatus === 410 || ['not_found', 'expired', 'source_expired', 'source_unavailable'].includes(error.code))) throw error; }
       }
       if (!current()) return;
-      activeProjectID.current = project.id; restoreProject(saved, fresh);
-      setJob(null); setJoinedJob(false); setJobRangeNumbers([]); setJobError('');
+      activeProjectID.current = project.id; projectRevisions.current.set(project.id, stored.revision); setActiveProject(project.id); setProjectConflict(null);
+      setJob(null); priorJobLoadGeneration.current++; priorJobReferences.current = []; setPriorJobs([]); setJobCuts([]); setJoinedJob(false); setJobRangeNumbers([]); setJobError('');
+      restoreProject(saved, fresh);
       if (storedResourceId(saved.job_id)) {
-        try { const previous = await api.job(saved.job_id, controller.signal); if (!current()) return; setJob(previous); setJoinedJob(saved.job_output_mode === 'joined'); setJobRangeNumbers(Array.isArray(saved.job_range_numbers) ? saved.job_range_numbers as number[] : previous.items.map((_, index) => index + 1)); }
+        try { const previous = await api.job(saved.job_id, controller.signal); if (!current()) return; setJob(previous); setJoinedJob(saved.job_output_mode === 'joined'); setJobRangeNumbers(Array.isArray(saved.job_range_numbers) ? saved.job_range_numbers as number[] : previous.items.map((_, index) => index + 1)); if (!fresh || saved.step === 4) setStep(4); }
         catch (error) { if (!current()) return; if (!(error instanceof ApiError) || !(error.httpStatus === 404 || error.httpStatus === 410)) setJobError(errorMessage(error)); }
       }
       if (current()) setNotice('Проект открыт.');
@@ -405,18 +538,22 @@ export default function App() {
     const savedPosition = typeof saved.current_ms === 'number' && Number.isFinite(saved.current_ms) ? Math.max(0, Math.min(length, saved.current_ms)) : 0;
     position.set(savedPosition); restoredPosition.current = savedPosition;
     setPrecisionOpen(saved.precision_open === true);
-    setPlayerAvailable(false); exportAttempt.current = restoredExportAttempt(saved);
+    setPlayerAvailable(false); exportAttempt.current = restoredExportAttempt(saved); void restorePriorJobs(saved);
     if (fresh) { setRecoverableSource(null); setRecoveringDraft(null); setStep(active ? 2 : 3); }
-    else { setRecoverableSource({ id: String(saved.source_id), title: String(saved.source_title ?? ''), duration_ms: length }); setRecoveringDraft(saved); setKeepRecoveredCuts(false); setStep(saved.step === 4 && nextOutput && matchingRetryOutput(String(saved.source_id), nextRanges.filter(range => rangeSelection(nextRanges, saved.selected_range_ids).includes(range.id)), nextOutput, exportAttempt.current) ? 4 : 1); setSourceError('Источник больше недоступен. Фрагменты сохранены. Загрузите ту же запись или откройте её ссылку, чтобы продолжить.'); }
+    else { setRecoverableSource({ id: String(saved.source_id), title: String(saved.source_title ?? ''), duration_ms: length }); setRecoveringDraft(saved); setKeepRecoveredCuts(false); setStep(saved.step === 4 && nextOutput && recoverExportRequest(String(saved.source_id), nextRanges, nextOutput, exportAttempt.current) ? 4 : 1); setSourceError('Источник больше недоступен. Фрагменты сохранены. Загрузите ту же запись или откройте её ссылку, чтобы продолжить.'); }
     refreshHistory(value => value + 1);
   }
 
-  function deleteProject(id: string) {
+  async function deleteProject(id: string) {
     if (!window.confirm(t('Удалить проект только из браузера? Видео и готовые файлы останутся на сервере.'))) return;
-    const next = { ...projectStore.current, active_id: projectStore.current.active_id === id ? null : projectStore.current.active_id, projects: projectStore.current.projects.filter(project => project.id !== id) };
-    projectStore.current = next; setProjects(next); delete histories.current[id];
-    if (activeProjectID.current === id) { activeProjectID.current = null; setSource(null); setRecoverableSource(null); setRecoveringDraft(null); setRanges([]); setSelectedId(''); setSelectedRangeIds([]); setStep(1); try { localStorage.removeItem(storageKey); } catch { /* Optional persistence. */ } }
-    try { localStorage.setItem(projectsStorageKey, JSON.stringify(next)); if (activeProjectID.current && activeProjectID.current !== id) persistCurrentProject(); } catch { setProjectError('Не удалось сохранить проект в браузере. Скачайте план, чтобы не потерять работу.'); }
+    try {
+      await projectSaveQueue.current;
+      const stored = readProject(id); if (!stored) return;
+      await deleteStoredProject(id, stored.revision);
+      const fresh = readProjects(); projectStore.current = fresh; setProjects(fresh); delete histories.current[id];
+      if (activeProjectID.current === id) { activeProjectID.current = null; setActiveProject(null); setProjectConflict(null); setSource(null); setRecoverableSource(null); setRecoveringDraft(null); setRanges([]); setSelectedId(''); setSelectedRangeIds([]); setStep(1); }
+      setProjectError('');
+    } catch (error) { setProjectError(error instanceof ProjectConflictError ? error.message : 'Не удалось сохранить проект в браузере. Скачайте план, чтобы не потерять работу.', true); }
   }
 
   function downloadPlan() {
@@ -434,7 +571,14 @@ export default function App() {
       const result = importCuttingPlan(raw, source?.duration_ms ?? 366 * 24 * 60 * 60 * 1000, () => crypto.randomUUID());
       if (source && !window.confirm(t('Заменить фрагменты текущего проекта импортированным планом? Проверьте, что открыта нужная запись.'))) return;
       if (source) rememberHistory();
-      else { draftWriter.current?.flush(); if (recoverableSource && !persistCurrentProject()) return; const id = `plan-${crypto.randomUUID()}`; const length = Math.max(...result.ranges.map(range => range.end_ms)); const draft = { source_id: id, source_title: result.input.split(/[\\/]/).at(-1), source_duration_ms: length, plan_imported: true }; upsertProject(projectStore.current, id, { ...draft, ranges: result.ranges, output: result.output }); activeProjectID.current = id; setRecoverableSource({ id, title: String(draft.source_title), duration_ms: length }); setRecoveringDraft(draft); setKeepRecoveredCuts(true); }
+      else {
+        draftWriter.current?.flush(); if (recoverableSource && !await persistCurrentProject()) return;
+        const id = `plan-${crypto.randomUUID()}`, length = Math.max(...result.ranges.map(range => range.end_ms));
+        const draft = { source_id: id, source_title: result.input.split(/[\\/]/).at(-1), source_duration_ms: length, plan_imported: true, ranges: result.ranges, output: result.output, selected_id: result.ranges[0].id, selected_range_ids: result.ranges.map(range => range.id) };
+        const saved = await saveProject(id, draft, null); projectRevisions.current.set(id, saved.revision);
+        activeProjectID.current = id; setActiveProject(id); projectStore.current = readProjects(); setProjects(projectStore.current);
+        setProjectConflict(null); setRecoverableSource({ id, title: String(draft.source_title), duration_ms: length }); setRecoveringDraft(draft); setKeepRecoveredCuts(true);
+      }
       setRanges(result.ranges); setSelectedId(result.ranges[0].id); setSelectedRangeIds(result.ranges.map(range => range.id)); setOutput(result.output); setFields(result.ranges[0]); setRevealId(result.ranges[0].id); setProjectError('');
       if (source) { setStep(3); setNotice('План открыт. Проверьте соответствие записи и границы.'); } else { setStep(1); setSourceError('План открыт. Загрузите указанную запись и проверьте границы.'); }
     } catch (error) { setProjectError(error instanceof Error ? error.message : 'Не удалось прочитать JSON-план.'); }
@@ -447,12 +591,12 @@ export default function App() {
   }
 
   function draftSnapshot() {
-    return { workflow_version: 2, plan_imported: !source && recoveringDraft?.plan_imported === true, source_width: source?.width ?? recoveringDraft?.source_width, source_height: source?.height ?? recoveringDraft?.source_height, source_provider_video_id: source?.provider_video_id ?? recoveringDraft?.source_provider_video_id, media_unavailable: !source, timeline_span: span, view_center: viewCenter, simple_view: simpleView, source_id: source?.id ?? recoverableSource?.id, source_title: source?.title ?? recoverableSource?.title, source_duration_ms: source?.duration_ms ?? recoverableSource?.duration_ms, start_text: startText, end_text: endText, ranges, selected_id: selectedId, selected_range_ids: selectedRangeIds, output, job_id: job?.id, job_output_mode: joinedJob ? 'joined' : 'separate', job_range_numbers: jobRangeNumbers, step, current_ms: position.getSnapshot(), precision_open: precisionOpen, export_attempt: exportAttempt.current };
+    return { workflow_version: 2, plan_imported: !source && recoveringDraft?.plan_imported === true, source_width: source?.width ?? recoveringDraft?.source_width, source_height: source?.height ?? recoveringDraft?.source_height, source_provider_video_id: source?.provider_video_id ?? recoveringDraft?.source_provider_video_id, media_unavailable: !source, timeline_span: span, view_center: viewCenter, simple_view: simpleView, source_id: source?.id ?? recoverableSource?.id, source_title: source?.title ?? recoverableSource?.title, source_duration_ms: source?.duration_ms ?? recoverableSource?.duration_ms, start_text: startText, end_text: endText, ranges, selected_id: selectedId, selected_range_ids: selectedRangeIds, output, job_id: job?.id, job_output_mode: joinedJob ? 'joined' : 'separate', job_range_numbers: jobRangeNumbers, job_ranges: jobCuts, prior_job_ids: priorJobReferences.current.map(value => value.id), prior_job_range_numbers: Object.fromEntries(priorJobReferences.current.map(value => [value.id, value.numbers])), step, current_ms: position.getSnapshot(), precision_open: precisionOpen, export_attempt: exportAttempt.current, export_attempt_range_numbers: exportAttempt.current ? exportAttemptNumbers.current : [] };
   }
 
   const saveDraft = useEffectEvent(() => {
     if (!sessionReady) return;
-    persistCurrentProject();
+    void persistCurrentProject();
   });
 
   useEffect(() => {
@@ -469,7 +613,7 @@ export default function App() {
     };
   }, [position]);
 
-  useEffect(() => { draftWriter.current?.schedule(300); }, [source, ranges, selectedId, selectedRangeIds, output, job?.id, joinedJob, jobRangeNumbers, sessionReady, step, precisionOpen, startText, endText, recoverableSource, span, viewCenter, simpleView]);
+  useEffect(() => { draftWriter.current?.schedule(300); }, [source, ranges, selectedId, selectedRangeIds, output, job?.id, joinedJob, jobRangeNumbers, jobCuts, priorJobs, sessionReady, step, precisionOpen, startText, endText, recoverableSource, span, viewCenter, simpleView]);
 
   useEffect(() => {
     if (!job || !activeJob(job) || cancelling) return;
@@ -496,15 +640,16 @@ export default function App() {
 
   useEffect(() => () => sourceController.current?.abort(), []);
 
-  useEffect(() => { document.title = `${t('Шаг {current} из 4', { current: step })} · ${t(['Откройте видео', 'Выберите один момент', 'Соберите фрагменты', 'Сохраните фрагменты'][step - 1])} · cutmyvideo`; }, [step, locale]);
+  useEffect(() => { document.title = `${t('Шаг {current} из 4', { current: step })} · ${t(['Откройте видео', 'Нарежьте видео', 'Соберите фрагменты', 'Сохраните фрагменты'][step - 1])} · cutmyvideo`; }, [step, locale]);
 
   useEffect(() => {
-    if (step !== 2) { player.current?.pause(); previewEnd.current = null; setPreviewing(false); }
+    if (step !== 2) stopPreview();
     if (previousStep.current !== step) { stageHeading.current?.focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' }); }
     previousStep.current = step;
   }, [step]);
 
   function goToStep(next: WorkbenchStep) {
+    if (submitting || mutationPending.current) return;
     if (next > 1 && !source && !(next === 4 && (job || retryOutput))) return;
     if (next === 4 && !exportRanges.length && !job && !retryOutput) return;
     if (next === 2 && !selected) return;
@@ -541,7 +686,13 @@ export default function App() {
     const updated = { ...selected, start_ms: start, end_ms: end };
     if (start !== selected.start_ms || end !== selected.end_ms) { rememberHistory(); setRanges(previous => previous.map(range => range.id === selected.id ? updated : range)); }
     setFields(updated);
-    previewEnd.current = null; setPreviewing(false);
+    pendingBoundary.current = start !== selected.start_ms ? start : end;
+    stopPreview();
+  }
+
+  function finishBoundaryChange() {
+    finishHistory();
+    if (pendingBoundary.current !== null) { const target = pendingBoundary.current; pendingBoundary.current = null; seek(target); }
   }
 
   function revealBoundary(ms: number) {
@@ -572,14 +723,16 @@ export default function App() {
       setRanges(previous => previous.map(item => item.id === range.id ? range : item));
       setViewCenter((range.start_ms + range.end_ms) / 2);
       setSimpleView(simpleRangeView(duration, range));
+      if (range.start_ms !== selected?.start_ms || range.end_ms !== selected?.end_ms) { player.current?.pause(); seek(range.start_ms !== selected?.start_ms ? range.start_ms : range.end_ms); }
     }
     return !!range;
   }
 
   function seek(ms: number) {
+    pendingBoundary.current = null;
     const value = Math.max(0, Math.min(duration, ms));
     restoredPosition.current = null;
-    previewEnd.current = null; setPreviewing(false);
+    stopPreview();
     position.set(value); player.current?.seek(value);
   }
 
@@ -588,7 +741,7 @@ export default function App() {
     const [start, end] = markBounds(selected, position.getSnapshot(), which, duration);
     const error = validateRange(start, end, duration, limits.max_range_ms);
     if (error) { setRangeError(error); return; }
-    changeBounds(start, end); setViewCenter((start + end) / 2); setSimpleView(simpleRangeView(duration, { ...selected, start_ms: start, end_ms: end }));
+    changeBounds(start, end); seek(which === 'start' ? start : end); setViewCenter((start + end) / 2); setSimpleView(simpleRangeView(duration, { ...selected, start_ms: start, end_ms: end }));
   }
 
   const handleShortcut = useEffectEvent((event: KeyboardEvent) => {
@@ -599,6 +752,8 @@ export default function App() {
     if (event.code === 'KeyI') { event.preventDefault(); marker('start'); }
     if (event.code === 'KeyO') { event.preventDefault(); marker('end'); }
     if ((event.code === 'ArrowLeft' || event.code === 'ArrowRight') && playerAvailable) { event.preventDefault(); player.current?.pause(); seek(position.getSnapshot() + (event.code === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 1000 : 100)); }
+    if (event.code === 'KeyN' && !busy) { event.preventDefault(); addRange(); }
+    if ((event.code === 'BracketLeft' || event.code === 'BracketRight') && !busy) { event.preventDefault(); pickAdjacent(event.code === 'BracketLeft' ? -1 : 1); }
     if (event.code === 'Space' && playerAvailable) { event.preventDefault(); player.current?.toggle(); }
   });
   useEffect(() => {
@@ -609,7 +764,7 @@ export default function App() {
 
   async function openSource(file?: File, providedUrl?: string) {
     if (!sessionReady || sourceBusy || submitting || deletingSource || cancelling || mutationPending.current || sourceController.current) return;
-    if ((source || recoverableSource) && !persistCurrentProject()) return;
+    if ((source || recoverableSource) && !await persistCurrentProject()) return;
     if (!(recoverableSource && keepRecoveredCuts) && projectStore.current.projects.length >= maxProjects) { setProjectError('Слишком много проектов. Сохраните планы и удалите ненужные проекты.'); return; }
     setProjectError('');
     const candidateUrl = canonicalSourceUrl(providedUrl ?? url);
@@ -628,7 +783,7 @@ export default function App() {
       const opened = file ? await api.upload(file, controller.signal, progress => { if (sourceController.current === controller && !controller.signal.aborted) setUploadProgress(progress); }) : await api.open(candidateUrl!, controller.signal);
       if (controller.signal.aborted) return;
       if (file && (!opened.width || !opened.height)) { setSourceError('В файле не найдено видео. Выберите файл с видеодорожкой.'); setStep(1); return; }
-      if (!activateSource(opened)) return;
+      if (!await activateSource(opened)) return;
       if (!file) setUrl(candidateUrl!);
       setNotice('Источник открыт. Укажите границы фрагмента.');
     } catch (error) {
@@ -636,23 +791,27 @@ export default function App() {
     } finally { if (sourceController.current === controller) { sourceController.current = null; setSourceBusy(false); setUploadProgress(null); } }
   }
 
-  function activateSource(opened: Source) {
+  async function activateSource(opened: Source) {
     if (opened.media_removed) { setSourceError('Источник больше недоступен. Фрагменты сохранены. Загрузите ту же запись или откройте её ссылку, чтобы продолжить.'); setStep(1); return false; }
     const recovered = recoverableSource && keepRecoveredCuts;
     if (recovered && ranges.some(range => range.end_ms > opened.duration_ms)) { setSourceError('Эта запись короче сохранённых фрагментов. Откройте исходную запись или отключите восстановление фрагментов.'); setStep(1); return false; }
     if (recovered && recoveringDraft && sourceMismatch({ ...recoveringDraft, ...(recoveringDraft.plan_imported ? { source_duration_ms: undefined } : {}) }, opened) && !window.confirm(t('Запись отличается от сохранённого проекта. Применить интервалы? Проверьте границы перед экспортом.'))) { setStep(1); return false; }
-    draftWriter.current?.flush(); if ((source || recoverableSource) && !persistCurrentProject()) return false;
+    draftWriter.current?.flush(); if ((source || recoverableSource) && !await persistCurrentProject()) return false;
     const prior = !recovered && projectStore.current.projects.find(project => project.draft.source_id === opened.id);
+    const targetID = recovered ? activeProjectID.current ?? opened.id : prior ? prior.id : freshProjectID(opened.id);
     try {
-      const targetID = recovered ? activeProjectID.current ?? opened.id : prior ? prior.id : opened.id;
       const targetRanges = recovered ? ranges : prior && Array.isArray(prior.draft.ranges) ? prior.draft.ranges : [newRange(opened.duration_ms, 0, limits)];
-      upsertProject(projectStore.current, targetID, { ...draftSnapshot(), source_id: opened.id, source_title: opened.title, source_duration_ms: opened.duration_ms, ranges: targetRanges, output: recovered ? output : prior ? prior.draft.output : withoutSourceAudio(preferences.output) });
+      const base = recovered ? draftSnapshot() : prior ? prior.draft : { ...draftSnapshot(), job_id: undefined, job_ranges: [], prior_job_ids: [], prior_job_range_numbers: {}, export_attempt: null, selected_id: (targetRanges[0] as ClipRange)?.id, selected_range_ids: targetRanges.map(range => (range as ClipRange).id), current_ms: 0, step: 2 };
+      const stored = await saveProject(targetID, { ...base, source_id: opened.id, source_title: opened.title, source_duration_ms: opened.duration_ms, media_unavailable: false, ranges: targetRanges, output: recovered ? output : prior ? prior.draft.output : withoutSourceAudio(preferences.output) }, projectRevisions.current.get(targetID) ?? (prior as PersistedProject | undefined)?.revision ?? null);
+      projectRevisions.current.set(targetID, stored.revision);
+      projectStore.current = readProjects(); setProjects(projectStore.current);
     } catch (error) { setProjectError(error instanceof Error ? error.message : 'Не удалось сохранить проект в браузере. Скачайте план, чтобы не потерять работу.'); setStep(1); return false; }
     setProjectError('');
     stopJobPolling.current?.(); stopJobPolling.current = null; player.current?.pause(); previewEnd.current = null;
-    if (prior) { activeProjectID.current = prior.id; restoreProject(prior.draft, opened); }
+    setJob(null); priorJobLoadGeneration.current++; priorJobReferences.current = []; setPriorJobs([]); setJobCuts([]); setJoinedJob(false); setJobRangeNumbers([]); setJobError('');
+    if (prior) { activeProjectID.current = prior.id; projectRevisions.current.set(prior.id, (prior as PersistedProject).revision); setActiveProject(prior.id); restoreProject(prior.draft, opened); }
     else {
-      if (!recovered) activeProjectID.current = opened.id;
+      if (!recovered) activeProjectID.current = targetID;
       const nextRanges = recovered ? ranges : [newRange(opened.duration_ms, 0, limits)];
       const range = nextRanges.find(range => range.id === selectedId) ?? nextRanges[0];
       setSource(opened); setRanges(nextRanges); setSelectedId(range?.id ?? ''); if (range) setFields(range);
@@ -662,7 +821,7 @@ export default function App() {
       setPrecisionOpen(!!recovered || opened.preview_kind === 'none' || (!opened.preview_url && !opened.embed_url));
       setRecoverableSource(null); setRecoveringDraft(null); setStep(range ? 2 : 3);
     }
-    if (!prior) exportAttempt.current = null; setJob(null); setJoinedJob(false); setJobRangeNumbers([]); setJobError(''); setPreviewing(false); setPlayerAvailable(false); setAdvancedOutputOpen(false); refreshHistory(value => value + 1);
+    if (!prior) exportAttempt.current = null; setProjectConflict(null); setPreviewing(false); setPlayerAvailable(false); setAdvancedOutputOpen(false); refreshHistory(value => value + 1);
     return true;
   }
 
@@ -676,7 +835,7 @@ export default function App() {
     setSourceBusy(true); setSourceError('');
     try {
       const fresh = await api.source(previous.id, controller.signal);
-      if (!controller.signal.aborted && activateSource(fresh)) setNotice('Источник открыт. Укажите границы фрагмента.');
+      if (!controller.signal.aborted && await activateSource(fresh)) setNotice('Источник открыт. Укажите границы фрагмента.');
     } catch (error) {
       if (!controller.signal.aborted) {
         if (previous.id === currentSourceID.current && error instanceof ApiError && (error.httpStatus === 410 || ['not_found', 'expired', 'source_expired', 'source_unavailable'].includes(error.code))) void sourceUnavailable(previous.id);
@@ -706,9 +865,17 @@ export default function App() {
   }
 
   function pickRange(range: ClipRange) {
-    previewEnd.current = null; setPreviewing(false); player.current?.pause();
+    stopPreview(); seek(range.start_ms);
     setSelectedId(range.id); setFields(range); setViewCenter((range.start_ms + range.end_ms) / 2); setSimpleView(simpleRangeView(duration, range));
     setStep(2); setRevealId(range.id);
+  }
+
+  function pickAdjacent(direction: -1 | 1) {
+    const committed = validateFields(true); if (!committed) return;
+    const index = ranges.findIndex(range => range.id === selected?.id), next = ranges[index + direction];
+    if (!next) return;
+    setRanges(previous => previous.map(range => range.id === committed.id ? committed : range));
+    pickRange(next);
   }
 
   function fitSelection() {
@@ -719,13 +886,31 @@ export default function App() {
   }
 
   function addRange() {
+    appendRange(true);
+  }
+
+  function addLibraryRange() {
+    appendRange(false);
+  }
+
+  function appendRange(continueCurrent: boolean) {
     if (!source || ranges.length >= limits.max_ranges) return;
     const committed = selected ? validateFields(true) : null;
     if (selected && !committed) { setStep(2); return; }
+    const playhead = position.getSnapshot();
+    // Save-next follows the cut being edited. Adding from the library starts
+    // at the playhead, even when the current cut covers the whole recording.
+    const defaultLength = Math.min(30000, duration, limits.max_range_ms, limits.max_job_ms);
+    const libraryStart = playhead >= duration - 100 ? Math.max(0, duration - defaultLength) : playhead;
+    const nextStart = continueCurrent
+      ? committed && playhead >= committed.start_ms && playhead <= committed.end_ms ? committed.end_ms : playhead
+      : libraryStart;
+    if (nextStart >= duration) { setRangeError('Видео закончилось. Перейдите к другому моменту на шкале.'); return; }
     rememberHistory();
-    const range = newRange(duration, position.getSnapshot(), limits);
+    const range = newRange(duration, nextStart, limits);
+    stopPreview(); seek(range.start_ms);
     setRanges(previous => [...previous.map(item => item.id === committed?.id ? committed! : item), range]);
-    setSelectedRangeIds(previous => [...previous, range.id]);
+    setSelectedRangeIds(previous => [...new Set([...previous, range.id])]);
     setSelectedId(range.id); setFields(range); setViewCenter((range.start_ms + range.end_ms) / 2); setSimpleView(simpleRangeView(duration, range));
     setRevealId(range.id); setStep(2);
     setNotice('Фрагмент добавлен. Настройте его границы.');
@@ -758,7 +943,7 @@ export default function App() {
     const end = which === 'end' ? Math.min(duration, Math.max(range.start_ms + 100, range.end_ms + delta)) : range.end_ms;
     const error = validateRange(start, end, duration, limits.max_range_ms);
     if (error) { setRangeError(error); return; }
-    changeBounds(start, end); revealBoundary(which === 'start' ? start : end);
+    changeBounds(start, end); seek(which === 'start' ? start : end); revealBoundary(which === 'start' ? start : end);
   }
 
   function revealPlayer() {
@@ -770,42 +955,89 @@ export default function App() {
 
   function audition(which: 'start' | 'end') {
     const range = validateFields(true); if (!range || !playerAvailable) return;
-    commitFields(); revealPlayer();
+    stopPreview(); commitFields(); revealPlayer();
     const [start, end] = boundaryAudition(which === 'start' ? range.start_ms : range.end_ms, duration);
     player.current?.pause(); player.current?.seek(start);
     previewEnd.current = end; setPreviewing(true); player.current?.play();
   }
 
   function preview() {
-    if (previewing) { player.current?.pause(); previewEnd.current = null; setPreviewing(false); return; }
+    if (previewing) { stopPreview(); return; }
     const range = validateFields(true);
     if (!range || !playerAvailable) return;
-    commitFields(); revealPlayer(); player.current?.seek(range.start_ms); previewEnd.current = range.end_ms;
+    stopPreview(); commitFields(); revealPlayer(); player.current?.seek(range.start_ms); previewEnd.current = range.end_ms;
     setPreviewing(true); player.current?.play();
+  }
+
+  function previewSequence() {
+    if (sequence.current) { stopPreview(); return; }
+    const committed = selected ? validateFields(true) : null;
+    if (selected && !committed || !source || !playerAvailable || !exportRanges.length) return;
+    const cuts = ranges.map(range => range.id === committed?.id ? committed! : range).filter(range => selectedRangeIds.includes(range.id));
+    setRanges(previous => previous.map(range => range.id === committed?.id ? committed! : range));
+    stopPreview(); setCropOpen(false); setStep(2); revealPlayer();
+    sequence.current = { ranges: cuts, index: 0, awaitingSeek: true };
+    setSequenceIndex(0); setPreviewing(true); player.current?.seek(cuts[0].start_ms); player.current?.play();
   }
 
   async function exportClips(event: FormEvent) {
     event.preventDefault();
-    if (!source || busy || sourceBusy || mutationPending.current || !exportRanges.length || invalidAudio || incompatibleOutput) return;
-    if (exportLimitError) { setJobError(exportLimitError); return; }
     const range = selected ? validateFields(true) : null;
     if (selected && !range) { setStep(2); return; }
     const committed = ranges.map(item => item.id === range?.id ? range! : item);
-    const includedDuration = committed.filter(item => selectedRangeIds.includes(item.id)).reduce((total, item) => total + item.end_ms - item.start_ms, 0);
-    if (exportRanges.length > limits.max_ranges || includedDuration > limits.max_job_ms) { setJobError(exportLimitError || t('Общая длительность одного экспорта — до {limit}. Разделите фрагменты на несколько заданий.', { limit: durationLabel(limits.max_job_ms, locale) })); return; }
+    await submitExport(committed.filter(item => selectedRangeIds.includes(item.id)), committed);
+  }
+
+  function retryRanges() {
+    const candidates = unfinishedJobRanges(job, jobCuts.length ? jobCuts : joinedJob ? exportRanges : ranges, joinedJob);
+    const current = candidates.map(candidate => ranges.find(range => range.id === candidate.id));
+    return current.every(range => !!range) ? current as ClipRange[] : [];
+  }
+
+  async function retryUnfinished() {
+    const included = retryRanges();
+    if (!included.length) return;
+    await submitExport(included, ranges, true);
+  }
+
+  async function submitExport(included: ClipRange[], committed: ClipRange[], selective = false) {
+    if (!source || busy || sourceBusy || mutationPending.current || !included.length || invalidAudio || incompatibleOutput) return;
+    const includedDuration = included.reduce((total, item) => total + item.end_ms - item.start_ms, 0);
+    if (included.length > limits.max_ranges || included.some(item => item.end_ms - item.start_ms > limits.max_range_ms) || includedDuration > limits.max_job_ms) { setJobError(exportLimitError || t('Общая длительность одного экспорта — до {limit}. Разделите фрагменты на несколько заданий.', { limit: durationLabel(limits.max_job_ms, locale) })); return; }
     mutationPending.current = true;
     setRanges(committed); setSubmitting(true); setJobError('');
     try {
-      const included = committed.filter(item => selectedRangeIds.includes(item.id));
-      const requestedOutput = preserveLocalQuality ? { ...output, quality: 'best' as const } : output;
-      const fingerprint = jobRequestBody(source.id, included, requestedOutput);
+      // Recover an uncertain accepted request before starting another one. A
+      // terminal retry has no pending identity and therefore gets a fresh key.
+      const pending = recoverExportRequest(source.id, committed, output, exportAttempt.current);
+      const requestedRanges = pending?.ranges ?? included;
+      const requestedOutput = pending?.output ?? (preserveLocalQuality ? { ...output, quality: 'best' as const } : output);
+      const requestedNumbers = requestedOutput.output_mode === 'joined' ? [1]
+        : pending && exportAttemptNumbers.current.length === requestedRanges.length ? exportAttemptNumbers.current
+        : requestedRanges.map(range => {
+          const original = selective ? jobCuts.findIndex(cut => cut.id === range.id) : -1;
+          const legacy = selective && original < 0 ? job?.items.findIndex(item => item.start_ms === range.start_ms && item.end_ms === range.end_ms && item.label === range.label) ?? -1 : -1;
+          return original >= 0 ? jobRangeNumbers[original] ?? original + 1 : legacy >= 0 ? jobRangeNumbers[legacy] ?? legacy + 1 : committed.findIndex(cut => cut.id === range.id) + 1;
+        });
+      exportAttemptNumbers.current = requestedNumbers;
+      const fingerprint = jobRequestBody(source.id, requestedRanges, requestedOutput);
       if (exportAttempt.current?.fingerprint !== fingerprint) exportAttempt.current = { fingerprint, key: crypto.randomUUID() };
-      // Persist the same retry identity in the authoritative project before POST.
-      // Without browser storage, the visible warning and in-memory key remain.
-      persistCurrentProject({ ...draftSnapshot(), ranges: committed });
-      const created = await api.createJob(source.id, included, requestedOutput, exportAttempt.current.key);
+      const priorResults = selective || pending ? priorJobs : [];
+      const preceding = selective && job && job.items.some(item => item.artifact) && !priorResults.some(value => value.job.id === job.id)
+        ? [...priorResults, { job, numbers: jobRangeNumbers }].slice(-32) : priorResults;
+      const references = selective || pending ? new Map(priorJobReferences.current.map(value => [value.id, value])) : new Map<string, { id: string; numbers: number[] }>();
+      for (const value of preceding) references.set(value.job.id, { id: value.job.id, numbers: value.numbers });
+      priorJobReferences.current = [...references.values()].slice(-32);
+      const preflight = { ...draftSnapshot(), ranges: committed, job_ranges: requestedRanges };
+      if (!await persistCurrentProject(preflight)) return;
+      setPriorJobs(current => priorJobReferences.current.flatMap(reference => {
+        const value = preceding.find(value => value.job.id === reference.id) ?? current.find(value => value.job.id === reference.id);
+        return value ? [{ ...value, numbers: reference.numbers }] : [];
+      }));
+      const created = await api.createJob(source.id, requestedRanges, requestedOutput, exportAttempt.current.key);
       exportAttempt.current = null;
-      setJobRangeNumbers(requestedOutput.output_mode === 'joined' ? [1] : included.map(item => committed.findIndex(original => original.id === item.id) + 1)); setJoinedJob(requestedOutput.output_mode === 'joined'); setJob(created);
+      setJobRangeNumbers(requestedNumbers);
+      setJobCuts(requestedRanges); setJoinedJob(requestedOutput.output_mode === 'joined'); setJob(created);
     }
     catch (error) {
       if (error instanceof ApiError && (error.httpStatus === 404 || error.httpStatus === 410 || ['expired', 'source_expired', 'source_unavailable'].includes(error.code))) void sourceUnavailable(source.id);
@@ -817,13 +1049,14 @@ export default function App() {
   async function recoverExport() {
     const id = recoverableSource?.id, attempt = exportAttempt.current;
     if (!id || !attempt || busy || sourceBusy || mutationPending.current) return;
-    const recoveredOutput = matchingRetryOutput(id, exportRanges, output, attempt);
-    if (!recoveredOutput) return;
+    const recovered = recoverExportRequest(id, ranges, output, attempt);
+    if (!recovered) return;
+    const recoveredOutput = recovered.output;
     mutationPending.current = true; setSubmitting(true); setJobError('');
     try {
-      const previous = await api.createJob(id, exportRanges, recoveredOutput, attempt.key);
-      exportAttempt.current = null; setJob(previous); setJoinedJob(recoveredOutput.output_mode === 'joined');
-      setJobRangeNumbers(recoveredOutput.output_mode === 'joined' ? [1] : exportRanges.map(range => ranges.findIndex(value => value.id === range.id) + 1));
+      const previous = await api.createJob(id, recovered.ranges, recoveredOutput, attempt.key);
+      exportAttempt.current = null; setJobCuts(recovered.ranges); setJob(previous); setJoinedJob(recoveredOutput.output_mode === 'joined');
+      setJobRangeNumbers(recoveredOutput.output_mode === 'joined' ? [1] : exportAttemptNumbers.current.length === recovered.ranges.length ? exportAttemptNumbers.current : recovered.ranges.map(range => ranges.findIndex(value => value.id === range.id) + 1));
     } catch (error) {
       setJobError(errorMessage(error, 'export'));
       if (error instanceof ApiError && (error.httpStatus === 404 || error.httpStatus === 410)) { exportAttempt.current = null; setStep(1); }
@@ -842,9 +1075,9 @@ export default function App() {
 
   function clearDeletedSource() {
     player.current?.pause(); previewEnd.current = null; restoredPosition.current = null;
-    persistCurrentProject(); activeProjectID.current = null;
+    void persistCurrentProject(); activeProjectID.current = null; try { setActiveProject(null); } catch { /* Existing work remains in the project. */ }
     exportAttempt.current = null; setSource(null); setRecoverableSource(null); setRecoveringDraft(null); setRanges([]); setSelectedId(''); setSelectedRangeIds([]);
-    setJob(null); setJoinedJob(false); setJobRangeNumbers([]); setJobError(''); setStartText(''); setEndText(''); setRangeError('');
+    setJob(null); priorJobLoadGeneration.current++; priorJobReferences.current = []; setPriorJobs([]); setJobCuts([]); setJoinedJob(false); setJobRangeNumbers([]); setJobError(''); setStartText(''); setEndText(''); setRangeError('');
     setPreviewing(false); setPlayerAvailable(false); position.set(0); setStep(1);
     // Persist immediately so closing the page cannot resurrect deleted IDs.
     try { localStorage.removeItem(storageKey); } catch { /* Optional persistence. */ }
@@ -887,21 +1120,25 @@ export default function App() {
   }, [job?.id, job?.status]);
   const failedItems = job?.items.filter(item => item.status === 'failed') ?? [];
   const repeatExport = repeatsFailedExport(job, exportRanges);
+  const unfinished = retryRanges();
+  const resultFiles = [...priorJobs.flatMap(value => value.job.items.map((item, index) => ({ item, number: value.numbers[index] ?? index + 1 }))), ...(job?.items.map((item, index) => ({ item, number: jobRangeNumbers[index] ?? index + 1 })) ?? [])]
+    .filter(value => value.item.artifact).filter((value, index, all) => all.findIndex(other => other.item.artifact?.id === value.item.artifact?.id) === index).sort((a, b) => a.number - b.number);
+  const archiveJobID = job?.id ?? priorJobs.at(-1)?.job.id;
+  const archiveURL = archiveJobID ? `/api/v1/jobs/${encodeURIComponent(archiveJobID)}/download.zip${priorJobs.length ? '?' + resultFiles.map(value => `artifact_id=${encodeURIComponent(value.item.artifact!.id)}`).join('&') : ''}` : undefined;
   const jobHeading = job?.status === 'failed' && files.length > 0 ? 'Часть фрагментов готова' : stageNames[job?.status === 'running' ? job.stage : job?.status ?? ''] ?? 'Обрабатываем фрагменты';
   const sourceProvider = providerName(source?.provider);
   const qualityLabel = source?.width && source?.height ? `${source.width} × ${source.height}` : null;
 
-  const jobProgress = job && <section className={`job-status ${job.status}`} aria-label={t("Состояние экспорта")} aria-live="polite"><p className="job-history-label">{t("Последний экспорт")}</p><div className="job-status-heading">{activeJob(job) ? <span className="spinner" /> : <Icon name={job.status === 'succeeded' ? 'check' : 'file'} size={20} />}<h3>{t(jobHeading)}</h3></div><p>{jobDescription(job, t)}</p>{job.status === 'waiting_storage' && <RetentionNotice expiresAt={job.storage_wait_until} kind="wait" />}<ExportProgress job={job} /><p className="job-file-count">{t('Готово: {count} из {total}', { count: files.length, total: job.items.length })}</p>{failedItems.length > 0 && <div className="failed-items"><ul>{failedItems.map(item => <li key={item.id}><strong>{joinedJob && item.label === 'Joined result' ? t('Объединённый результат') : item.label || `${t('Фрагмент')} ${jobRangeNumbers[job.items.indexOf(item)] ?? job.items.indexOf(item) + 1}`}</strong><span>{t(exportFailureReason(item, job.message))}</span></li>)}</ul>{source && <p className="job-recovery-note">{t('Выбранные моменты сохранены. Настройки можно изменить перед повтором.')}</p>}</div>}{activeJob(job) && <button type="button" className="button secondary cancel-button" disabled={cancelling} onClick={() => void cancelJob()}>{cancelling ? t("Отменяем…") : t("Отменить обработку")}</button>}{activeJob(job) && <button type="button" className="text-button background-source" onClick={() => goToStep(1)}>{t('Пока обрабатывается — открыть другое видео')}</button>}</section>;
+  const jobProgress = job && <section className={`job-status ${job.status}`} aria-label={t("Состояние экспорта")} aria-live="polite"><p className="job-history-label">{t("Последний экспорт")}</p><div className="job-status-heading">{activeJob(job) ? <span className="spinner" /> : <Icon name={job.status === 'succeeded' ? 'check' : 'file'} size={20} />}<h3>{t(jobHeading)}</h3></div><p>{jobDescription(job, t)}</p>{job.status === 'waiting_storage' && <RetentionNotice expiresAt={job.storage_wait_until} kind="wait" />}<ExportProgress job={job} /><p className="job-file-count">{t('Готово: {count} из {total}', { count: files.length, total: job.items.length })}</p>{failedItems.length > 0 && <div className="failed-items"><ul>{failedItems.map(item => <li key={item.id}><strong>{joinedJob && item.label === 'Joined result' ? t('Объединённый результат') : item.label || `${t('Фрагмент')} ${jobRangeNumbers[job.items.indexOf(item)] ?? job.items.indexOf(item) + 1}`}</strong><span>{t(exportFailureReason(item, job.message))}</span></li>)}</ul>{source && <p className="job-recovery-note">{t('Выбранные моменты сохранены. Настройки можно изменить перед повтором.')}</p>}</div>}{source && unfinished.length > 0 && <button type="button" className="button secondary retry-unfinished" disabled={busy || sourceBusy || invalidAudio || incompatibleOutput} onClick={() => void retryUnfinished()}>{t(joinedJob ? 'Повторить объединение' : 'Повторить неудавшиеся')}</button>}{activeJob(job) && <button type="button" className="button secondary cancel-button" disabled={cancelling} onClick={() => void cancelJob()}>{cancelling ? t("Отменяем…") : t("Отменить обработку")}</button>}{activeJob(job) && <button type="button" className="text-button background-source" onClick={() => goToStep(1)}>{t('Пока обрабатывается — открыть другое видео')}</button>}</section>;
 
-  const resultsPanel = files.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading" tabIndex={-1}>{t("Файлы последнего экспорта")}</h2><p>{t(files.some(item => item.artifact?.segments?.length) ? 'Скачайте объединённый файл. Порядок и границы фрагментов указаны ниже.' : "Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(files.length, 'file', locale)}</span></div><ul className="file-list">{files.map((item, index) => {
+  const resultsPanel = resultFiles.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading" tabIndex={-1}>{t("Файлы последнего экспорта")}</h2><p>{t(resultFiles.some(value => value.item.artifact?.segments?.length) ? 'Скачайте объединённый файл. Порядок и границы фрагментов указаны ниже.' : "Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(resultFiles.length, 'file', locale)}</span></div>{archiveURL && resultFiles.length > 1 && <a className="button secondary download-all" href={archiveURL} download><Icon name="download" size={17} />{t('Скачать всё ZIP')}</a>}<ul className="file-list">{resultFiles.map(({ item, number: itemNumber }) => {
         const artifact = item.artifact!;
-        const itemNumber = jobRangeNumbers[job?.items.indexOf(item) ?? index] ?? (job?.items.indexOf(item) ?? index) + 1;
         const adjusted = !artifact.segments?.length && (Math.abs(artifact.actual_start_ms - item.start_ms) > 100 || Math.abs(artifact.actual_end_ms - item.end_ms) > 100);
         return <li key={artifact.id}><span className="file-icon"><Icon name="file" size={23} /></span><div className="file-description"><h3>{artifact.segments?.length && item.label === 'Joined result' ? t('Объединённый результат') : item.label || `${t('Фрагмент')} ${itemNumber}`}</h3><p>{artifact.filename}</p><span>{formatBytes(artifact.size_bytes, locale)}<span className="meta-separator"> / </span>{formatTimecode(artifact.actual_start_ms, true)} — {formatTimecode(artifact.actual_end_ms, true)}</span><RetentionNotice expiresAt={artifact.expires_at} kind="artifact" />{adjusted && <p className="adjusted-note">{t("Фактические границы отличаются от выбранных.")}</p>}<ArtifactDetails artifact={artifact} /></div><a className="button secondary download-button" href={artifact.download_url} download={artifact.filename}><Icon name="download" size={17} />{t("Скачать")}</a></li>;
       })}</ul></section>;
 
-  const stageTitles = ['Откройте видео', 'Выберите один момент', 'Соберите фрагменты', 'Сохраните фрагменты'];
-  const stageDescriptions = ['Ссылка на запись или видеофайл с вашего устройства.', 'Отметьте начало и конец одного фрагмента.', 'Отметьте, что вырезать. Здесь же можно добавить или изменить моменты.', 'Выберите видео или аудио и скачайте результат.'];
+  const stageTitles = ['Откройте видео', 'Нарежьте видео', 'Соберите фрагменты', 'Сохраните фрагменты'];
+  const stageDescriptions = ['Ссылка на запись или видеофайл с вашего устройства.', 'Отметьте моменты и добавляйте фрагменты, оставаясь возле плеера.', 'Отметьте, что вырезать. Здесь же можно добавить или изменить моменты.', 'Выберите видео или аудио и скачайте результат.'];
 
   return <>
     <a className="skip-link" href="#editor">{t('К выбору фрагмента')}</a>
@@ -911,12 +1148,12 @@ export default function App() {
       <div className="header-actions"><LanguageSwitch /><ThemeToggle /></div>
     </div></header>
     <main id="editor" className={`stage-page stage-${step}`}>
-      <nav className="steps-nav" aria-label={t('Шаги работы')}><ol>{(['Видео', 'Момент', 'Фрагменты', 'Экспорт'] as const).map((label, index) => <li key={label}><button type="button" disabled={sourceBusy || (index > 0 && !source && !(index === 3 && (job || retryOutput))) || (index === 3 && !exportRanges.length && !job && !retryOutput) || (index === 1 && !ranges.length)} aria-current={step === index + 1 ? 'step' : undefined} onClick={() => goToStep((index + 1) as WorkbenchStep)}><span className="step-number">{index + 1}</span><span>{t(label)}</span></button>{index < 3 && <span className="step-connector" aria-hidden="true" />}</li>)}</ol></nav>
+      <nav className="steps-nav" aria-label={t('Шаги работы')}><ol>{(['Видео', 'Момент', 'Фрагменты', 'Экспорт'] as const).map((label, index) => <li key={label}><button type="button" disabled={sourceBusy || submitting || (index > 0 && !source && !(index === 3 && (job || retryOutput))) || (index === 3 && !exportRanges.length && !job && !retryOutput) || (index === 1 && !ranges.length)} aria-current={step === index + 1 ? 'step' : undefined} onClick={() => goToStep((index + 1) as WorkbenchStep)}><span className="step-number">{index + 1}</span><span>{t(label)}</span></button>{index < 3 && <span className="step-connector" aria-hidden="true" />}</li>)}</ol></nav>
       <div className="page-heading"><div><p className="step-caption">{t('Шаг {current} из 4', { current: step })}</p><h1 ref={stageHeading} tabIndex={-1}>{t(stageTitles[step - 1])}</h1><p>{t(stageDescriptions[step - 1])}</p></div>{step > 2 && <button className="text-button change-source" type="button" onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button>}</div>
       {recoverableSource && step === 1 && <section className="draft-recovery" aria-labelledby="draft-recovery-heading"><h2 id="draft-recovery-heading">{t('Фрагменты сохранены')}</h2>{recoverableSource.title && <p>{recoverableSource.title}</p>}<p>{t('Загрузите ту же запись или откройте её ссылку. Границы, названия и настройки экспорта восстановятся.')}</p><ol>{ranges.map(range => <li key={range.id}><strong>{range.label || t('Фрагмент')}</strong><span>{formatTimecode(range.start_ms, true)} — {formatTimecode(range.end_ms, true)}</span></li>)}</ol><label><input type="checkbox" checked={keepRecoveredCuts} onChange={event => setKeepRecoveredCuts(event.target.checked)} />{t('Восстановить фрагменты в открываемом видео')}</label></section>}
       {step === 1 && <SourceChooser url={url} onUrl={value => { setUrl(value); setSourceError(''); }} onOpen={() => void openSource()} onFile={file => void openSource(file)} busy={sourceBusy} progress={uploadProgress} maximumBytes={limits.max_source_bytes} blocked={deletingSource} processing={submitting || cancelling} ready={sessionReady} error={sourceError} onCancel={() => { sourceController.current?.abort(); sourceController.current = null; setSourceBusy(false); setUploadProgress(null); }} onReconnect={() => { setSourceError(''); setSessionAttempt(n => n + 1); }} />}
-      {step === 1 && sessionReady && <ProjectLibrary projects={projectStore.current.projects} activeID={activeProjectID.current} disabled={sourceBusy || submitting || cancelling || deletingSource} canExport={exportRanges.length > 0} onOpen={value => void openProject(value)} onDelete={deleteProject} onExport={downloadPlan} onImport={file => void loadPlan(file)} />}
-      {projectError && <p className="error-message" role="alert">{t(projectError)}</p>}
+      {step === 1 && sessionReady && <ProjectLibrary projects={projectStore.current.projects} activeID={activeProjectID.current} disabled={sourceBusy || submitting || cancelling || deletingSource} canExport={exportRanges.length > 0} onOpen={value => void openProject(value)} onDelete={id => void deleteProject(id)} onExport={downloadPlan} onImport={file => void loadPlan(file)} />}
+      {projectError && <div className="project-storage-message"><p className="error-message" role="alert">{t(projectError)}</p>{projectConflict && <div className="project-conflict-actions"><button type="button" className="button secondary" disabled={sourceBusy || submitting} onClick={() => void saveProjectCopy()}>{t('Сохранить мои изменения как копию')}</button>{!projectConflict.deleted && <button type="button" className="text-button" disabled={sourceBusy || submitting} onClick={() => void reloadProjectVersion()}>{t('Открыть сохранённую версию')}</button>}</div>}</div>}
       {source && (step === 2 || step === 3) && <div className="edit-history-actions" role="group" aria-label={t('История изменений')}><button type="button" className="text-button" disabled={!currentHistory().past.length || busy} onClick={() => historyAction('undo')}>{t('Отменить изменение')}</button><button type="button" className="text-button" disabled={!currentHistory().future.length || busy} onClick={() => historyAction('redo')}>{t('Повторить изменение')}</button></div>}
       {step === 1 && sessionReady && <SourceLibrary currentID={source?.id} disabled={sourceBusy || submitting || cancelling || deletingSource} currentBusy={busy} onBusy={setDeletingSource} onOpen={value => void reopenSource(value)} onDeleted={id => { if (id === currentSourceID.current) clearDeletedSource(); else setNotice('Видео и связанные файлы удалены.'); }} />}
       {sessionReady && (step === 1 || step === 4) && <JobLibrary refreshKey={job?.id + ":" + job?.status} initiallyOpen={step === 1 && activeJob(job)} />}
@@ -925,17 +1162,24 @@ export default function App() {
         <div className="editing-panel">
           <div className="media-heading"><div className="source-title"><Icon name="file" size={18} /><span title={source.title}>{source.title}</span>{sourceProvider && <span className="source-provider">{t(sourceProvider)}</span>}</div><span className="source-meta">{qualityLabel && <>{qualityLabel}<span className="meta-separator"> / </span></>}{formatTimecode(duration)}</span></div>
           <div className="moment-layout">
-          <Player ref={player} source={source} audioTrack={previewAudioTrack} noAudio={output.no_audio} forceWindow={cropOpen && !source.preview_url} onGeometry={mediaGeometry} active={step === 2} onAvailable={playerAvailability} onTime={playbackPosition} onSourceUnavailable={sourceUnavailable} />
+          <Player ref={player} source={source} initialPosition={position.getSnapshot()} audioTrack={previewAudioTrack} noAudio={output.no_audio} forceWindow={(cropOpen || !!output.crop) && !source.preview_url} onGeometry={mediaGeometry} active={step === 2} onAvailable={playerAvailability} onTime={playbackPosition} onSourceUnavailable={sourceUnavailable} />
+          {sequenceIndex !== null && output.crop && cropContainer && <CropPreview crop={output.crop} container={cropContainer} />}
           {selected && <div className="moment-controls">
+            <div className="moment-collection-actions" role="group" aria-label={t('Нарезка фрагментов')}>
+              <div className="moment-clip-navigation"><button type="button" className="icon-button" aria-label={t('Предыдущий фрагмент')} disabled={busy || ranges.findIndex(range => range.id === selected.id) <= 0} onClick={() => pickAdjacent(-1)}><Icon name="chevron" size={17} style={{ transform: 'rotate(180deg)' }} /></button><span>{t('Фрагмент {index} из {total}.', { index: ranges.findIndex(range => range.id === selected.id) + 1, total: ranges.length })}</span><button type="button" className="icon-button" aria-label={t('Следующий фрагмент')} disabled={busy || ranges.findIndex(range => range.id === selected.id) >= ranges.length - 1} onClick={() => pickAdjacent(1)}><Icon name="chevron" size={17} /></button></div>
+              <div className="moment-mobile-markers" role="group" aria-label={t('Границы по позиции плеера')}><button type="button" className="marker-button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span>{t('Начало здесь')}<kbd>I</kbd></button><button type="button" className="marker-button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span>{t('Конец здесь')}<kbd>O</kbd></button></div>
+              <button type="button" className="button secondary save-next" disabled={busy || sourceBusy || ranges.length >= limits.max_ranges} onClick={addRange}><Icon name="plus" size={17} />{t('Сохранить и добавить следующий')}</button>
+            </div>
             <AudioTrackSelector id="audio-track-preview" output={output} tracks={tracks} loading={tracksLoading} error={tracksError} disabled={busy} onChange={changeAudio} onRetry={() => setTrackRevision(value => value + 1)} />
             <div className="moment-boundaries"><div><label htmlFor="range-start">{t('Начало')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время начала: {time}', { time: displayTimecode(selected.start_ms) })} onClick={() => editTime('start')}>{displayTimecode(selected.start_ms)}<Icon name="edit" size={14} /></button><input ref={startField} id="range-start" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span>{t('Начало здесь')}<kbd>I</kbd></button></div><div><label htmlFor="range-end">{t('Конец')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время конца: {time}', { time: displayTimecode(selected.end_ms) })} onClick={() => editTime('end')}>{displayTimecode(selected.end_ms)}<Icon name="edit" size={14} /></button><input ref={endField} id="range-end" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={endText} onChange={event => { setEndText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span>{t('Конец здесь')}<kbd>O</kbd></button></div><div className="moment-duration"><span>{t('Длительность')}</span><strong>{durationLabel(selected.end_ms - selected.start_ms, locale)}</strong></div></div>
-            <Timeline duration={duration} position={position} ranges={ranges} selected={selected} view={precisionOpen ? view : simpleView} showOverview={precisionOpen} onSeek={seek} onRange={changeBounds} onReveal={revealBoundary} onBeginChange={beginHistory} onEndChange={finishHistory} audioTrack={previewAudioTrack} noAudio={output.no_audio} sourceID={source.id} active={step === 2} />
+            <Timeline duration={duration} position={position} ranges={ranges} selected={selected} view={precisionOpen ? view : simpleView} showOverview={precisionOpen} onSeek={seek} onRange={changeBounds} onReveal={ms => { revealBoundary(ms); seek(ms); }} onBeginChange={beginHistory} onEndChange={finishBoundaryChange} audioTrack={previewAudioTrack} noAudio={output.no_audio} sourceID={source.id} active={step === 2} />
             <CropEditor key={source.id} value={output.crop} onChange={crop => setOutput(previous => ({ ...previous, crop }))}
               displayWidth={displayGeometry?.id === source.id ? displayGeometry.width : 0} displayHeight={displayGeometry?.id === source.id ? displayGeometry.height : 0}
               locale={locale} disabled={busy || output.format !== 'mp4' || output.cut_mode !== 'accurate'} previewContainer={cropContainer}
               onBeginChange={beginHistory} onEndChange={finishHistory} onOpenChange={setCropOpen} />
             <div className="moment-selection-tools"><span>{t('Фрагмент до {limit}', { limit: durationLabel(limits.max_range_ms, locale) })}</span>{duration <= Math.min(limits.max_range_ms, limits.max_job_ms) && <button type="button" className="text-button" disabled={busy} onClick={() => { changeBounds(0, duration); setSimpleView([0, duration]); setViewCenter(duration / 2); }}>{t('Выбрать всё видео')}</button>}</div>
             <div className="moment-preview"><button className="button secondary" type="button" disabled={!playerAvailable} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} />{previewing ? t('Остановить просмотр') : t('Посмотреть фрагмент')}</button><button className="text-button precision-toggle" type="button" aria-expanded={precisionOpen} aria-controls="range-start range-end precision-controls" onClick={() => { if (precisionOpen && invalidDraft) { validateFields(true); return; } if (precisionOpen) setSimpleView(simpleRangeView(duration, selected)); setPrecisionOpen(!precisionOpen); setViewCenter((selected.start_ms + selected.end_ms) / 2); }}>{t('Точное время и шкала')}<Icon name="chevron" size={15} style={{ transform: precisionOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button></div>
+            {(exportRanges.length > 1 || sequenceIndex !== null) && <div className="sequence-preview"><button className="text-button" type="button" disabled={!playerAvailable || invalidDraft} onClick={previewSequence}><Icon name={sequenceIndex !== null ? 'pause' : 'play'} size={16} />{t(sequenceIndex !== null ? 'Остановить подборку' : 'Посмотреть подборку')}</button>{sequenceIndex !== null && <span role="status">{t('Сейчас: {name}', { name: sequence.current?.ranges[sequenceIndex]?.label || t('Фрагмент {index}', { index: ranges.findIndex(range => range.id === sequence.current?.ranges[sequenceIndex]?.id) + 1 }) })}</span>}{videoCopy && <p className="field-hint">{t('Проверяем выбранные моменты. При копировании фактические границы могут сдвинуться к ключевым кадрам.')}</p>}</div>}
             <div className="boundary-audition" role="group" aria-label={t('Проверить границы')}><button type="button" className="text-button" disabled={!playerAvailable} onClick={() => audition('start')}><Icon name="play" size={13} />{t('Проверить начало')}</button><button type="button" className="text-button" disabled={!playerAvailable} onClick={() => audition('end')}><Icon name="play" size={13} />{t('Проверить конец')}</button><span>{t('По 1,5 с до и после границы')}</span></div>
             <div id="precision-controls" className="precision-controls" hidden={!precisionOpen}>
               <p id="time-hint" className="field-hint">{t('Часы:минуты:секунды. Можно ввести 83:10 или 01:23:10.250.')}</p>
@@ -946,9 +1190,9 @@ export default function App() {
           </div>
         </div>
         <div className="stage-actions"><div className="moment-secondary-actions"><button className="text-button change-source" type="button" onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button><button className="text-button" type="button" onClick={() => setShowShortcuts(!showShortcuts)} aria-expanded={showShortcuts}><span className="keycap">?</span>{t('Горячие клавиши')}</button></div><div className="moment-next-actions"><button className="button primary" type="button" onClick={() => finishMoment(4)} disabled={sourceBusy || !selected}>{t('К скачиванию')}<Icon name="download" size={17} /></button><button className="button secondary" type="button" onClick={() => finishMoment(3)} disabled={sourceBusy || !selected}>{t('Список фрагментов')}</button></div></div>
-        {showShortcuts && <div className="shortcut-guide"><span><kbd>I</kbd>{t('начало по позиции плеера')}</span><span><kbd>O</kbd>{t('конец')}</span><span><kbd>{t('Пробел')}</kbd>{t('пауза / воспроизведение')}</span><span><kbd>←</kbd><kbd>→</kbd>{t('перемотка или ручка: 0,1 с;')}<kbd>Shift</kbd>{t(': 1 с')}</span><p>{t('Клавиши I, O и пробел работают вне полей ввода. В плеере действуют его собственные клавиши.')}</p></div>}
+        {showShortcuts && <div className="shortcut-guide"><span><kbd>I</kbd>{t('начало по позиции плеера')}</span><span><kbd>O</kbd>{t('конец')}</span><span><kbd>N</kbd>{t('сохранить и добавить следующий')}</span><span><kbd>[</kbd><kbd>]</kbd>{t('предыдущий / следующий фрагмент')}</span><span><kbd>{t('Пробел')}</kbd>{t('пауза / воспроизведение')}</span><span><kbd>←</kbd><kbd>→</kbd>{t('перемотка или ручка: 0,1 с;')}<kbd>Shift</kbd>{t(': 1 с')}</span><p>{t('Клавиши I, O и пробел работают вне полей ввода. В плеере действуют его собственные клавиши.')}</p></div>}
       </section>}
-      {step === 3 && source && <ClipLibrary limit={limits.max_ranges} ranges={ranges} selectedIds={selectedRangeIds} editedId={selectedId} revealId={revealId} onSelect={id => { setSelectedRangeIds(previous => previous.includes(id) ? previous.filter(value => value !== id) : [...previous, id]); setRevealId(id); }} onSelectAll={() => setSelectedRangeIds(exportRanges.length === ranges.length ? [] : ranges.map(range => range.id))} onEdit={pickRange} onAdd={addRange} onBeginChange={beginHistory} onEndChange={finishHistory} onMove={moveRange} onLabel={(id, label) => { rememberHistory(); setRanges(previous => previous.map(range => range.id === id ? { ...range, label } : range)); }} onDuplicate={duplicateSelected} onDelete={() => removeSelected(selectedRangeIds)} onDeleteOne={id => removeSelected([id])} onExport={() => goToStep(4)} />}
+      {step === 3 && source && <ClipLibrary limit={limits.max_ranges} ranges={ranges} selectedIds={selectedRangeIds} editedId={selectedId} revealId={revealId} onSelect={id => { setSelectedRangeIds(previous => previous.includes(id) ? previous.filter(value => value !== id) : [...previous, id]); setRevealId(id); }} onSelectAll={() => setSelectedRangeIds(exportRanges.length === ranges.length ? [] : ranges.map(range => range.id))} onEdit={pickRange} onAdd={addLibraryRange} onBeginChange={beginHistory} onEndChange={finishHistory} onMove={moveRange} onLabel={(id, label) => { rememberHistory(); setRanges(previous => previous.map(range => range.id === id ? { ...range, label } : range)); }} onDuplicate={duplicateSelected} onDelete={() => removeSelected(selectedRangeIds)} onDeleteOne={id => removeSelected([id])} onPreview={previewSequence} canPreview={playerAvailable && !invalidDraft} onExport={() => goToStep(4)} />}
       {step === 4 && (source || job || retryOutput) && <div className="output-stage">
         {resultsPanel}
         {source && <div className="output-grid"><div className="output-overview"><section className="output-selection" aria-labelledby="output-selection-heading"><div className="output-source"><Icon name="file" size={20} /><span>{source.title}</span></div><h2 id="output-selection-heading">{t('Выбранные фрагменты')}</h2>{!exportRanges.length && <p className="field-hint">{t('Выберите хотя бы один фрагмент для экспорта.')}</p>}<ol>{exportRanges.map((range, index) => <li key={range.id}><span className="range-index">{index + 1}</span><div><strong>{range.label || `${t('Фрагмент')} ${ranges.findIndex(original => original.id === range.id) + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></div><span>{durationLabel(range.end_ms - range.start_ms, locale)}</span></li>)}</ol><button className="text-button" type="button" onClick={() => goToStep(3)}><Icon name="chevron" size={17} style={{ transform: 'rotate(180deg)' }} />{t('К списку фрагментов')}</button></section></div>

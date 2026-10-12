@@ -11,11 +11,12 @@ function ClipCheckbox({ id, checked, mixed, label, onChange, disabled }: { id?: 
   return <label className="clip-checkbox"><input ref={input} id={id} type="checkbox" checked={checked} aria-label={label} onChange={onChange} disabled={disabled} /><span aria-hidden="true">{mixed ? '−' : checked && <Icon name="check" size={15} />}</span></label>;
 }
 
-export function ClipLibrary({ limit, ranges, selectedIds, editedId, revealId, onSelect, onSelectAll, onEdit, onAdd, onLabel, onDuplicate, onDelete, onDeleteOne, onExport, onMove, onBeginChange, onEndChange }: {
+export function ClipLibrary({ limit, ranges, selectedIds, editedId, revealId, onSelect, onSelectAll, onEdit, onAdd, onLabel, onDuplicate, onDelete, onDeleteOne, onExport, onPreview, canPreview, onMove, onBeginChange, onEndChange }: {
   limit: number; ranges: ClipRange[]; selectedIds: string[]; editedId: string; revealId: string;
   onMove?(id: string, direction: -1 | 1): void; onBeginChange?(): void; onEndChange?(): void;
   onSelect(id: string): void; onSelectAll(): void; onEdit(range: ClipRange): void; onAdd(): void;
   onLabel(id: string, label: string): void; onDuplicate(): void; onDelete(): void; onDeleteOne(id: string): void; onExport(): void;
+  onPreview?(): void; canPreview?: boolean;
 }) {
   const { locale, t } = useLanguage();
   const section = useRef<HTMLElement>(null);
@@ -64,6 +65,6 @@ export function ClipLibrary({ limit, ranges, selectedIds, editedId, revealId, on
       </li>)}</ol>
     </> : <div className="clip-empty"><Icon name="cut" size={27} /><h3>{t('Пока нет фрагментов')}</h3><p>{t('Добавьте момент, который хотите сохранить.')}</p><button className="button primary" type="button" onClick={onAdd}><Icon name="plus" size={17} />{t('Добавить первый фрагмент')}</button></div>}
     
-    <div className="clip-library-footer"><p id="clip-limit-hint">{duplicateLimit && ranges.length < limit ? t('Для копий не хватает места. Выберите меньше фрагментов: в списке может быть до {limit}.', { limit }) : ranges.length >= limit ? t('В одном задании — до {limit} фрагментов.', { limit }) : !included.length && ranges.length ? t('Выберите хотя бы один фрагмент для экспорта.') : t('Каждый выбранный фрагмент будет отдельным файлом.')}</p><button className="button primary" type="button" disabled={!included.length} onClick={onExport}>{t('К настройкам экспорта')}<Icon name="chevron" size={17} /></button></div>
+    <div className="clip-library-footer"><p id="clip-limit-hint">{duplicateLimit && ranges.length < limit ? t('Для копий не хватает места. Выберите меньше фрагментов: в списке может быть до {limit}.', { limit }) : ranges.length >= limit ? t('В одном задании — до {limit} фрагментов.', { limit }) : !included.length && ranges.length ? t('Выберите хотя бы один фрагмент для экспорта.') : t('Порядок списка задаёт порядок подборки. Формат результата выбирается при экспорте.')}</p><div className="clip-footer-actions">{onPreview && <button type="button" className="button secondary" disabled={!included.length || !canPreview} onClick={onPreview}><Icon name="play" size={17} />{t('Посмотреть подборку')}</button>}<button className="button primary" type="button" disabled={!included.length} onClick={onExport}>{t('К настройкам экспорта')}<Icon name="chevron" size={17} /></button></div></div>
   </section>;
 }

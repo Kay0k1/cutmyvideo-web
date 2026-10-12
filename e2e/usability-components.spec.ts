@@ -24,6 +24,9 @@ async function prepare(page: Page, saved: Record<string, unknown> = {}) {
     window.dispatchEvent(new Event('pagehide'))
     localStorage.setItem('cutmy.workbench.v1', JSON.stringify({ workflow_version: 2, step: 3, source_id: sourceID,
       ranges, selected_id: ranges[0].id, selected_range_ids: ranges.map(range => range.id), ...saved }))
+    // Restore the historical single-draft state before its first migration.
+    // Later reloads exercise the migrated, per-project records.
+    localStorage.removeItem('cutmy.projects.v2.ready')
   }, { sourceID: source.id, ranges, saved })
 }
 

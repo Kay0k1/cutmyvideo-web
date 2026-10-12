@@ -226,6 +226,32 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 .clip-library-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 15px; }
 .clip-library-footer p { color: var(--muted); font-size: .8125rem; line-height: 1.6; }
 .clip-library-footer .button { flex-shrink: 0; }
+.clip-footer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.moment-collection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.moment-clip-navigation { display: flex; align-items: center; gap: 6px; flex: 1 1 170px; min-width: 0; }
+.moment-clip-navigation span { flex: 1; color: var(--muted); font-size: .8125rem; text-align: center; }
+.moment-clip-navigation .icon-button { min-width: 44px; min-height: 44px; }
+.save-next { flex: 1 1 210px; min-width: 0; font-size: .8125rem; }
+.moment-mobile-markers { display: none; }
+.sequence-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 4px; }
+.sequence-preview > span { color: var(--muted); font-size: .8125rem; overflow-wrap: anywhere; }
+.sequence-preview > p { flex-basis: 100%; }
+.project-conflict-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.project-conflict-actions > button { min-height: 44px; }
+.download-all { margin-top: 12px; margin-bottom: 4px; }
+.retry-unfinished { margin-top: 10px; }
+.draft-crop-preview { position: absolute; overflow: hidden; pointer-events: none; z-index: 2; }
+.draft-crop-preview > span { position: absolute; outline: 1px solid white; box-shadow: 0 0 0 5000px rgba(0, 0, 0, .72); }
+@media (max-width: 600px) {
+  .clip-library-footer { flex-wrap: wrap; }
+  .clip-footer-actions { width: 100%; }
+  .clip-footer-actions > .button { flex: 1 1 180px; min-width: 0; }
+  .moment-collection-actions > .save-next { width: 100%; }
+  .moment-mobile-markers { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; width: 100%; }
+  .moment-mobile-markers > .marker-button { justify-content: center; min-height: 44px; padding: 8px 4px; border: 1px solid var(--line); border-radius: 7px; }
+  .moment-boundaries .marker-button { display: none; }
+  .download-all { width: 100%; }
+}
 .output-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
 .output-overview { min-width: 0; }
 .output-selection, .export-panel, .results-panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; min-width: 0; }
