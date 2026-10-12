@@ -107,7 +107,11 @@ export function CropOverlay({ value, onChange, displayWidth, displayHeight, loca
       if (!media) { setBox(current => current.width === 0 ? current : { x: 0, y: 0, width: 0, height: 0 }); return; }
       if (observed !== media) { if (observed) resize.unobserve(observed); observed = media; resize.observe(media); }
       const bounds = media.getBoundingClientRect(), parent = previewContainer.getBoundingClientRect();
-      const content = containedMediaBox(bounds.width, bounds.height, displayWidth, displayHeight);
+      // Presets use original display geometry; the overlay follows the actual
+      // rendition's visible pixels, whose even dimensions may round its ratio.
+      const renderedWidth = media instanceof HTMLVideoElement && media.videoWidth > 0 ? media.videoWidth : displayWidth;
+      const renderedHeight = media instanceof HTMLVideoElement && media.videoHeight > 0 ? media.videoHeight : displayHeight;
+      const content = containedMediaBox(bounds.width, bounds.height, renderedWidth, renderedHeight);
       const next = { x: bounds.left - parent.left + content.x, y: bounds.top - parent.top + content.y, width: content.width, height: content.height };
       setBox(current => Object.keys(next).every(key => current[key as keyof typeof next] === next[key as keyof typeof next]) ? current : next);
     }
