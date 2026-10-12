@@ -156,8 +156,18 @@ while capturing a coordinated private database/media snapshot. Verify restoratio
 with the original 005 image in isolated resources. See the core's migration 006
 upgrade guide for the tested database/media recovery contract.
 
-For this release, first prepare and activate a compatibility release containing
+For this release, first prepare and build a compatibility release containing
 the exact new 006 core and the previous 0.3 website with its core pin updated.
+Test migration of a restored production snapshot with that exact image. After
+the final 005 snapshot, keep writers stopped. Under the exclusive deployment
+lock, atomically pin `RELEASE_TAG` in the private production environment to the
+compatibility release first, then atomically pin `current` to that release.
+Release the lock before activation or any systemd action. The first activation
+must therefore see both a 006-compatible previous release and environment;
+changing only the symlink leaves a reboot able to select the old 005 image.
+Keep the original 005 environment and release in the coordinated backup packet.
+Then activate the compatibility release. Every automatic failure path must use
+the new compatible image, even if migration has already happened.
 Verify its health, a real export/download and a restored 006 database/media pair.
 The previous website keeps legacy original retention because it does not send
 `cleanup_source`. Then activate the full 0.4 website with that same core: its
