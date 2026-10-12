@@ -1,0 +1,124 @@
+{
+  "measured_at": "2026-10-12T11:59:16.185Z",
+  "browser": "153.0.8010.12",
+  "viewport": "1440x1000",
+  "network": "loopback, no throttling",
+  "fixture_sha256": "10e6bbbb94ac9bcfac48e4d66c7392426a9874fe18ca33e5546ccb87fe4f15fe",
+  "media_tools": "ffmpeg version N-127083-g65a3870462-20261001 Copyright (c) 2000-2026 the FFmpeg developers",
+  "cold": {
+    "count": 5,
+    "median_ms": 4869.399999856949,
+    "min_ms": 4657.599999904633,
+    "max_ms": 4955.200000047684,
+    "spread_ms": 297.60000014305115
+  },
+  "warm": {
+    "count": 5,
+    "median_ms": 25.199999809265137,
+    "min_ms": 22,
+    "max_ms": 27.199999809265137,
+    "spread_ms": 5.199999809265137
+  },
+  "observations": [
+    {
+      "observation": 1,
+      "cold": {
+        "elapsed_ms": 4955.200000047684,
+        "media_ms": 0,
+        "target_ms": 0,
+        "requests": [
+          {
+            "status": 200,
+            "headers_ms": 4868.700000047684
+          }
+        ]
+      },
+      "warm": {
+        "elapsed_ms": 27.199999809265137,
+        "media_ms": 1000,
+        "target_ms": 1000,
+        "requests": []
+      }
+    },
+    {
+      "observation": 2,
+      "cold": {
+        "elapsed_ms": 4783.599999904633,
+        "media_ms": 0,
+        "target_ms": 0,
+        "requests": [
+          {
+            "status": 200,
+            "headers_ms": 4727.199999809265
+          }
+        ]
+      },
+      "warm": {
+        "elapsed_ms": 24.200000047683716,
+        "media_ms": 1000,
+        "target_ms": 1000,
+        "requests": []
+      }
+    },
+    {
+      "observation": 3,
+      "cold": {
+        "elapsed_ms": 4942.299999952316,
+        "media_ms": 0,
+        "target_ms": 0,
+        "requests": [
+          {
+            "status": 200,
+            "headers_ms": 4892.299999952316
+          }
+        ]
+      },
+      "warm": {
+        "elapsed_ms": 25.199999809265137,
+        "media_ms": 1000,
+        "target_ms": 1000,
+        "requests": []
+      }
+    },
+    {
+      "observation": 4,
+      "cold": {
+        "elapsed_ms": 4869.399999856949,
+        "media_ms": 0,
+        "target_ms": 0,
+        "requests": [
+          {
+            "status": 200,
+            "headers_ms": 4813
+          }
+        ]
+      },
+      "warm": {
+        "elapsed_ms": 22,
+        "media_ms": 1000,
+        "target_ms": 1000,
+        "requests": []
+      }
+    },
+    {
+      "observation": 5,
+      "cold": {
+        "elapsed_ms": 4657.599999904633,
+        "media_ms": 0,
+        "target_ms": 0,
+        "requests": [
+          {
+            "status": 200,
+            "headers_ms": 4614.299999952316
+          }
+        ]
+      },
+      "warm": {
+        "elapsed_ms": 26.200000047683716,
+        "media_ms": 1000,
+        "target_ms": 1000,
+        "requests": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,144 @@
+{
+  "measured_at": "2026-10-12T12:00:09.225Z",
+  "browser": "153.0.8010.12",
+  "viewport": "1440x1000",
+  "network": "loopback, no throttling",
+  "fixture_sha256": "10e6bbbb94ac9bcfac48e4d66c7392426a9874fe18ca33e5546ccb87fe4f15fe",
+  "media_tools": "ffmpeg version N-127083-g65a3870462-20261001 Copyright (c) 2000-2026 the FFmpeg developers",
+  "cold": {
+    "count": 5,
+    "median_ms": 3574.4000000953674,
+    "min_ms": 3364.899999856949,
+    "max_ms": 3939.2000000476837,
+    "spread_ms": 574.3000001907349
+  },
+  "warm": {
+    "count": 5,
+    "median_ms": 25.200000047683716,
+    "min_ms": 22.399999856948853,
+    "max_ms": 44.5,
+    "spread_ms": 22.100000143051147
+  },
+  "observations": [
+    {
+      "observation": 1,
+      "cold": {
+        "elapsed_ms": 3714.5,
+        "media_ms": 0,
+        "target_ms": 0,
+        "requests": [
+          {
+            "status": 429,
+            "headers_ms": 44.700000047683716
+          },
+          {
+            "status": 200,
+            "headers_ms": 3651.2000000476837
+          }
+        ]
+      },
+      "warm": {
+        "elapsed_ms": 25.200000047683716,
+        "media_ms": 1000,
+        "target_ms": 1000,
+        "requests": []
+      }
+    },
+    {
+      "observation": 2,
+      "cold": {
+        "elapsed_ms": 3574.4000000953674,
+        "media_ms": 0,
+        "target_ms": 0,
+        "requests": [
+          {
+            "status": 429,
+            "headers_ms": 20.59999990463257
+          },
+          {
+            "status": 200,
+            "headers_ms": 3512.7999999523163
+          }
+        ]
+      },
+      "warm": {
+        "elapsed_ms": 44.5,
+        "media_ms": 1000,
+        "target_ms": 1000,
+        "requests": []
+      }
+    },
+    {
+      "observation": 3,
+      "cold": {
+        "elapsed_ms": 3515.5,
+        "media_ms": 0,
+        "target_ms": 0,
+        "requests": [
+          {
+            "status": 429,
+            "headers_ms": 40.5
+          },
+          {
+            "status": 200,
+            "headers_ms": 3457.5
+          }
+        ]
+      },
+      "warm": {
+        "elapsed_ms": 22.399999856948853,
+        "media_ms": 1000,
+        "target_ms": 1000,
+        "requests": []
+      }
+    },
+    {
+      "observation": 4,
+      "cold": {
+        "elapsed_ms": 3939.2000000476837,
+        "media_ms": 0,
+        "target_ms": 0,
+        "requests": [
+          {
+            "status": 429,
+            "headers_ms": 29.299999952316284
+          },
+          {
+            "status": 200,
+            "headers_ms": 3888.4000000953674
+          }
+        ]
+      },
+      "warm": {
+        "elapsed_ms": 25.800000190734863,
+        "media_ms": 1000,
+        "target_ms": 1000,
+        "requests": []
+      }
+    },
+    {
+      "observation": 5,
+      "cold": {
+        "elapsed_ms": 3364.899999856949,
+        "media_ms": 0,
+        "target_ms": 0,
+        "requests": [
+          {
+            "status": 429,
+            "headers_ms": 22.700000047683716
+          },
+          {
+            "status": 200,
+            "headers_ms": 3309.5999999046326
+          }
+        ]
+      },
+      "warm": {
+        "elapsed_ms": 24.5,
+        "media_ms": 1000,
+        "target_ms": 1000,
+        "requests": []
+      }
+    }
+  ]
+}

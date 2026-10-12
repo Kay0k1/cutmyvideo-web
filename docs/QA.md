@@ -685,3 +685,82 @@ preview/export is available by link. Subtitle preservation is limited to local
 copy exports with supported text codecs; styling is simplified and ASS/SSA or
 bitmap tracks receive clear diagnostics. MKV remains a video-copy-only container for every supported source, including platform links. A mocked platform contract checks that choosing MKV retains the selected 720p ceiling, copy mode and no-sound choice; local quality normalization and subtitle constraints remain separate.
 Browser emulation does not certify physical mobile hardware or screen readers.
+# Responsive cutting acceptance — 2026-10-12
+
+The coordinated core/browser change makes boundary checks, 100 ms adjustments,
+nearby source frames and expired-draft recovery available without discarding
+clip names, checked clips, output settings or unfinished exact-time input.
+Late thumbnail preparation keeps the controls at their original scroll position.
+Copy mode explains its keyframe policy before the optional settings are opened.
+
+## Matched first-presented-frame observations
+
+Five fresh sources per cohort use the same 36-second 1920×1080/60 fps H.264 and
+880 Hz AAC fixture, Chromium 153.0.8010.12, FFmpeg/ffprobe
+N-127083-g65a3870462-20261001, two codec threads, one filter thread, the same
+four-CPU operator host and disposable PostgreSQL 17.11. Production website
+assets run through the same loopback proxy, without network throttling or other
+task media work. Both cohorts use the same private 512 MiB media filesystem and
+browser harness. The source SHA-256 is recorded in both JSON reports.
+
+`scripts/preview-latency.mjs` measures from the foreground request to the real
+`requestVideoFrameCallback` at source time zero. It then seeks to 1,000 ms within
+the prepared window and measures its first presented frame. Only source metadata
+is routed to select the server-window player for this compatible test file;
+API authorization, FFmpeg rendering, byte delivery and browser decoding are real.
+Every measured source is deleted by its isolated browser context.
+
+| Production assets + core | Cold median (min–max) | Prepared median (min–max) |
+| --- | ---: | ---: |
+| Web `58c048c` + core `85550cd` | 4,869.4 ms (4,657.6–4,955.2) | 25.2 ms (22.0–27.2) |
+| Web `da2e3c9` + core `3bf98be` | 3,574.4 ms (3,364.9–3,939.2) | 25.2 ms (22.4–44.5) |
+
+Cold first-frame median improves **26.59%**; all prepared observations are below
+one second. Raw five-observation cohorts are in
+[baseline](audit-data/2026-10-12-cutting-preview-baseline.json) and
+[candidate](audit-data/2026-10-12-cutting-preview-candidate.json).
+The candidate's first request receives a brief resource-admission 429 while its
+track inspection holds the conservative pool lease, then succeeds after the
+bounded adaptive retry. That wait is included in its first-frame measurement.
+
+The separate core handler cohort measures complete playable-window preparation:
+5,094.1 → 3,089.0 ms, **39.36%** faster, with five cold/warm observations per
+cohort. Core's committed benchmark evidence records the unchanged preview
+quality, matched retained output and peak-RSS tradeoff: 73,056 → 75,000 KiB
+(+1,944 KiB / 2.66%). These local observations do not establish performance for
+all source resolutions, codecs, HDR conversion or public providers.
+
+## Product and export checks
+
+- The final local Chromium desktop/mobile/layout/usability run covers 177 cases
+  with the real API and an actual three-hour fixture: 172 passed, three explicit
+  external-provider skips, and two artifact-saving `browserContext.close ENOSPC`
+  failures. Both affected cases passed unchanged on a targeted rerun using a
+  bounded private temporary filesystem; there were no application assertions in
+  those failures. All 174 enabled scenarios therefore passed.
+- Final-code hosted checks passed: 185 Linux browser cases, four explicit skips,
+  two additional database-fault cases, and 12 native macOS WebKit cases. These
+  include stale seeks, cached revisits, cancellation, partial results, recovered
+  retry identity, expired/live-expiring drafts, delayed frame geometry,
+  keyboard controls, Russian/English, touch viewports and 200% text.
+- Build, 206 unit tests, contract-type checks, 73 deployment tests, shell/Compose
+  validation and dependency audit passed. The local optional database-role drill
+  is skipped; its hosted check passed. Core full/race, contract, native-platform,
+  public HTTPS profile, archive-consumer and coordinated recovery checks passed.
+- Core's deterministic export evidence independently decodes 56 downloads:
+  short and one-hour beginning/end cuts, individually named batches, accurate
+  MP4, compatible copy and MP3, and the advertised 32-fragment maximum. It rejects
+  33 fragments and configured count/duration boundaries plus one. Copy preserves
+  the selected compressed streams and reports actual keyframe bounds. MP4 audio
+  alignment is 0 ms; measured MP3 framing offset is 29.75–32.5 ms within one
+  36 ms codec frame. Cancellation, partial publication and safe retry are covered.
+- A separately enabled real public-source check passed on the final binary for
+  `https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4`:
+  source import, accurate export, private download and independent decode.
+  The ordinary deterministic suite does not treat skipped YouTube/platform
+  probes as proof that every public platform is accessible.
+
+Code verification records: core [checks](https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38244469198),
+[public profile](https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38244469294),
+[archives and recovery](https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38244469549),
+and web [product checks](https://github.com/Kay0k1/cutmyvideo-web/actions/runs/38244467937).
