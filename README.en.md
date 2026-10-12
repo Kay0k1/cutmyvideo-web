@@ -20,6 +20,8 @@ The [cutmy.video](https://cutmy.video) product browser interface for selecting m
 
 Light, dark and system appearance, complete Russian/English copy, keyboard controls, labelled sliders and visible focus work on desktop and mobile. Drafts, stage, language, appearance and defaults are stored in the browser. Server-file access belongs to the current session: a saved local draft cannot recover access after cookies are cleared.
 
+The timeline shows frames from the current 30-second area; select a frame to jump to it. Six 160×90 thumbnails prepare after seeking settles, yield to playback and share the server cache resource limits. The browser keeps up to eight strips / 8 MiB and releases them when the source changes. Check start/end plays 1.5 seconds on both sides of the boundary and stops, shortened at the recording edges. Exact controls include ±0.1 s buttons. Arrow keys outside fields seek by 0.1 s, or 1 s with Shift; I/O mark boundaries and Space toggles playback. Unfinished exact time entry survives reload. If a source expires, named clips and exact boundaries remain in the draft: reopen the same recording and explicitly enable clip restoration. A shorter replacement cannot discard saved boundaries.
+
 ## Sources and limits
 
 Recognizes YouTube, Twitch, Rutube, TikTok, Instagram, Vimeo, Dailymotion, VK Video, Facebook, X/Twitter, Reddit, Odnoklassniki, Bilibili, Streamable and Rumble, plus public HTTPS files/pages supported by the core. The server resolves short links.

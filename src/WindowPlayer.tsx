@@ -5,6 +5,7 @@ import { PREVIEW_WINDOW_MAX_BYTES, PREVIEW_WINDOW_MS, PreviewWindowCache } from 
 import type { PreviewWindow } from './previewWindowCache';
 import type { Source } from './types';
 import type { PlayerControls } from './Player';
+import { usePlaybackClock } from './usePlaybackClock';
 
 type PendingWindow = { controller: AbortController; promise: Promise<PreviewWindow>; background: boolean };
 
@@ -34,6 +35,9 @@ export const WindowPlayer = forwardRef<PlayerControls, {
   const [prefetching, setPrefetching] = useState(false);
   const mounted = useRef(false);
   const enabled = useRef(active); enabled.current = active;
+  usePlaybackClock(video, active, () => {
+    if (state.current.ready && !state.current.loading && !state.current.failed) publish(state.current.start + (video.current?.currentTime ?? 0) * 1000);
+  });
 
   function publish(ms: number) {
     const value = Math.min(source.duration_ms, Math.max(0, Math.round(ms)));
@@ -154,11 +158,11 @@ export const WindowPlayer = forwardRef<PlayerControls, {
 
   function seek(ms: number) {
     const current = state.current;
-    const target = Math.min(Math.max(0, ms), Math.max(0, source.duration_ms - 1));
+    const target = Math.min(Math.max(0, ms), source.duration_ms);
     publish(target);
     window.clearTimeout(seekTimer.current); seekTimer.current = undefined;
     if (!enabled.current) return;
-    const start = Math.floor(target / PREVIEW_WINDOW_MS) * PREVIEW_WINDOW_MS;
+    const start = Math.floor(Math.min(target, Math.max(0, source.duration_ms - 1)) / PREVIEW_WINDOW_MS) * PREVIEW_WINDOW_MS;
     if (cache.current!.has(start)) { void load(target); return; }
     // Protect the desired position from timeupdate events from the old file.
     current.generation++; status(true); cancelRequests(start);
@@ -236,7 +240,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
         <span className="window-player-position"><span>{t('Позиция в видео')}</span><span>{formatTimecode(position)} / {formatTimecode(source.duration_ms)}</span></span>
         <span className="window-player-rail">
           <span className="window-player-buffered" aria-hidden="true">{buffered.map(range => <span key={range.start} style={{ left: `${range.start / source.duration_ms * 100}%`, width: `${(range.end-range.start) / source.duration_ms * 100}%` }} />)}</span>
-          <input type="range" min="0" max={Math.max(0, source.duration_ms-1)} step="100" value={position} aria-label={t('Позиция в видео')} aria-valuetext={formatTimecode(position)} onChange={event => seek(Number(event.target.value))} />
+          <input type="range" min="0" max={source.duration_ms} step="100" value={position} aria-label={t('Позиция в видео')} aria-valuetext={formatTimecode(position)} onChange={event => seek(Number(event.target.value))} />
         </span>
       </label>
       <span className="window-player-buffer-status">{prefetching ? t('Загружаем следующий участок…') : nextReady ? t('Следующий участок готов') : t('Недавние участки доступны без ожидания')}</span>

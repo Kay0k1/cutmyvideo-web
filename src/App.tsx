@@ -33,6 +33,8 @@ import { SourceLibrary } from './SourceLibrary';
 import { JobLibrary } from './JobLibrary';
 import { RetentionNotice } from './RetentionNotice';
 import { useWorkflowHistory } from './workflowHistory';
+import { boundaryAudition, recoverCuttingDraft } from './cuttingDraft';
+import type { RecoverableSource } from './cuttingDraft';
 import type { WorkbenchPanel, WorkflowRoute } from './workflowHistory';
 
 const activeJob = (job: Job | null) => job?.status === 'queued' || job?.status === 'running' || job?.status === 'waiting_storage';
@@ -75,6 +77,8 @@ export default function App() {
     return requested === 'examples' || requested === 'settings' || requested === 'support' ? requested : null;
   });
   const [source, setSource] = useState<Source | null>(null);
+  const [recoverableSource, setRecoverableSource] = useState<RecoverableSource | null>(null);
+  const [keepRecoveredCuts, setKeepRecoveredCuts] = useState(false);
   const currentSourceID = useRef<string | undefined>(undefined);
   currentSourceID.current = source?.id;
   const [url, setUrl] = useState('');
@@ -153,8 +157,10 @@ export default function App() {
   const navigation = useWorkflowHistory({ ready: sessionReady, step, panel, onNavigate: navigateHistory });
 
   const playbackPosition = useCallback((ms: number) => {
-    position.set(Math.min(duration, ms));
-    if (previewEnd.current !== null && ms >= previewEnd.current) { player.current?.pause(); previewEnd.current = null; setPreviewing(false); }
+    if (previewEnd.current !== null && ms >= previewEnd.current) {
+      const end = previewEnd.current; previewEnd.current = null; setPreviewing(false);
+      player.current?.pause(); player.current?.seek(end); position.set(end);
+    } else position.set(Math.min(duration, ms));
   }, [duration, position]);
 
   const playerAvailability = useCallback((available: boolean) => {
@@ -215,7 +221,7 @@ export default function App() {
               const valid = restoreRanges(saved.ranges, original.duration_ms, maxClientRanges);
               const restoredRanges = valid.length || Array.isArray(saved.ranges) && saved.ranges.length === 0 ? valid : [newRange(original.duration_ms, 0, currentLimits)];
               const active = restoredRanges.find(range => range.id === saved.selected_id) ?? restoredRanges[0];
-              setSource(original); setRanges(restoredRanges); setSelectedId(active?.id ?? ''); if (active) setFields(active);
+              setSource(original); setRanges(restoredRanges); setSelectedId(active?.id ?? ''); if (active) { setFields(active); restoreTimeFields(saved, active.id); }
               setSelectedRangeIds(rangeSelection(restoredRanges, saved.selected_range_ids)); setRevealId(active?.id ?? '');
               setPrecisionOpen(saved.precision_open === true || original.preview_kind === 'none' || (!original.preview_url && !original.embed_url));
               sourceStep = !active && (savedStep === 2 || savedStep === undefined) ? 3 : savedStep ?? 2;
@@ -230,7 +236,15 @@ export default function App() {
             } catch (error) {
               if (disposed) return;
               if (!(error instanceof ApiError) || !(error.httpStatus === 404 || error.httpStatus === 410 || ['not_found', 'expired'].includes(error.code))) throw error;
-              setSourceError('Предыдущий источник больше недоступен. Откройте его заново.');
+              const recovered = recoverCuttingDraft(saved);
+              if (recovered) {
+                setRecoverableSource(recovered.source); setKeepRecoveredCuts(false);
+                setRanges(recovered.ranges); setSelectedId(recovered.selectedId); setSelectedRangeIds(recovered.selectedIds);
+                const active = recovered.ranges.find(range => range.id === recovered.selectedId)!;
+                setFields(active); restoreTimeFields(saved, active.id);
+                const restoredOutput = readOutputSettings(saved.output); if (restoredOutput) setOutput(restoredOutput);
+              }
+              setSourceError(recovered ? 'Источник больше недоступен. Фрагменты сохранены. Загрузите ту же запись или откройте её ссылку, чтобы продолжить.' : 'Предыдущий источник больше недоступен. Откройте его заново.');
             }
           }
           if (disposed) return;
@@ -246,8 +260,14 @@ export default function App() {
     return () => { disposed = true; controller.abort(); };
   }, [sessionAttempt, setFields]);
 
+  function restoreTimeFields(saved: Record<string, unknown>, id: string) {
+    if (saved.selected_id !== id) return;
+    if (typeof saved.start_text === 'string' && saved.start_text.length <= 64) setStartText(saved.start_text);
+    if (typeof saved.end_text === 'string' && saved.end_text.length <= 64) setEndText(saved.end_text);
+  }
+
   function draftSnapshot() {
-    return { workflow_version: 2, source_id: source?.id, ranges, selected_id: selectedId, selected_range_ids: selectedRangeIds, output, job_id: job?.id, job_output_mode: joinedJob ? 'joined' : 'separate', job_range_numbers: jobRangeNumbers, step, current_ms: position.getSnapshot(), precision_open: precisionOpen, export_attempt: exportAttempt.current };
+    return { workflow_version: 2, source_id: source?.id ?? recoverableSource?.id, source_title: source?.title ?? recoverableSource?.title, source_duration_ms: source?.duration_ms ?? recoverableSource?.duration_ms, start_text: startText, end_text: endText, ranges, selected_id: selectedId, selected_range_ids: selectedRangeIds, output, job_id: job?.id, job_output_mode: joinedJob ? 'joined' : 'separate', job_range_numbers: jobRangeNumbers, step, current_ms: position.getSnapshot(), precision_open: precisionOpen, export_attempt: exportAttempt.current };
   }
 
   const saveDraft = useEffectEvent(() => {
@@ -270,7 +290,7 @@ export default function App() {
     };
   }, [position]);
 
-  useEffect(() => { draftWriter.current?.schedule(300); }, [source, ranges, selectedId, selectedRangeIds, output, job?.id, joinedJob, jobRangeNumbers, sessionReady, step, precisionOpen]);
+  useEffect(() => { draftWriter.current?.schedule(300); }, [source, ranges, selectedId, selectedRangeIds, output, job?.id, joinedJob, jobRangeNumbers, sessionReady, step, precisionOpen, startText, endText, recoverableSource]);
 
   useEffect(() => {
     if (!job || !activeJob(job) || cancelling) return;
@@ -396,6 +416,7 @@ export default function App() {
     if (step !== 2 || !source || !selected) return;
     if (event.code === 'KeyI') { event.preventDefault(); marker('start'); }
     if (event.code === 'KeyO') { event.preventDefault(); marker('end'); }
+    if ((event.code === 'ArrowLeft' || event.code === 'ArrowRight') && playerAvailable) { event.preventDefault(); player.current?.pause(); seek(position.getSnapshot() + (event.code === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 1000 : 100)); }
     if (event.code === 'Space' && playerAvailable) { event.preventDefault(); player.current?.toggle(); }
   });
   useEffect(() => {
@@ -422,7 +443,7 @@ export default function App() {
       const opened = file ? await api.upload(file, controller.signal, progress => { if (sourceController.current === controller && !controller.signal.aborted) setUploadProgress(progress); }) : await api.open(candidateUrl!, controller.signal);
       if (controller.signal.aborted) return;
       if (file && (!opened.width || !opened.height)) { setSourceError('В файле не найдено видео. Выберите файл с видеодорожкой.'); setStep(1); return; }
-      activateSource(opened);
+      if (!activateSource(opened)) return;
       if (!file) setUrl(candidateUrl!);
       setNotice('Источник открыт. Укажите границы фрагмента.');
     } catch (error) {
@@ -432,14 +453,22 @@ export default function App() {
 
   function activateSource(opened: Source) {
     stopJobPolling.current?.(); stopJobPolling.current = null;
-    const range = newRange(opened.duration_ms, 0, limits);
+    const recovered = recoverableSource && keepRecoveredCuts;
+    if (recovered && ranges.some(range => range.end_ms > opened.duration_ms)) {
+      setSourceError('Эта запись короче сохранённых фрагментов. Откройте исходную запись или отключите восстановление фрагментов.');
+      setStep(1); return false;
+    }
+    const nextRanges = recovered ? ranges : [newRange(opened.duration_ms, 0, limits)];
+    const range = nextRanges.find(range => range.id === selectedId) ?? nextRanges[0];
     player.current?.pause(); previewEnd.current = null; restoredPosition.current = null;
-    setSource(opened); setRanges([range]); setSelectedId(range.id); setFields(range);
-    setSelectedRangeIds([range.id]); setRevealId(range.id); setSimpleView(simpleRangeView(opened.duration_ms, range)); setPrecisionOpen(opened.preview_kind === 'none' || (!opened.preview_url && !opened.embed_url));
-    position.set(0); setViewCenter((range.start_ms + range.end_ms) / 2); setSpan(Math.min(opened.duration_ms, preferences.timeline_span)); setOutput(withoutSourceAudio(preferences.output));
+    setSource(opened); setRanges(nextRanges); setSelectedId(range.id); if (!recovered) setFields(range);
+    setSelectedRangeIds(recovered ? selectedRangeIds : [range.id]); setRevealId(range.id); setSimpleView(simpleRangeView(opened.duration_ms, range)); setPrecisionOpen(opened.preview_kind === 'none' || (!opened.preview_url && !opened.embed_url));
+    position.set(0); setViewCenter((range.start_ms + range.end_ms) / 2); setSpan(Math.min(opened.duration_ms, preferences.timeline_span)); if (!recovered) setOutput(withoutSourceAudio(preferences.output));
+    setRecoverableSource(null);
     exportAttempt.current = null;
     setJob(null); setJoinedJob(false); setJobRangeNumbers([]); setJobError(''); setPreviewing(false); setPlayerAvailable(false); setStep(2);
     setAdvancedOutputOpen(false);
+    return true;
   }
 
   async function reopenSource(previous: Source) {
@@ -450,7 +479,7 @@ export default function App() {
     setSourceBusy(true); setSourceError('');
     try {
       const fresh = await api.source(previous.id, controller.signal);
-      if (!controller.signal.aborted) { activateSource(fresh); setNotice('Источник открыт. Укажите границы фрагмента.'); }
+      if (!controller.signal.aborted && activateSource(fresh)) setNotice('Источник открыт. Укажите границы фрагмента.');
     } catch (error) { if (!controller.signal.aborted) setSourceError(errorMessage(error)); }
     finally { if (sourceController.current === controller) { sourceController.current = null; setSourceBusy(false); } }
   }
@@ -518,6 +547,23 @@ export default function App() {
     setRevealId(result.addedIds.at(-1)!); setNotice('Выбранные фрагменты продублированы.');
   }
 
+  function nudgeBoundary(which: 'start' | 'end', delta: number) {
+    const range = validateFields(true); if (!range) return;
+    const start = which === 'start' ? Math.max(0, Math.min(range.end_ms - 100, range.start_ms + delta)) : range.start_ms;
+    const end = which === 'end' ? Math.min(duration, Math.max(range.start_ms + 100, range.end_ms + delta)) : range.end_ms;
+    const error = validateRange(start, end, duration, limits.max_range_ms);
+    if (error) { setRangeError(error); return; }
+    changeBounds(start, end); revealBoundary(which === 'start' ? start : end);
+  }
+
+  function audition(which: 'start' | 'end') {
+    const range = validateFields(true); if (!range || !playerAvailable) return;
+    commitFields();
+    const [start, end] = boundaryAudition(which === 'start' ? range.start_ms : range.end_ms, duration);
+    player.current?.pause(); player.current?.seek(start);
+    previewEnd.current = end; setPreviewing(true); player.current?.play();
+  }
+
   function preview() {
     if (previewing) { player.current?.pause(); previewEnd.current = null; setPreviewing(false); return; }
     const range = validateFields(true);
@@ -564,7 +610,7 @@ export default function App() {
 
   function clearDeletedSource() {
     player.current?.pause(); previewEnd.current = null; restoredPosition.current = null;
-    exportAttempt.current = null; setSource(null); setRanges([]); setSelectedId(''); setSelectedRangeIds([]);
+    exportAttempt.current = null; setSource(null); setRecoverableSource(null); setRanges([]); setSelectedId(''); setSelectedRangeIds([]);
     setJob(null); setJoinedJob(false); setJobRangeNumbers([]); setJobError(''); setStartText(''); setEndText(''); setRangeError('');
     setPreviewing(false); setPlayerAvailable(false); position.set(0); setStep(1);
     // Persist immediately so closing the page cannot resurrect deleted IDs.
@@ -634,6 +680,7 @@ export default function App() {
     <main id="editor" className={`stage-page stage-${step}`}>
       <nav className="steps-nav" aria-label={t('Шаги работы')}><ol>{(['Видео', 'Момент', 'Фрагменты', 'Экспорт'] as const).map((label, index) => <li key={label}><button type="button" disabled={sourceBusy || (index > 0 && !source && !(index === 3 && job)) || (index === 3 && !exportRanges.length && !job) || (index === 1 && !ranges.length)} aria-current={step === index + 1 ? 'step' : undefined} onClick={() => goToStep((index + 1) as WorkbenchStep)}><span className="step-number">{index + 1}</span><span>{t(label)}</span></button>{index < 3 && <span className="step-connector" aria-hidden="true" />}</li>)}</ol></nav>
       <div className="page-heading"><div><p className="step-caption">{t('Шаг {current} из 4', { current: step })}</p><h1 ref={stageHeading} tabIndex={-1}>{t(stageTitles[step - 1])}</h1><p>{t(stageDescriptions[step - 1])}</p></div>{step > 2 && <button className="text-button change-source" type="button" onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button>}</div>
+      {recoverableSource && step === 1 && <section className="draft-recovery" aria-labelledby="draft-recovery-heading"><h2 id="draft-recovery-heading">{t('Фрагменты сохранены')}</h2>{recoverableSource.title && <p>{recoverableSource.title}</p>}<p>{t('Загрузите ту же запись или откройте её ссылку. Границы, названия и настройки экспорта восстановятся.')}</p><ol>{ranges.map(range => <li key={range.id}><strong>{range.label || t('Фрагмент')}</strong><span>{formatTimecode(range.start_ms, true)} — {formatTimecode(range.end_ms, true)}</span></li>)}</ol><label><input type="checkbox" checked={keepRecoveredCuts} onChange={event => setKeepRecoveredCuts(event.target.checked)} />{t('Восстановить фрагменты в открываемом видео')}</label></section>}
       {step === 1 && <SourceChooser url={url} onUrl={value => { setUrl(value); setSourceError(''); }} onOpen={() => void openSource()} onFile={file => void openSource(file)} busy={sourceBusy} progress={uploadProgress} maximumBytes={limits.max_source_bytes} blocked={deletingSource} processing={submitting || cancelling} ready={sessionReady} error={sourceError} onCancel={() => { sourceController.current?.abort(); sourceController.current = null; setSourceBusy(false); setUploadProgress(null); }} onReconnect={() => { setSourceError(''); setSessionAttempt(n => n + 1); }} />}
       {step === 1 && sessionReady && <SourceLibrary currentID={source?.id} disabled={sourceBusy || submitting || cancelling || deletingSource} currentBusy={busy} onBusy={setDeletingSource} onOpen={value => void reopenSource(value)} onDeleted={id => { if (id === currentSourceID.current) clearDeletedSource(); else setNotice('Видео и связанные файлы удалены.'); }} />}
       {sessionReady && (step === 1 || step === 4) && <JobLibrary refreshKey={job?.id + ":" + job?.status} initiallyOpen={step === 1 && activeJob(job)} />}
@@ -646,19 +693,20 @@ export default function App() {
           {selected && <div className="moment-controls">
             <AudioTrackSelector id="audio-track-preview" output={output} tracks={tracks} loading={tracksLoading} error={tracksError} disabled={busy} onChange={changeAudio} onRetry={() => setTrackRevision(value => value + 1)} />
             <div className="moment-boundaries"><div><label htmlFor="range-start">{t('Начало')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время начала: {time}', { time: displayTimecode(selected.start_ms) })} onClick={() => editTime('start')}>{displayTimecode(selected.start_ms)}<Icon name="edit" size={14} /></button><input ref={startField} id="range-start" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span>{t('Начало здесь')}<kbd>I</kbd></button></div><div><label htmlFor="range-end">{t('Конец')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время конца: {time}', { time: displayTimecode(selected.end_ms) })} onClick={() => editTime('end')}>{displayTimecode(selected.end_ms)}<Icon name="edit" size={14} /></button><input ref={endField} id="range-end" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={endText} onChange={event => { setEndText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span>{t('Конец здесь')}<kbd>O</kbd></button></div><div className="moment-duration"><span>{t('Длительность')}</span><strong>{durationLabel(selected.end_ms - selected.start_ms, locale)}</strong></div></div>
-            <Timeline duration={duration} position={position} ranges={ranges} selected={selected} view={precisionOpen ? view : simpleView} showOverview={precisionOpen} onSeek={seek} onRange={changeBounds} onReveal={revealBoundary} />
+            <Timeline duration={duration} position={position} ranges={ranges} selected={selected} view={precisionOpen ? view : simpleView} showOverview={precisionOpen} onSeek={seek} onRange={changeBounds} onReveal={revealBoundary} sourceID={source.id} active={step === 2} />
             <div className="moment-selection-tools"><span>{t('Фрагмент до {limit}', { limit: durationLabel(limits.max_range_ms, locale) })}</span>{duration <= Math.min(limits.max_range_ms, limits.max_job_ms) && <button type="button" className="text-button" disabled={busy} onClick={() => { changeBounds(0, duration); setSimpleView([0, duration]); setViewCenter(duration / 2); }}>{t('Выбрать всё видео')}</button>}</div>
             <div className="moment-preview"><button className="button secondary" type="button" disabled={!playerAvailable} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} />{previewing ? t('Остановить просмотр') : t('Посмотреть фрагмент')}</button><button className="text-button precision-toggle" type="button" aria-expanded={precisionOpen} aria-controls="range-start range-end precision-controls" onClick={() => { if (precisionOpen && invalidDraft) { validateFields(true); return; } if (precisionOpen) setSimpleView(simpleRangeView(duration, selected)); setPrecisionOpen(!precisionOpen); setViewCenter((selected.start_ms + selected.end_ms) / 2); }}>{t('Точное время и шкала')}<Icon name="chevron" size={15} style={{ transform: precisionOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button></div>
+            <div className="boundary-audition" role="group" aria-label={t('Проверить границы')}><button type="button" className="text-button" disabled={!playerAvailable} onClick={() => audition('start')}><Icon name="play" size={13} />{t('Проверить начало')}</button><button type="button" className="text-button" disabled={!playerAvailable} onClick={() => audition('end')}><Icon name="play" size={13} />{t('Проверить конец')}</button><span>{t('По 1,5 с до и после границы')}</span></div>
             <div id="precision-controls" className="precision-controls" hidden={!precisionOpen}>
               <p id="time-hint" className="field-hint">{t('Часы:минуты:секунды. Можно ввести 83:10 или 01:23:10.250.')}</p>
-              <div className="precision-zoom"><label htmlFor="zoom">{t('Масштаб шкалы')}</label><div className="zoom-controls"><button type="button" className="icon-button" aria-label={t('Предыдущий участок шкалы')} disabled={view[0] <= 0} onClick={() => setViewCenter(Math.max(0, viewCenter - span / 2))}><Icon name="chevron" size={16} style={{ transform: 'rotate(180deg)' }} /></button><SelectControl id="zoom" value={String(span)} label={t('Масштаб шкалы')} onChange={value => { setSpan(Number(value)); setViewCenter((selected.start_ms + selected.end_ms) / 2); }} options={zoomOptions.map(value => ({ value: String(value), label: value === duration ? t('Всё видео') : value === 300000 ? t('5 минут') : value === 60000 ? t('1 минута') : t('10 секунд') }))} /><button type="button" className="icon-button" aria-label={t('Следующий участок шкалы')} disabled={view[1] >= duration} onClick={() => setViewCenter(Math.min(duration, viewCenter + span / 2))}><Icon name="chevron" size={16} /></button></div><button className="text-button" type="button" onClick={fitSelection}>{t('Показать границы')}</button></div>
+              <div className="boundary-steps">{(['start', 'end'] as const).map(which => <div key={which} role="group" aria-label={t(which === 'start' ? 'Сдвиг начала' : 'Сдвиг конца')}><span>{t(which === 'start' ? 'Начало' : 'Конец')}</span><button type="button" aria-label={t(which === 'start' ? 'Начало на 0,1 с раньше' : 'Конец на 0,1 с раньше')} onClick={() => nudgeBoundary(which, -100)}>{locale === 'en' ? '−0.1' : '−0,1'} {t('с')}</button><button type="button" aria-label={t(which === 'start' ? 'Начало на 0,1 с позже' : 'Конец на 0,1 с позже')} onClick={() => nudgeBoundary(which, 100)}>{locale === 'en' ? '+0.1' : '+0,1'} {t('с')}</button></div>)}</div><div className="precision-zoom"><label htmlFor="zoom">{t('Масштаб шкалы')}</label><div className="zoom-controls"><button type="button" className="icon-button" aria-label={t('Предыдущий участок шкалы')} disabled={view[0] <= 0} onClick={() => setViewCenter(Math.max(0, viewCenter - span / 2))}><Icon name="chevron" size={16} style={{ transform: 'rotate(180deg)' }} /></button><SelectControl id="zoom" value={String(span)} label={t('Масштаб шкалы')} onChange={value => { setSpan(Number(value)); setViewCenter((selected.start_ms + selected.end_ms) / 2); }} options={zoomOptions.map(value => ({ value: String(value), label: value === duration ? t('Всё видео') : value === 300000 ? t('5 минут') : value === 60000 ? t('1 минута') : t('10 секунд') }))} /><button type="button" className="icon-button" aria-label={t('Следующий участок шкалы')} disabled={view[1] >= duration} onClick={() => setViewCenter(Math.min(duration, viewCenter + span / 2))}><Icon name="chevron" size={16} /></button></div><button className="text-button" type="button" onClick={fitSelection}>{t('Показать границы')}</button></div>
             </div>
             {rangeError && <p id="range-error" className="error-message" role="alert">{rangeError === 'Фрагмент превышает лимит сервиса. Сократите его.' ? t('Один фрагмент может длиться до {limit}.', { limit: durationLabel(limits.max_range_ms, locale) }) : t(rangeError)}</p>}
           </div>}
           </div>
         </div>
         <div className="stage-actions"><div className="moment-secondary-actions"><button className="text-button change-source" type="button" onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button><button className="text-button" type="button" onClick={() => setShowShortcuts(!showShortcuts)} aria-expanded={showShortcuts}><span className="keycap">?</span>{t('Горячие клавиши')}</button></div><div className="moment-next-actions"><button className="button primary" type="button" onClick={() => finishMoment(4)} disabled={sourceBusy || !selected}>{t('К скачиванию')}<Icon name="download" size={17} /></button><button className="button secondary" type="button" onClick={() => finishMoment(3)} disabled={sourceBusy || !selected}>{t('Список фрагментов')}</button></div></div>
-        {showShortcuts && <div className="shortcut-guide"><span><kbd>I</kbd>{t('начало по позиции плеера')}</span><span><kbd>O</kbd>{t('конец')}</span><span><kbd>{t('Пробел')}</kbd>{t('пауза / воспроизведение')}</span><span><kbd>←</kbd><kbd>→</kbd>{t('на ручке: 0,1 с;')}<kbd>Shift</kbd>{t(': 1 с')}</span><p>{t('Клавиши I, O и пробел работают вне полей ввода. В плеере действуют его собственные клавиши.')}</p></div>}
+        {showShortcuts && <div className="shortcut-guide"><span><kbd>I</kbd>{t('начало по позиции плеера')}</span><span><kbd>O</kbd>{t('конец')}</span><span><kbd>{t('Пробел')}</kbd>{t('пауза / воспроизведение')}</span><span><kbd>←</kbd><kbd>→</kbd>{t('перемотка или ручка: 0,1 с;')}<kbd>Shift</kbd>{t(': 1 с')}</span><p>{t('Клавиши I, O и пробел работают вне полей ввода. В плеере действуют его собственные клавиши.')}</p></div>}
       </section>}
       {step === 3 && source && <ClipLibrary limit={limits.max_ranges} ranges={ranges} selectedIds={selectedRangeIds} editedId={selectedId} revealId={revealId} onSelect={id => { setSelectedRangeIds(previous => previous.includes(id) ? previous.filter(value => value !== id) : [...previous, id]); setRevealId(id); }} onSelectAll={() => setSelectedRangeIds(exportRanges.length === ranges.length ? [] : ranges.map(range => range.id))} onEdit={pickRange} onAdd={addRange} onLabel={(id, label) => setRanges(previous => previous.map(range => range.id === id ? { ...range, label } : range))} onDuplicate={duplicateSelected} onDelete={() => removeSelected(selectedRangeIds)} onDeleteOne={id => removeSelected([id])} onRestore={snapshot => { setRanges(snapshot.ranges); setSelectedRangeIds(snapshot.selectedIds); setSelectedId(snapshot.editedId); setRevealId(snapshot.editedId); const active = snapshot.ranges.find(range => range.id === snapshot.editedId) ?? snapshot.ranges[0]; if (active) { setFields(active); setViewCenter((active.start_ms + active.end_ms) / 2); setSimpleView(simpleRangeView(duration, active)); } setNotice('Фрагменты восстановлены.'); }} onExport={() => goToStep(4)} />}
       {step === 4 && (source || job) && <div className="output-stage">
