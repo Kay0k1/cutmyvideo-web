@@ -4,6 +4,7 @@ import type { Source } from './types';
 import { Icon } from './Icons';
 import './Player.css';
 import { WindowPlayer } from './WindowPlayer';
+import { usePlaybackClock } from './usePlaybackClock';
 
 export interface PlayerControls { seek(ms: number): void; play(): void; pause(): void; toggle(): void; }
 interface YTPlayer {
@@ -82,7 +83,8 @@ export const Player = memo(forwardRef<PlayerControls, {
   noAudio?: boolean;
   onTime(ms: number): void;
   onAvailable(available: boolean): void;
-}>(({ source, active, audioTrack, noAudio, onTime, onAvailable }, ref) => {
+  onSourceUnavailable(id: string, verify?: boolean): void;
+}>(({ source, active, audioTrack, noAudio, onTime, onAvailable, onSourceUnavailable }, ref) => {
   const { t } = useLanguage();
   const video = useRef<HTMLVideoElement>(null);
   const host = useRef<HTMLDivElement>(null);
@@ -97,6 +99,7 @@ export const Player = memo(forwardRef<PlayerControls, {
   const windowPlayer = useRef<PlayerControls>(null);
   const useWindow = audioTrack !== undefined || noAudio === true || serverPreview || (!!source && !source.preview_url && !embedId(source.embed_url));
   const poster = source && source.thumbnail_url === `/api/v1/sources/${encodeURIComponent(source.id)}/thumbnail` ? source.thumbnail_url : undefined;
+  usePlaybackClock(video, active && !useWindow && !!source?.preview_url, () => callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000)), source?.id);
 
   function readyCommand(command: (player: YTPlayer) => void) {
     const instance = youtube.current;
@@ -214,9 +217,9 @@ export const Player = memo(forwardRef<PlayerControls, {
   </div>;
 
   return <div className="player-frame">
-    {useWindow ? <WindowPlayer key={`${source.id}:${audioTrack ?? 'default'}:${noAudio ?? false}`} ref={windowPlayer} source={source} audioTrack={audioTrack} noAudio={noAudio} active={active} poster={poster} initialPosition={lastTime.current.ms} onTime={ms => callbacks.current.onTime(ms)} onAvailable={onAvailable} /> : source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
+    {useWindow ? <WindowPlayer key={`${source.id}:${audioTrack ?? 'default'}:${noAudio ?? false}`} ref={windowPlayer} source={source} audioTrack={audioTrack} noAudio={noAudio} active={active} poster={poster} initialPosition={lastTime.current.ms} onTime={ms => callbacks.current.onTime(ms)} onAvailable={onAvailable} onSourceUnavailable={onSourceUnavailable} /> : source.preview_url ? <video key={source.id} ref={video} src={source.preview_url} poster={poster} controls playsInline preload="metadata" aria-label={source.title}
       onLoadedMetadata={() => { if (video.current && lastTime.current.ms > 0) video.current.currentTime = lastTime.current.ms / 1000; callbacks.current.onAvailable(true); }}
-      onTimeUpdate={() => callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000))}
+      onTimeUpdate={() => { if (!video.current?.seeking) callbacks.current.onTime(Math.round((video.current?.currentTime ?? 0) * 1000)); }}
       onError={() => { setServerPreview(true); callbacks.current.onAvailable(false); }} />
       : <div ref={host} className="youtube-player" />}
 

@@ -1,6 +1,11 @@
 export const PREVIEW_WINDOW_MS = 30_000;
 export const PREVIEW_WINDOW_MAX_BYTES = 16 * 1024 * 1024;
 
+/** Brief metadata leases should not add a whole second before playback. */
+export function foregroundPreviewRetryDelay(attempt: number): number {
+  return Math.min(1000, 100 * 2 ** Math.min(4, Math.max(0, attempt)));
+}
+
 export interface PreviewWindow {
   start: number;
   end: number;
