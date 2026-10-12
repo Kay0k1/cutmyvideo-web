@@ -4,6 +4,21 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+## 0.4.0 — 2026-10-12
+
+### Added
+- Independent per-video browser projects with legacy draft migration, source-reconnection checks and strict core-v1 plan import/export. Projects survive original-media cleanup; retained outputs remain available under their existing retention policy.
+- Touch/keyboard clip reordering and bounded per-project undo/redo, with one drag or completed name edit recorded as one action.
+- Progressive selected-audio waveform detail and overview. Visited sections fill gradually, with bounded browser/server caches and background priority.
+- A collapsed Frame editor with popular aspect ratios, custom width/height, draggable/resizable crop and keyboard controls. Accurate MP4 exports apply the same source-image geometry without stretching.
+- Default-on Delete source after export. Full success cleans original media and its derived previews after active operations finish, preserving browser projects and ready clips. An explicit opt-out retains the original under normal server retention; failed/cancelled exports do not trigger successful-completion cleanup.
+
+### Fixed
+- Cancelled project reads cannot overwrite a later source or attach an old job.
+- Export retry identity is persisted in the active project before submission and restored when returning to that project. Accepted work can be recovered after media removal with the same request/key; pending 0.3 retries preserve their original keep-source policy without changing new-video defaults.
+- Intentionally empty projects preserve source metadata and output/crop settings after media removal.
+- Full or unavailable browser storage prevents source switches that would discard unsaved work; full project indexes reject new media creation until space is freed.
+
 ## 0.3.0 — 2026-10-12
 
 ### Added
