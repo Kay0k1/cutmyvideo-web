@@ -764,3 +764,34 @@ Code verification records: core [checks](https://github.com/Kay0k1/cutmyvideo-co
 [public profile](https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38244469294),
 [archives and recovery](https://github.com/Kay0k1/cutmyvideo-core/actions/runs/38244469549),
 and web [product checks](https://github.com/Kay0k1/cutmyvideo-web/actions/runs/38244467937).
+
+
+## Per-video projects and edit history (2026-10-12)
+
+The editor migrates its single legacy draft into a bounded per-video browser
+project store. Source metadata, ranges/order/selection, unfinished time input,
+output options including crop, player position, and timeline view remain
+independent when switching videos. Source expiry or `media_removed` preserves
+project data and the latest retained job; a browser plan contains no resource IDs
+or authenticated URLs. Core-v1 JSON plans round-trip ordered selected intervals
+and options. Local CLI users replace the `input` filename with their media path.
+
+Reorder controls are buttons usable with touch and keyboard. Undo/redo stores up
+to 50 editor snapshots per project in the current tab, coalesces pointer drags and
+name edits, preserves native text-field undo, and clears the redo branch only
+when a real edit happens. Persisted projects survive a reload; action history does
+not. Invalid storage and plans are bounded before parsing and normalizing.
+
+Validation on an isolated Vite instance with mocked API data:
+
+- 216 frontend unit tests passed, including plan schema/security, migration,
+  independent stores and history limits/transactions.
+- TypeScript validation passed.
+- 10 Chromium browser checks passed across desktop and Pixel 7 viewports:
+  switching/reload, independent histories, drag coalescing, legacy migration,
+  removed-media recovery, plan import/export with undo, and completed output
+  downloads after original-media removal.
+
+These browser checks validate product behavior; backend cleanup, real-media
+geometry and production verification are covered by the integrated release
+checks rather than this mocked suite.

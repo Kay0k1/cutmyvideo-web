@@ -7,7 +7,7 @@ import { keyboardTrimValue, pointerSeekValue, pointerTrimValue } from './timelin
 import type { PlaybackPosition } from './playbackPosition';
 import { Storyboard } from './Storyboard';
 
-export function Timeline({ duration, position, ranges, selected, view, showOverview = true, sourceID, active, onSeek, onRange, onReveal }: {
+export function Timeline({ duration, position, ranges, selected, view, showOverview = true, sourceID, active, onSeek, onRange, onReveal, onBeginChange, onEndChange }: {
   duration: number;
   position: PlaybackPosition;
   ranges: ClipRange[];
@@ -19,6 +19,8 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
   onSeek(ms: number): void;
   onRange(start: number, end: number): void;
   onReveal(ms: number): void;
+  onBeginChange?(): void;
+  onEndChange?(): void;
 }) {
   const { t } = useLanguage();
   const current = useSyncExternalStore(position.subscribe, position.getSnapshot);
@@ -56,7 +58,7 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
     event.preventDefault(); move(which, next); onReveal(next);
   };
   const endDrag = (which: 'start' | 'end', pointer: number) => {
-    if (drag.current?.which === which && drag.current.pointer === pointer) { drag.current = null; setDragging(null); }
+    if (drag.current?.which === which && drag.current.pointer === pointer) { drag.current = null; setDragging(null); onEndChange?.(); }
   };
   const endScrub = (pointer: number) => {
     if (scrub.current?.pointer === pointer) { scrub.current = null; setScrubbing(false); }
@@ -75,6 +77,7 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
       onPointerDown={event => {
         if (event.button !== 0 || drag.current || scrub.current) return;
         event.stopPropagation(); event.currentTarget.focus({ preventScroll: true });
+        onBeginChange?.();
         drag.current = { which, pointer: event.pointerId, x: event.clientX, value, width: track.current!.getBoundingClientRect().width, span };
         setDragging(which); event.currentTarget.setPointerCapture(event.pointerId);
       }}

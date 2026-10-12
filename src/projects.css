@@ -1,0 +1,22 @@
+.project-library { margin: 1.25rem 0; }
+.project-library > .text-button { gap: .5rem; }
+.project-library ul { list-style: none; padding: 0; margin: .75rem 0; max-height: 23rem; overflow-y: auto; }
+.project-library li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .8rem 0; border-bottom: 1px solid var(--line); }
+.project-library li > div:first-child { min-width: 0; }
+.project-library h3 { font-size: .95rem; margin: 0 0 .25rem; overflow-wrap: anywhere; }
+.project-library li span { font-size: .85rem; color: var(--muted); }
+.project-plan-actions, .project-row-actions, .edit-history-actions { display: flex; align-items: center; gap: .5rem; }
+.edit-history-actions { justify-content: flex-end; margin: .4rem 0; }
+.edit-history-actions button { font-size: .85rem; }
+.clip-reorder { display: flex; flex-direction: column; gap: .15rem; }
+.clip-reorder .icon-button { width: 2.75rem; min-height: 2.75rem; height: 2.75rem; }
+.clip-library .clip-list > li { grid-template-columns: auto minmax(0, 1fr) auto auto auto; }
+@media (max-width: 600px) {
+  .project-library li { align-items: flex-start; gap: .5rem; }
+  .project-row-actions { flex-shrink: 0; }
+  .project-row-actions .button { padding-left: .65rem; padding-right: .65rem; }
+  .clip-library .clip-list > li { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .clip-library .clip-list .clip-reorder { grid-column: 3; grid-row: 1; }
+  .clip-library .clip-list .clip-edit { grid-column: 2; grid-row: 2; }
+  .clip-library .clip-list .delete-range { grid-column: 4; grid-row: 1; }
+}

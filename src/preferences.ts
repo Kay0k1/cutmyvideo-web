@@ -6,7 +6,7 @@ export const defaultPreferences: Preferences = { output: { format: 'mp4', qualit
 
 export function readOutputSettings(value: unknown): OutputSettings | null {
   if (typeof value !== 'object' || value === null) return null;
-  const { format, quality, cut_mode, output_mode, audio_track, no_audio, subtitle_mode } = value as Record<string, unknown>;
+  const { format, quality, cut_mode, output_mode, audio_track, no_audio, subtitle_mode, crop } = value as Record<string, unknown>;
   if ((format !== 'mp4' && format !== 'mp3' && format !== 'mkv') || (quality !== 'best' && quality !== '1080p' && quality !== '720p') || (cut_mode !== 'accurate' && cut_mode !== 'copy')) return null;
   if (format === 'mkv' && cut_mode !== 'copy') return null;
   if (audio_track !== undefined && (typeof audio_track !== 'number' || !Number.isSafeInteger(audio_track) || audio_track < 0 || audio_track > 999)) return null;
@@ -15,13 +15,15 @@ export function readOutputSettings(value: unknown): OutputSettings | null {
   if (output_mode !== undefined && output_mode !== 'separate' && output_mode !== 'joined') return null;
   if (subtitle_mode !== undefined && subtitle_mode !== 'omit' && subtitle_mode !== 'preserve') return null;
   if (subtitle_mode === 'preserve' && (format === 'mp3' || cut_mode !== 'copy')) return null;
+  if (crop !== undefined && (!crop || typeof crop !== 'object' || Array.isArray(crop) || !['x', 'y', 'width', 'height'].every(key => typeof (crop as Record<string, unknown>)[key] === 'number' && Number.isFinite((crop as Record<string, number>)[key])))) return null;
+  if (crop !== undefined) { const r = crop as { x: number; y: number; width: number; height: number }; if (r.x < 0 || r.y < 0 || r.width <= 0 || r.height <= 0 || r.x + r.width > 1.000001 || r.y + r.height > 1.000001) return null; }
   return { format, quality, cut_mode: format === 'mp3' ? 'accurate' : cut_mode,
     ...(output_mode !== undefined ? { output_mode } : {}), ...(audio_track !== undefined ? { audio_track } : {}),
-    ...(no_audio !== undefined ? { no_audio } : {}), ...(subtitle_mode !== undefined ? { subtitle_mode } : {}) };
+    ...(no_audio !== undefined ? { no_audio } : {}), ...(subtitle_mode !== undefined ? { subtitle_mode } : {}), ...(crop !== undefined ? { crop: crop as OutputSettings['crop'] } : {}) };
 }
 
 // Stream indices belong to one source and must never become defaults for another.
-export function withoutSourceAudio({ audio_track: _audio, no_audio: _silent, ...output }: OutputSettings): OutputSettings { return output; }
+export function withoutSourceAudio({ audio_track: _audio, no_audio: _silent, crop: _crop, ...output }: OutputSettings): OutputSettings { return output; }
 
 export function readPreferences(): Preferences {
   try {
