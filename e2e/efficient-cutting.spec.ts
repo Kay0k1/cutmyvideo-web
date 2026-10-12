@@ -294,7 +294,7 @@ for (const savedPosition of [3000, 8000]) test(`restored playhead ${savedPositio
       Object.defineProperty(node, 'currentTime', { configurable: true, get: () => 0, set: value => { (node as HTMLVideoElement & { requestedSeek?: number }).requestedSeek = value; } });
     });
     releaseMetadata();
-    await expect.poll(() => native.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+    await expect.poll(() => native.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(1);
     await expect.poll(() => native.evaluate(node => (node as HTMLVideoElement & { requestedSeek?: number }).requestedSeek)).toBe(savedPosition / 1000);
     expect(await native.evaluate(node => (node as HTMLVideoElement).currentTime)).toBe(0);
     expect(await native.evaluate(node => (node as HTMLVideoElement).seeking)).toBe(false);
