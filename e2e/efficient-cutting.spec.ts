@@ -251,6 +251,25 @@ test('save-next preserves an existing excluded clip while including the new one'
   await expect(page.getByRole('checkbox', { name: 'Выбрать фрагмент 4', exact: true })).toBeChecked();
 });
 
+for (const playhead of [0, 3000, 12000]) test(`library add opens an editable cut from a full-length selection at playhead ${playhead}`, async ({ page }) => {
+  await prepare(page, { ranges: [{ ...cuts[0], start_ms: 0, end_ms: 12000 }], selected_id: 'later', selected_range_ids: ['later'], current_ms: playhead }, async () => {
+    await page.route(`**/api/v1/sources/${source.id}`, route => route.fulfill({ json: { ...source, duration_ms: 12000 } }));
+  });
+  await goToClips(page);
+  await page.getByRole('button', { name: 'Добавить фрагмент', exact: true }).click();
+  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step');
+  await expect(page.locator('.moment-clip-navigation')).toContainText('Фрагмент 2 из 2.');
+  await showExactTimes(page);
+  // At the exact source end, choose a usable default interval ending there.
+  await expect(page.locator('#range-start')).toHaveValue(playhead === 3000 ? '00:00:03.000' : '00:00:00.000');
+  await expect(page.locator('#range-end')).toHaveValue('00:00:12.000');
+  await page.getByRole('button', { name: 'Отменить изменение', exact: true }).click();
+  await expect(page.locator('.moment-clip-navigation')).toContainText('Фрагмент 1 из 1.');
+  await page.getByRole('button', { name: 'Повторить изменение', exact: true }).click();
+  await goToClips(page); await expect(page.locator('.clip-list > li')).toHaveCount(2);
+  await expect(page.getByRole('checkbox', { name: 'Выбрать фрагмент 2', exact: true })).toBeChecked();
+});
+
 for (const failure of ['slow', 'temporary', 'expired'] as const) test(`saved prior files survive ${failure} metadata reads according to their availability`, async ({ page }) => {
   const file = (id: string, index: number) => ({ id, filename: `${cuts[index].label}.mp4`, download_url: `/retained-${id}.mp4`, size_bytes: 100, actual_start_ms: cuts[index].start_ms, actual_end_ms: cuts[index].end_ms });
   const previous = { id: 'prior-ready', status: 'failed', stage: 'failed', message: '', items: [{ ...cuts[0], id: 'old-ready-item', status: 'succeeded', artifact: file('old-ready', 0) }, { ...cuts[2], id: 'old-failed-item', status: 'failed', artifact: null }] };

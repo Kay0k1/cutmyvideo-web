@@ -885,13 +885,25 @@ export default function App() {
   }
 
   function addRange() {
+    appendRange(true);
+  }
+
+  function addLibraryRange() {
+    appendRange(false);
+  }
+
+  function appendRange(continueCurrent: boolean) {
     if (!source || ranges.length >= limits.max_ranges) return;
     const committed = selected ? validateFields(true) : null;
     if (selected && !committed) { setStep(2); return; }
-    // Continue after the current cut, or respect a different moment the user
-    // deliberately found outside it (including earlier parts of the recording).
     const playhead = position.getSnapshot();
-    const nextStart = committed && playhead >= committed.start_ms && playhead <= committed.end_ms ? committed.end_ms : playhead;
+    // Save-next follows the cut being edited. Adding from the library starts
+    // at the playhead, even when the current cut covers the whole recording.
+    const defaultLength = Math.min(30000, duration, limits.max_range_ms, limits.max_job_ms);
+    const libraryStart = playhead >= duration - 100 ? Math.max(0, duration - defaultLength) : playhead;
+    const nextStart = continueCurrent
+      ? committed && playhead >= committed.start_ms && playhead <= committed.end_ms ? committed.end_ms : playhead
+      : libraryStart;
     if (nextStart >= duration) { setRangeError('Видео закончилось. Перейдите к другому моменту на шкале.'); return; }
     rememberHistory();
     const range = newRange(duration, nextStart, limits);
@@ -1179,7 +1191,7 @@ export default function App() {
         <div className="stage-actions"><div className="moment-secondary-actions"><button className="text-button change-source" type="button" onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button><button className="text-button" type="button" onClick={() => setShowShortcuts(!showShortcuts)} aria-expanded={showShortcuts}><span className="keycap">?</span>{t('Горячие клавиши')}</button></div><div className="moment-next-actions"><button className="button primary" type="button" onClick={() => finishMoment(4)} disabled={sourceBusy || !selected}>{t('К скачиванию')}<Icon name="download" size={17} /></button><button className="button secondary" type="button" onClick={() => finishMoment(3)} disabled={sourceBusy || !selected}>{t('Список фрагментов')}</button></div></div>
         {showShortcuts && <div className="shortcut-guide"><span><kbd>I</kbd>{t('начало по позиции плеера')}</span><span><kbd>O</kbd>{t('конец')}</span><span><kbd>N</kbd>{t('сохранить и добавить следующий')}</span><span><kbd>[</kbd><kbd>]</kbd>{t('предыдущий / следующий фрагмент')}</span><span><kbd>{t('Пробел')}</kbd>{t('пауза / воспроизведение')}</span><span><kbd>←</kbd><kbd>→</kbd>{t('перемотка или ручка: 0,1 с;')}<kbd>Shift</kbd>{t(': 1 с')}</span><p>{t('Клавиши I, O и пробел работают вне полей ввода. В плеере действуют его собственные клавиши.')}</p></div>}
       </section>}
-      {step === 3 && source && <ClipLibrary limit={limits.max_ranges} ranges={ranges} selectedIds={selectedRangeIds} editedId={selectedId} revealId={revealId} onSelect={id => { setSelectedRangeIds(previous => previous.includes(id) ? previous.filter(value => value !== id) : [...previous, id]); setRevealId(id); }} onSelectAll={() => setSelectedRangeIds(exportRanges.length === ranges.length ? [] : ranges.map(range => range.id))} onEdit={pickRange} onAdd={addRange} onBeginChange={beginHistory} onEndChange={finishHistory} onMove={moveRange} onLabel={(id, label) => { rememberHistory(); setRanges(previous => previous.map(range => range.id === id ? { ...range, label } : range)); }} onDuplicate={duplicateSelected} onDelete={() => removeSelected(selectedRangeIds)} onDeleteOne={id => removeSelected([id])} onPreview={previewSequence} canPreview={playerAvailable && !invalidDraft} onExport={() => goToStep(4)} />}
+      {step === 3 && source && <ClipLibrary limit={limits.max_ranges} ranges={ranges} selectedIds={selectedRangeIds} editedId={selectedId} revealId={revealId} onSelect={id => { setSelectedRangeIds(previous => previous.includes(id) ? previous.filter(value => value !== id) : [...previous, id]); setRevealId(id); }} onSelectAll={() => setSelectedRangeIds(exportRanges.length === ranges.length ? [] : ranges.map(range => range.id))} onEdit={pickRange} onAdd={addLibraryRange} onBeginChange={beginHistory} onEndChange={finishHistory} onMove={moveRange} onLabel={(id, label) => { rememberHistory(); setRanges(previous => previous.map(range => range.id === id ? { ...range, label } : range)); }} onDuplicate={duplicateSelected} onDelete={() => removeSelected(selectedRangeIds)} onDeleteOne={id => removeSelected([id])} onPreview={previewSequence} canPreview={playerAvailable && !invalidDraft} onExport={() => goToStep(4)} />}
       {step === 4 && (source || job || retryOutput) && <div className="output-stage">
         {resultsPanel}
         {source && <div className="output-grid"><div className="output-overview"><section className="output-selection" aria-labelledby="output-selection-heading"><div className="output-source"><Icon name="file" size={20} /><span>{source.title}</span></div><h2 id="output-selection-heading">{t('Выбранные фрагменты')}</h2>{!exportRanges.length && <p className="field-hint">{t('Выберите хотя бы один фрагмент для экспорта.')}</p>}<ol>{exportRanges.map((range, index) => <li key={range.id}><span className="range-index">{index + 1}</span><div><strong>{range.label || `${t('Фрагмент')} ${ranges.findIndex(original => original.id === range.id) + 1}`}</strong><span>{displayTimecode(range.start_ms)} — {displayTimecode(range.end_ms)}</span></div><span>{durationLabel(range.end_ms - range.start_ms, locale)}</span></li>)}</ol><button className="text-button" type="button" onClick={() => goToStep(3)}><Icon name="chevron" size={17} style={{ transform: 'rotate(180deg)' }} />{t('К списку фрагментов')}</button></section></div>

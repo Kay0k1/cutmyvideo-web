@@ -288,6 +288,13 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
     await diagnoseNativePreview(touchPage, testInfo, { browserName, headless, context: 'touch' }, async () => {
       await touchPage.goto('/')
       if (browserName === 'chromium') chromeTouch = await touchContext.newCDPSession(touchPage)
+      // A separate tab starts with its own active project and selection. Shared
+      // localStorage contains the cuts, but this context has no session view.
+      await touchPage.getByRole('button', { name: /^(Мои проекты|My projects)$/ }).click()
+      await expect(touchPage.locator('.project-row-actions')).toHaveCount(1)
+      await touchPage.getByRole('button', { name: /^(Открыть проект «|Open project “)/ }).click()
+      await goToClips(touchPage)
+      await touchPage.getByRole('button', { name: /^(Редактировать фрагмент 2|Edit clip 2)$/ }).click()
       await goToMoment(touchPage)
       await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(1)
       await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).duration)).toBeCloseTo(12, 1)
