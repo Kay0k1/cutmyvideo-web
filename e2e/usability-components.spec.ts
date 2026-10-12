@@ -80,7 +80,7 @@ test('select-all text is tappable and Undo keeps surviving selections made after
   await page.getByRole('button', { name: 'Delete clip 1', exact: true }).click()
   await expect(page.getByLabel('Clip 1 name', { exact: true })).toHaveValue('Second moment')
   await page.getByRole('checkbox', { name: 'Select clip 1', exact: true }).check()
-  await page.getByRole('button', { name: 'Restore clips', exact: true }).click()
+  await page.getByRole('button', { name: 'Undo change', exact: true }).click()
   await expect(page.getByLabel('Clip 1 name', { exact: true })).toHaveValue('First moment')
   await expect(page.getByLabel('Clip 2 name', { exact: true })).toHaveValue('Second moment')
   await expect(first).toBeChecked()
