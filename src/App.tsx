@@ -124,6 +124,8 @@ export default function App() {
   const [sourceTracks, setSourceTracks] = useState<{ sourceID: string; tracks: MediaTrack[] | null; loading: boolean; error: string }>({ sourceID: '', tracks: null, loading: false, error: '' });
   const [cropOpen, setCropOpen] = useState(false);
   const [cropContainer, setCropContainer] = useState<HTMLElement | null>(null);
+  const momentControls = useRef<HTMLDivElement>(null);
+  const [controlsOverflow, setControlsOverflow] = useState(false);
   const [displayGeometry, setDisplayGeometry] = useState<{ id: string; width: number; height: number } | null>(null);
   const [trackRevision, setTrackRevision] = useState(0);
   const [job, setJob] = useState<Job | null>(null);
@@ -661,6 +663,24 @@ export default function App() {
     previousStep.current = step;
   }, [step]);
 
+  useEffect(() => {
+    const node = momentControls.current;
+    if (!node) { setControlsOverflow(false); return; }
+    const measure = () => setControlsOverflow(node.scrollHeight > node.clientHeight + 1);
+    let frame: number | undefined;
+    const schedule = () => { if (frame !== undefined) cancelAnimationFrame(frame); frame = requestAnimationFrame(measure); };
+    const observer = new ResizeObserver(schedule);
+    observer.observe(node);
+    const observeContent = () => {
+      for (const child of node.children) observer.observe(child);
+      schedule();
+    };
+    const mutations = new MutationObserver(observeContent);
+    mutations.observe(node, { childList: true });
+    observeContent();
+    return () => { observer.disconnect(); mutations.disconnect(); if (frame !== undefined) cancelAnimationFrame(frame); };
+  }, [source?.id, selected?.id, workspaceVisible]);
+
   function goToStep(next: WorkbenchStep) {
     if (!sessionReady || submitting || mutationPending.current) return;
     if (next > 1 && !source && !(next === 4 && (job || retryOutput))) return;
@@ -1196,7 +1216,7 @@ export default function App() {
     {jobError && <p className="error-message" role="alert">{t(jobError)}</p>}
   </form></section>;
 
-  return <>
+  return <div className={`app-shell${workspaceVisible ? ' workspace-shell' : ''}`}>
     <a className="skip-link" href="#editor">{t('К выбору фрагмента')}</a>
     <header className="site-header"><div className="header-inner">
       <a className="brand" href="/" aria-label={t('cutmyvideo — главная')}><span className="brand-symbol"><Icon name="cut" size={20} /></span><span>cutmy<span className="brand-suffix">video</span></span></a>
@@ -1221,10 +1241,10 @@ export default function App() {
           <div className="moment-layout">
           <Player ref={player} source={source} initialPosition={position.getSnapshot()} audioTrack={previewAudioTrack} noAudio={output.no_audio} forceWindow={(cropOpen || !!output.crop) && !source.preview_url} onGeometry={mediaGeometry} active={workspaceVisible} onAvailable={playerAvailability} onTime={playbackPosition} onSourceUnavailable={sourceUnavailable} />
           {output.crop && !cropOpen && cropContainer && <CropPreview crop={output.crop} container={cropContainer} />}
-          {selected && <div className="moment-controls">
+          {selected && <div ref={momentControls} className={`moment-controls${controlsOverflow ? ' controls-overflow' : ''}`}>
             <div className="moment-boundaries"><div><label htmlFor="range-start">{t('Начало')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время начала: {time}', { time: displayTimecode(selected.start_ms) })} onClick={() => editTime('start')}>{displayTimecode(selected.start_ms)}<Icon name="edit" size={14} /></button><input ref={startField} id="range-start" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span><span className="marker-text">{t('Начало здесь')}</span><kbd>I</kbd></button></div><div><label htmlFor="range-end">{t('Конец')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время конца: {time}', { time: displayTimecode(selected.end_ms) })} onClick={() => editTime('end')}>{displayTimecode(selected.end_ms)}<Icon name="edit" size={14} /></button><input ref={endField} id="range-end" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={endText} onChange={event => { setEndText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span><span className="marker-text">{t('Конец здесь')}</span><kbd>O</kbd></button></div><div className="moment-duration"><span>{t('Длительность')}</span><strong>{durationLabel(selected.end_ms - selected.start_ms, locale)}</strong></div></div>
             <Timeline compact duration={duration} position={position} ranges={ranges} selected={selected} view={precisionOpen ? view : simpleView} showOverview={precisionOpen} onSeek={seek} onRange={changeBounds} onReveal={ms => { revealBoundary(ms); seek(ms); }} onBeginChange={beginHistory} onEndChange={finishBoundaryChange} audioTrack={previewAudioTrack} noAudio={output.no_audio} sourceID={source.id} active={workspaceVisible} />
-            <div className="workspace-toolstrip"><div className="moment-preview"><button className="button secondary" type="button" disabled={!playerAvailable} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} />{previewing ? t('Остановить просмотр') : t('Посмотреть фрагмент')}</button><button className="text-button precision-toggle" type="button" aria-expanded={precisionOpen} aria-controls="range-start range-end precision-controls" onClick={() => { if (precisionOpen && invalidDraft) { validateFields(true); return; } if (precisionOpen) setSimpleView(simpleRangeView(duration, selected)); setPrecisionOpen(!precisionOpen); setViewCenter((selected.start_ms + selected.end_ms) / 2); }}>{t('Точное время и шкала')}<Icon name="chevron" size={15} style={{ transform: precisionOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button></div>
+            <div className="workspace-toolstrip"><div className="moment-preview"><button className="button secondary" type="button" disabled={!playerAvailable} aria-label={t(previewing ? 'Остановить просмотр' : 'Посмотреть фрагмент')} title={t(previewing ? 'Остановить просмотр' : 'Посмотреть фрагмент')} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} /><span className="preview-button-label">{previewing ? t('Остановить просмотр') : t('Посмотреть фрагмент')}</span></button><button className="text-button precision-toggle" type="button" aria-expanded={precisionOpen} aria-controls="range-start range-end precision-controls" onClick={() => { if (precisionOpen && invalidDraft) { validateFields(true); return; } if (precisionOpen) setSimpleView(simpleRangeView(duration, selected)); setPrecisionOpen(!precisionOpen); setViewCenter((selected.start_ms + selected.end_ms) / 2); }}>{t('Точное время и шкала')}<Icon name="chevron" size={15} style={{ transform: precisionOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button></div>
             <CropEditor key={source.id} value={output.crop} onChange={crop => setOutput(previous => ({ ...previous, crop }))}
               displayWidth={displayGeometry?.id === source.id ? displayGeometry.width : 0} displayHeight={displayGeometry?.id === source.id ? displayGeometry.height : 0}
               locale={locale} disabled={busy || output.format !== 'mp4' || output.cut_mode !== 'accurate'} previewContainer={cropContainer}
@@ -1261,5 +1281,5 @@ export default function App() {
       <footer className="page-footer"><span>cutmyvideo <span className="footer-dot">·</span> {t('Ссылки и видеофайлы')}</span><a href="https://github.com/Kay0k1/cutmyvideo-core" target="_blank" rel="noreferrer">{t('Открытое ядро на GitHub')}</a></footer>
       <div className="sr-only" role="status" aria-live="polite">{t(notice)}</div>
     </main>
-  </>;
+  </div>;
 }
