@@ -4,6 +4,33 @@ import { translate } from './locales';
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
+describe('export admission under preview pressure', () => {
+  const ranges = [{ id: 'cut', label: 'Cut', start_ms: 1000, end_ms: 2500 }];
+  const output = { format: 'mp4', quality: 'best', cut_mode: 'accurate' } as const;
+  it('retries only refused decoder admission with the same payload and key', async () => {
+    vi.useFakeTimers();
+    try {
+      const fetch = vi.fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ error: { code: 'server_busy' } }), { status: 429 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'accepted' }), { status: 202 }));
+      vi.stubGlobal('fetch', fetch);
+      const result = api.createJob('source', ranges, output, 'stable-key');
+      await vi.runAllTimersAsync();
+      expect(await result).toMatchObject({ id: 'accepted' });
+      expect(fetch).toHaveBeenCalledTimes(2);
+      const calls = fetch.mock.calls.map(call => call[1] as RequestInit);
+      expect(calls[0].body).toBe(calls[1].body);
+      expect(calls[0].headers).toEqual(calls[1].headers);
+    } finally { vi.useRealTimers(); }
+  });
+  it.each(['connection', 'job_limit', 'internal'])('does not repeat an uncertain or unrelated %s failure', async code => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code } }), { status: 503 }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(api.createJob('source', ranges, output, 'stable-key')).rejects.toMatchObject({ code });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('batch and track API contracts', () => {
   it('keeps retry identity stable across optional property order and explicit defaults', () => {
     const ranges = [{ id: 'range_retry', label: 'Opening', start_ms: 1000, end_ms: 2500 }];

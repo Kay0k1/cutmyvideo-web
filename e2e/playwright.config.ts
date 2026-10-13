@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
+import { localArtifactDirectory } from './local-artifacts'
+
+const temporaryOutput = !process.env.CI && !process.env.CUTMY_E2E_OUTPUT
+const resultRoot = process.env.CUTMY_E2E_OUTPUT || (temporaryOutput ? localArtifactDirectory() : undefined)
 
 // An isolated Linux dependency wrapper can be supplied without changing the
 // bundled browser or host packages. Normal CI uses Playwright's own executable.
@@ -14,8 +18,10 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  outputDir: process.env.CUTMY_E2E_OUTPUT ? `${process.env.CUTMY_E2E_OUTPUT}/test-results` : '../test-results',
-  reporter: [['list'], ['html', { outputFolder: process.env.CUTMY_E2E_OUTPUT ? `${process.env.CUTMY_E2E_OUTPUT}/playwright-report` : '../playwright-report', open: 'never' }]],
+  outputDir: resultRoot ? `${resultRoot}/test-results` : '../test-results',
+  reporter: temporaryOutput
+    ? [['list'], ['./local-artifacts.ts', { root: resultRoot! }]]
+    : [['list'], ['html', { outputFolder: resultRoot ? `${resultRoot}/playwright-report` : '../playwright-report', open: 'never' }]],
   use: {
     baseURL: process.env.CUTMY_E2E_URL || 'http://127.0.0.1:5173',
     screenshot: 'only-on-failure',
