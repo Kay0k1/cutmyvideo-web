@@ -8,6 +8,7 @@ export const english: Record<string, string> = {
   'Фрагменты и экспорт': 'Clips and export',
   'Вернуться к редактированию': 'Return to editing',
   'Инструменты': 'Tools',
+  'Кадрирование': 'Cropped',
   'Готово': 'Done',
   'Фрагменты и файлы': 'Clips and files',
   'Вернуться к скачиванию': 'Return to downloads',
