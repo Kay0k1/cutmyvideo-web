@@ -2,6 +2,16 @@
 
 ## Unified workspace — 13 October 2026
 
+The follow-up desktop check covers browser content windows below the original
+620px height cutoff, including 1280×600, 1024×600, 960×540 and 900×500. A
+1280×600 window previously produced a 1379px document. The editor now uses the
+viewport and the header's measured layout height, with bounded collections and
+reachable overflow controls for enlarged text. Two real-video layout scenarios
+resize across the old cutoffs, retain the player, exercise twelve clips, exact
+times, dialogs, simulated ready files and 200% text. Touch devices keep page
+reflow. These layout scenarios mock API records; the separate download scenarios
+below verify actual backend exports.
+
 The source picker opens one editor with a persistent player, timeline, compact
 clip collection and direct export. Saved Moment/Clips/Export locations retain
 compatibility without exposing those as mandatory screens. Export settings and

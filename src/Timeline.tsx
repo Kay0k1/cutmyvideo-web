@@ -102,7 +102,7 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
     <Storyboard sourceID={sourceID} duration={duration} current={current} active={active} onSeek={ms => { onSeek(ms); onReveal(ms); }} />
   </>;
 
-  return <div className={`timeline${compact ? ' timeline-compact' : ''}`}>
+  return <div className={`timeline${compact ? ' timeline-compact' : ''}${showOverview ? ' timeline-overview' : ''}`}>
     <div className="overview-label">{showOverview ? <label htmlFor="overview">{t("Всё видео")}</label> : <span>{t('Позиция плеера')}</span>}<span>{formatTimecode(current)} / {formatTimecode(duration)}</span></div>
     {showOverview && <div className="overview-track">
       <div className="overview-selections" aria-hidden="true">{ranges.map(range => <span key={range.id} style={{ left: `${range.start_ms / duration * 100}%`, width: `${Math.max(.3, (range.end_ms - range.start_ms) / duration * 100)}%` }} />)}</div>

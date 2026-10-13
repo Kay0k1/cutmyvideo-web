@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
+import { readFile } from 'node:fs/promises'
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test'
-import { api, assertFirstFrameMatchesSource, showExactTimes, uploadThroughUI, waitJob } from './helpers'
+import { api, assertFirstFrameMatchesSource, showExactTimes, showEditorTools, closeEditorTools, goToSource, goToMoment, uploadThroughUI, waitJob } from './helpers'
 import { diagnoseNativePreview } from './nativeDiagnostics'
 
 const desktopSizes = [{ width: 1280, height: 720 }, { width: 1440, height: 900 }, { width: 1920, height: 1080 }]
@@ -26,11 +27,11 @@ async function fullyInViewport(control: Locator, description: string) {
   expect(box.right, `${description}: right`).toBeLessThanOrEqual(box.viewportWidth + 1)
 }
 
-async function workspaceFits(page: Page) {
+async function workspaceFits(page: Page, collection = '.clip-library') {
   for (const [selector, description] of [
     ['video', 'Native player'], ['.trim-track', 'Timeline'],
     ['.trim-handle.start', 'Start handle'], ['.trim-handle.end', 'End handle'],
-    ['.clip-library', 'Clip collection'], ['.export-submit', 'Export button'],
+    [collection, 'Clip collection or ready files'], ['.export-submit', 'Export button'],
   ]) await fullyInViewport(page.locator(selector), description)
   const documentSize = await page.evaluate(() => ({
     width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight,
@@ -40,6 +41,93 @@ async function workspaceFits(page: Page) {
   expect(documentSize.height, 'Editing must fit the desktop window without page scrolling').toBeLessThanOrEqual(documentSize.viewportHeight + 1)
   expect(documentSize.scrollX).toBe(0)
   expect(documentSize.scrollY).toBe(0)
+}
+
+for (const orientation of ['landscape', 'portrait']) {
+  test(`${orientation} workspace remains whole below Safari toolbar breakpoints`, async ({ page }, testInfo) => {
+    const errors: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    let media = process.env.CUTMY_E2E_MEDIA!
+    if (orientation === 'portrait') {
+      media = testInfo.outputPath('short-window-portrait.mp4')
+      execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-i', process.env.CUTMY_E2E_MEDIA!,
+        '-vf', 'transpose=1', '-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p', '-c:a', 'copy', '-movflags', '+faststart', media], { timeout: 30_000 })
+    }
+    const bytes = await readFile(media)
+    const source = { id: 'short_window_source', title: 'Safari window.mp4', kind: 'upload', duration_ms: 12000,
+      width: orientation === 'portrait' ? 360 : 640, height: orientation === 'portrait' ? 640 : 360,
+      preview_kind: 'file', preview_url: '/short-window.mp4', thumbnail_url: null, embed_url: null }
+    const ranges = Array.from({ length: 12 }, (_, index) => ({ id: `short_clip_${index}`, label: `Clip ${index + 1}`, start_ms: 1000, end_ms: 5000 }))
+    const job = { id: 'short_window_job', status: 'succeeded', stage: 'finished', message: '', items: ranges.map((range, index) => ({
+      id: `short_item_${index}`, label: range.label, start_ms: range.start_ms, end_ms: range.end_ms, status: 'succeeded',
+      artifact: { id: `short_artifact_${index}`, filename: `${range.label}.mp4`, size_bytes: bytes.length, download_url: '/short-window.mp4', actual_start_ms: range.start_ms, actual_end_ms: range.end_ms },
+    })) }
+    await page.route('**/short-window.mp4', route => route.fulfill({ contentType: 'video/mp4', body: bytes }))
+    await page.route('**/api/v1/**', route => {
+      const path = new URL(route.request().url()).pathname
+      if (path.endsWith('/session')) return route.fulfill({ json: { ok: true } })
+      if (path.endsWith('/tracks')) return route.fulfill({ json: { tracks: [{ index: 0, type: 'video', codec: 'h264' }, { index: 1, type: 'audio', codec: 'aac' }] } })
+      if (path === `${api}/sources/${source.id}`) return route.fulfill({ json: source })
+      if (path === `${api}/sources`) return route.fulfill({ json: { sources: [source] } })
+      if ((path === `${api}/jobs` && route.request().method() === 'POST') || path === `${api}/jobs/${job.id}`) return route.fulfill({ json: job })
+      if (path === `${api}/jobs`) return route.fulfill({ json: { jobs: [] } })
+      return route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'Fixture not available' } } })
+    })
+    await page.addInitScript(({ source, ranges }) => localStorage.setItem('cutmy.workbench.v1', JSON.stringify({
+      workflow_version: 2, step: 2, source_id: source.id, ranges, selected_id: ranges[0].id,
+      selected_range_ids: ranges.map(range => range.id), output: { format: 'mp4', quality: 'best', cut_mode: 'accurate', cleanup_source: true },
+    })), { source, ranges })
+    await page.goto('/?lang=en')
+    await readyWorkspace(page)
+    const originalPlayer = await page.locator('video').elementHandle()
+    for (const [width, height] of [[1280, 720], [1280, 620], [1280, 619], [1280, 600], [1024, 600], [960, 540], [900, 500], [1440, 900], [1280, 600]]) {
+      await page.setViewportSize({ width, height })
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+      await workspaceFits(page)
+      await fullyInViewport(page.locator('.workspace-toolstrip'), 'Editing tools are visible, not clipped to suppress scrolling')
+      expect(await page.locator('video').evaluate((node, original) => node === original, originalPlayer)).toBe(true)
+      await page.locator('video').hover(); await page.mouse.wheel(0, 500)
+      await expect.poll(() => page.evaluate(() => scrollY)).toBe(0)
+    }
+    await screenshot(page, testInfo, `${orientation}-safari-1280x600`)
+    await page.locator('.clip-list').hover(); await page.mouse.wheel(0, 500)
+    await expect.poll(() => page.locator('.clip-list').evaluate(node => node.scrollTop)).toBeGreaterThan(0)
+    await workspaceFits(page)
+    await showExactTimes(page)
+    await fullyInViewport(page.locator('#range-start'), 'Exact start input')
+    await workspaceFits(page)
+    await page.getByRole('button', { name: 'Exact time and timeline', exact: true }).click()
+    await showEditorTools(page); await closeEditorTools(page)
+    await workspaceFits(page)
+    await page.locator('.export-submit').click()
+    await expect(page.locator('.workspace-results')).toBeVisible()
+    await workspaceFits(page, '.workspace-results')
+    await page.getByRole('link', { name: 'Download', exact: true }).first().scrollIntoViewIfNeeded()
+    await fullyInViewport(page.getByRole('link', { name: 'Download', exact: true }).first(), 'Ready-file download')
+    await workspaceFits(page, '.workspace-results')
+    await goToSource(page)
+    await expect(page.locator('.workspace-shell')).toHaveCount(0)
+    await goToMoment(page)
+    await workspaceFits(page, '.workspace-results')
+    if (orientation === 'landscape') {
+      await page.setViewportSize({ width: 1280, height: 800 })
+      await page.evaluate(() => {
+        const nodes = [...document.querySelectorAll<HTMLElement>('body,body *')].filter(node => node instanceof HTMLElement)
+        const sizes = nodes.map(node => parseFloat(getComputedStyle(node).fontSize))
+        nodes.forEach((node, index) => { node.style.fontSize = `${sizes[index] * 2}px` })
+      })
+      // Large text may need a panel to scroll. Its controls must remain
+      // reachable while the page, player and export stay in place.
+      await page.locator('.editor-tools-toggle').scrollIntoViewIfNeeded()
+      await fullyInViewport(page.locator('.editor-tools-toggle'), 'Tools at 200% text')
+      await showEditorTools(page); await closeEditorTools(page)
+      await page.locator('.export-submit').scrollIntoViewIfNeeded()
+      await fullyInViewport(page.locator('.export-submit'), 'Export at 200% text')
+      await fullyInViewport(page.locator('video'), 'Player at 200% text')
+      expect(await page.evaluate(() => scrollY)).toBe(0)
+    }
+    expect(errors).toEqual([])
+  })
 }
 
 async function screenshot(page: Page, testInfo: TestInfo, name: string) {
