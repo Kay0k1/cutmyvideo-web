@@ -5,3 +5,52 @@
 .timeline-media-disclosure[open] > summary svg { transform: rotate(-90deg); }
 .timeline-media-disclosure > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
 .timeline-media-content { min-width: 0; }
+
+.timeline-detail-label { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; color: var(--muted); font-size: .8125rem; }
+.timeline-zoom-buttons { display: flex; align-items: center; gap: 2px; }
+.timeline-zoom-buttons > button:not(.text-button) { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--accent); font-size: 1.25rem; }
+.timeline-zoom-buttons > button:not(.text-button):hover:not(:disabled) { background: var(--soft); }
+.timeline-zoom-buttons > button:disabled { opacity: .45; }
+.timeline-zoom-buttons > .text-button { font-size: .75rem; min-height: 44px; }
+.timeline-zoom-hint { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; color: var(--muted); font-size: .75rem; margin: 0 0 6px; }
+.timeline-zoom-hint .text-button { min-height: 44px; font-size: inherit; }
+.timeline .tick-labels { margin-bottom: 6px; }
+@media (hover: none) and (pointer: coarse) {
+  .timeline-zoom-hint > span { display: none; }
+}
+/* Both the grip and its 44px hit area extend away from the selected cut. */
+.timeline .trim-handle.start .trim-grip { right: 0; top: 7px; }
+.timeline .trim-handle.end .trim-grip { left: 0; top: 7px; }
+
+/* Short desktop windows keep both editing rails and the action row in view.
+   Touch layouts retain the larger controls defined above. */
+@media (min-width: 900px) and (max-height: 700px) and (hover: hover) and (pointer: fine) {
+  .workspace-page .moment-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: start; column-gap: 10px; }
+  .workspace-page .moment-boundaries, .workspace-page .timeline, .workspace-page .moment-controls > .error-message { grid-column: 1 / -1; }
+  .workspace-page .moment-boundaries .time-value, .workspace-page .moment-boundaries .time-input { min-height: 32px; }
+  .workspace-page .moment-boundaries .time-value { font-size: .8125rem; white-space: nowrap; }
+  .workspace-page .moment-boundaries .marker-button { width: 32px; height: 32px; min-height: 32px; }
+  .workspace-page .timeline-compact { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; }
+  .workspace-page .timeline-section { grid-column: 1 / -1; }
+  .workspace-page .timeline-detail-label { grid-column: 1; grid-row: 2; min-height: 28px; flex-wrap: nowrap; gap: 8px; font-size: .75rem; }
+  .workspace-page .timeline-zoom-buttons > button:not(.text-button) { width: 28px; height: 28px; min-height: 28px; }
+  .workspace-page .timeline-zoom-buttons > .text-button { min-height: 28px; padding: 2px 0; font-size: .6875rem; white-space: nowrap; }
+  .workspace-page .timeline-media-disclosure { grid-column: 2; grid-row: 2; align-self: center; }
+  .workspace-page .timeline-media-disclosure[open] { grid-column: 1 / -1; grid-row: 6; }
+  .workspace-page .timeline-media-disclosure > summary { min-height: 28px; font-size: .75rem; gap: 6px; }
+  .workspace-page .trim-track { grid-column: 1 / -1; grid-row: 3; height: 32px; }
+  .workspace-page .trim-track::before, .workspace-page .trim-selection { top: 12px; }
+  .workspace-page .trim-ticks { top: 26px; }
+  .workspace-page .timeline .trim-handle { height: 32px; }
+  .workspace-page .timeline .trim-handle .trim-grip { top: 4px; height: 24px; }
+  .workspace-page .playhead { top: 10px; }
+  .workspace-page .timeline .tick-labels { grid-column: 1 / -1; grid-row: 4; margin: 0; font-size: .6875rem; line-height: 1.4; }
+  .workspace-page .timeline-zoom-hint { grid-column: 1 / -1; grid-row: 5; margin: 0; }
+  .workspace-page .timeline-zoom-hint > span { display: none; }
+  .workspace-page .timeline-zoom-hint .text-button { min-height: 28px; padding: 2px 0; }
+  .workspace-page .workspace-toolstrip { grid-column: 1; align-self: start; gap: 2px 8px; }
+  .workspace-page .workspace-toolstrip .button { min-height: 32px; padding: 4px 8px; font-size: .75rem; }
+  .workspace-page .workspace-toolstrip .text-button, .workspace-page .workspace-toolstrip .crop-editor > summary { min-height: 32px; padding: 4px 0; font-size: .75rem; }
+  .workspace-page .sequence-preview { grid-column: 2; align-self: start; margin: 0; }
+  .workspace-page .sequence-preview > .text-button { min-height: 32px; padding: 4px 0; font-size: .75rem; }
+}

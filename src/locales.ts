@@ -2,6 +2,16 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  'Выберите участок': 'Choose a section',
+  'Участок для обрезки': 'Trim section',
+  'Уточните границы': 'Adjust the boundaries',
+  'Приблизить шкалу': 'Zoom in timeline',
+  'Отдалить шкалу': 'Zoom out timeline',
+  'Показать весь участок': 'Show entire section',
+  'Весь участок': 'Entire section',
+  'Приблизить границы': 'Zoom to boundaries',
+  'Колесо или жест сведения — масштаб; жест вбок — перемещение.': 'Scroll or pinch to zoom; swipe sideways to move.',
+  'Перемещайте участок целиком или нажмите на шкалу. Стрелки — 0,1 секунды, Shift — секунда, Page Up и Page Down — 5 секунд; Home и End — края видео.': 'Move the section as a whole or click the timeline. Arrows move 0.1 seconds, Shift moves one second, Page Up and Page Down move five seconds; Home and End go to the recording edges.',
   'Действия с фрагментом {index}': 'Actions for clip {index}',
   'Действия с выбранными': 'Selected clip actions',
   'Кадры и звук': 'Frames and audio',
