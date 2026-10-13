@@ -76,11 +76,13 @@ export const WindowPlayer = forwardRef<PlayerControls, {
       ? [...pending.current.values()].find(request => request.start <= start && request.end >= end)
       : undefined);
     if (existing) {
+      const speculative = existing.background;
       if (!background) {
         existing.background = false;
         setPrefetching([...pending.current.values()].some(request => request.background));
       }
-      return existing.start === start && existing.end === end ? existing.promise : promoteCovering(existing, start, windowMS);
+      return !background && speculative ? promoteCovering(existing, start, windowMS)
+        : existing.start === start && existing.end === end ? existing.promise : promoteCovering(existing, start, windowMS);
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), 120000);
@@ -169,7 +171,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     if (backgroundHolds.current || !current.playing || !enabled.current || document.hidden || current.loading || !current.ready || current.end >= source.duration_ms || cache.current!.get(next, nextEnd) || connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType ?? '')) return;
     prefetchTimer.current = window.setTimeout(() => {
       prefetchTimer.current = undefined;
-      if (backgroundHolds.current || !mounted.current || !enabled.current || document.hidden || state.current.end !== expectedEnd || state.current.loading) return;
+      if (backgroundHolds.current || !mounted.current || !enabled.current || document.hidden || !state.current.playing || state.current.end !== expectedEnd || state.current.loading) return;
       setPrefetching(true);
       void requestWindow(next, true, QUICK_PREVIEW_WINDOW_MS).catch(() => undefined).finally(() => {
         if (mounted.current) setPrefetching([...pending.current.values()].some(request => request.background));

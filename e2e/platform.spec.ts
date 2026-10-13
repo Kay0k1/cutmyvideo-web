@@ -481,22 +481,24 @@ test('window preview caches revisits and preloads the next interval without anot
       el.dispatchEvent(new Event('input', { bubbles: true }))
     }, ms)
     await expect(slider).toHaveValue(String(ms))
-    await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeCloseTo(ms % 30000 / 1000, 1)
+    await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeCloseTo(ms % 6000 / 1000, 1)
     await expect(page.getByText('Готовим предпросмотр…', { exact: true })).toHaveCount(0)
   }
+  await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.readyState)).toBeGreaterThan(0)
+  expect(requests).toEqual([{ start: 0, background: false, window: 6000 }])
+  await video.evaluate((el: HTMLVideoElement) => el.play())
   await expect(page.getByText('Следующий участок готов', { exact: true })).toBeVisible()
-  expect(requests).toEqual([{ start: 0, background: false, window: 6000 }, { start: 0, background: true, window: 30000 }])
-  // Use the ordinary cached rendition, then wait for its next interval. Warm
-  // seeks must reuse media even when the short and ordinary windows overlap.
+  // Six-second speculative windows are reused by nearby foreground seeks.
   await seek(8000)
-  await expect.poll(() => requests.some(request => request.start === 30000 && request.background)).toBe(true)
+  await expect.poll(() => requests.some(request => request.start === 12000 && request.background)).toBe(true)
   await expect(page.getByText('Следующий участок готов', { exact: true })).toBeVisible()
-  await seek(32000)
-  expect(requests.filter(request => request.start === 30000)).toHaveLength(1)
+  await seek(14000)
+  expect(requests.filter(request => request.start === 12000)).toHaveLength(1)
+  await video.evaluate((el: HTMLVideoElement) => el.pause())
   await seek(28802000)
   await seek(2000)
   expect(requests.filter(request => request.start === 0 && !request.background)).toHaveLength(1)
-  expect(requests.filter(request => request.start === 0 && request.background)).toHaveLength(1)
+  expect(requests.filter(request => request.start === 0 && request.background)).toHaveLength(0)
   await seek(28803000)
   expect(requests.filter(request => request.start === 28800000 && !request.background)).toHaveLength(1)
   await page.setViewportSize({ width: 390, height: 844 })
@@ -568,7 +570,7 @@ for (const mode of ['promote', 'replace', 'slow-cover'] as const) test(`window p
   const source = { id: 'src_preview_priority', title: 'Long recording', kind: 'platform', provider: 'twitch', duration_ms: 9 * 3600000, preview_kind: 'window', preview_url: null, embed_url: null, thumbnail_url: null }
   page.on('requestfailed', request => {
     const url = new URL(request.url());
-    if (url.pathname.endsWith('/preview') && url.searchParams.get('start_ms') === '0' && url.searchParams.has('priority')) originalCancelled = true;
+    if (url.pathname.endsWith('/preview') && url.searchParams.get('start_ms') === '6000' && url.searchParams.has('priority')) originalCancelled = true;
   })
   await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
   await page.route(`**${api}/sources`, route => route.fulfill({ status: 201, json: source }))
@@ -577,15 +579,16 @@ for (const mode of ['promote', 'replace', 'slow-cover'] as const) test(`window p
     const url = new URL(route.request().url())
     const start = Number(url.searchParams.get('start_ms')), background = url.searchParams.has('priority')
     requests.push({ start, background, window: Number(url.searchParams.get('window_ms') ?? 30000) })
-    if (start === 0 && background && requests.filter(request => request.start === 0 && request.background).length === 1) await new Promise<void>(resolve => { releaseBackground = resolve })
+    if (start === 6000 && background && requests.filter(request => request.start === 6000 && request.background).length === 1) await new Promise<void>(resolve => { releaseBackground = resolve })
     await route.fulfill({ contentType: 'video/mp4', body: readFileSync(process.env.CUTMY_E2E_MEDIA!), headers: previewIntervalHeaders(url, source.duration_ms) }).catch(() => undefined)
   })
   await page.goto('/')
   await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://www.twitch.tv/videos/123456789')
   await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
-  await expect.poll(() => Boolean(releaseBackground)).toBe(true)
   const video = page.locator('.window-player video')
+  await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.readyState)).toBeGreaterThan(0)
   await video.evaluate((el: HTMLVideoElement) => el.play())
+  await expect.poll(() => Boolean(releaseBackground)).toBe(true)
   const seek = page.getByRole('slider', { name: 'Позиция в видео', exact: true })
   const target = mode !== 'replace' ? 8000 : 28802000
   await seek.evaluate((el, target) => {
@@ -606,7 +609,7 @@ for (const mode of ['promote', 'replace', 'slow-cover'] as const) test(`window p
   const clock = await video.evaluate((el: HTMLVideoElement) => el.currentTime)
   await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeGreaterThan(clock + 0.05)
   await video.evaluate((el: HTMLVideoElement) => el.pause())
-  const intervalStart = mode === 'promote' ? 0 : mode === 'slow-cover' ? 6000 : 28800000
+  const intervalStart = mode !== 'replace' ? 6000 : 28800000
   const actualPosition = intervalStart + await video.evaluate((el: HTMLVideoElement) => el.currentTime) * 1000
   expect(Number(await seek.inputValue())).toBeCloseTo(actualPosition, -2)
   // The replaced response arrives after foreground playback progressed. It
@@ -615,17 +618,16 @@ for (const mode of ['promote', 'replace', 'slow-cover'] as const) test(`window p
   await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeCloseTo((actualPosition - intervalStart) / 1000, 1)
   expect(Number(await seek.inputValue())).toBeGreaterThanOrEqual(target)
   expect(Number(await seek.inputValue())).toBeLessThan(target + 28000)
-  const ordinaryRequests = requests.filter(request => request.start === 0 && request.background)
+  const ordinaryRequests = requests.filter(request => request.start === 6000 && request.background)
   if (mode === 'slow-cover') {
     await expect.poll(() => originalCancelled).toBe(true)
-    // After cancellation the ordinary rendition may be retried once in the
-    // background, while the requested quick rendition is already playing.
+    // Canceled speculation cannot be reused after foreground playback starts.
     expect(ordinaryRequests.length).toBeGreaterThanOrEqual(1)
     expect(ordinaryRequests.length).toBeLessThanOrEqual(2)
   } else expect(ordinaryRequests).toHaveLength(1)
   if (mode === 'promote') {
     expect(requests.filter(request => !request.background)).toEqual([{ start: 0, background: false, window: 6000 }])
-    await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeGreaterThanOrEqual(8)
+    await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeGreaterThanOrEqual(2)
   } else {
     const requestedStart = mode === 'slow-cover' ? 6000 : 28800000
     expect(requests.filter(request => request.start === requestedStart && !request.background)).toEqual([{ start: requestedStart, background: false, window: 6000 }])
