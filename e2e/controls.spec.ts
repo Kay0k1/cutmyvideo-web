@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { chooseOption, goToExport, goToMoment, showExactTimes, uploadThroughUI } from './helpers'
+import { chooseOption, goToExport, goToMoment, showExactTimes, uploadThroughUI, showExportSettings, closeExportSettings, showEditorTools, closeEditorTools } from './helpers'
 
 test('custom selectors support keyboard choice, typeahead, Escape and native-dialog focus', async ({ page }) => {
   await page.goto('/')
@@ -35,7 +35,7 @@ test('custom selectors support keyboard choice, typeahead, Escape and native-dia
   await expect(settings).toBeFocused()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await uploadThroughUI(page)
-  await goToExport(page)
+  await showExportSettings(page)
   const quality = page.getByRole('combobox', { name: 'Video quality', exact: true })
   await quality.focus()
   await quality.press('ArrowDown')
@@ -53,6 +53,7 @@ test('custom selectors support keyboard choice, typeahead, Escape and native-dia
   await expect(page.getByText('No re-encoding. Boundaries may shift; some codecs are incompatible with MP4.', { exact: true })).toBeVisible()
   await chooseOption(page, page.getByRole('combobox', { name: 'Boundaries and quality', exact: true }), 'Exact boundaries')
   await expect(quality).toBeEnabled()
+  await closeExportSettings(page)
   await goToMoment(page)
   await showExactTimes(page)
   await page.locator('#range-start').fill('00:00:01.250')
@@ -64,6 +65,7 @@ test('custom selectors support keyboard choice, typeahead, Escape and native-dia
   await video.evaluate(element => { (element as HTMLVideoElement).currentTime = 2.5 })
   await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).seeking)).toBe(false)
   await expect(page.locator('#overview')).toHaveValue('2500')
+  await showEditorTools(page)
   const zoom = page.getByRole('combobox', { name: 'Timeline zoom', exact: true })
   for (const key of ['i', 'o', 'Space']) {
     await zoom.focus()
@@ -76,6 +78,7 @@ test('custom selectors support keyboard choice, typeahead, Escape and native-dia
     if (await page.getByRole('listbox').isVisible()) await page.keyboard.press('Escape')
     await expect(zoom).toBeFocused()
   }
+  await closeEditorTools(page)
   await settings.click()
   await theme.focus()
   await theme.press('Enter')
@@ -106,14 +109,14 @@ test('custom selectors support keyboard choice, typeahead, Escape and native-dia
 test('dismissed export menus keep the chosen value and do not create a job', async ({ page }) => {
   await page.goto('/')
   await uploadThroughUI(page)
-  await goToExport(page)
+  await showExportSettings(page)
   const jobs: string[] = []
   page.on('request', request => { if (request.method() === 'POST' && /\/api\/v1\/jobs$/.test(request.url())) jobs.push(request.url()) })
   const quality = page.getByRole('combobox', { name: 'Качество видео', exact: true })
   await chooseOption(page, quality, 'До 720p')
   await quality.click()
   await expect(page.getByRole('listbox')).toBeVisible()
-  const outside = await page.locator('.page-heading h1').boundingBox()
+  const outside = await page.locator('.export-settings-dialog .dialog-header h2').boundingBox()
   expect(outside).not.toBeNull()
   await page.mouse.click(outside!.x + outside!.width / 2, outside!.y + outside!.height / 2)
   await expect(page.getByRole('listbox')).not.toBeVisible()
@@ -174,7 +177,9 @@ test('zoomed timeline seek and scrubbing preserve time offsets and all sliders r
   await page.getByLabel('Начало', { exact: true }).press('Tab')
   await page.getByLabel('Конец', { exact: true }).fill('00:00:10.000')
   await page.getByLabel('Конец', { exact: true }).press('Tab')
+  await showEditorTools(page)
   await chooseOption(page, page.getByRole('combobox', { name: 'Масштаб шкалы', exact: true }), '10 секунд')
+  await closeEditorTools(page)
   const scrubber = page.getByRole('slider', { name: 'Позиция плеера', exact: true })
   const start = page.getByRole('slider', { name: 'Начало фрагмента на шкале', exact: true })
   const end = page.getByRole('slider', { name: 'Конец фрагмента на шкале', exact: true })

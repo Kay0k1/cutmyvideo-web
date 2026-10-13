@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { api, assertFirstFrameMatchesSource, chooseOption, goToExport, probeDownloadedFile, showExactTimes, upload, uploadThroughUI, waitJob } from './helpers'
+import { api, assertFirstFrameMatchesSource, chooseOption, goToExport, probeDownloadedFile, showExactTimes, upload, uploadThroughUI, waitJob, showExportSettings, closeExportSettings } from './helpers'
 
 test('exports two precise MP4 ranges as real playable files', async ({ request }, testInfo) => {
   await request.get(`${api}/session`)
@@ -81,9 +81,10 @@ test('the original-quality UI submits an uncapped local copy and reports its act
   await page.getByLabel('Начало', { exact: true }).press('Tab')
   await page.getByLabel('Конец', { exact: true }).fill('00:00:04.750')
   await page.getByLabel('Конец', { exact: true }).press('Tab')
-  await goToExport(page)
+  await showExportSettings(page)
   await chooseOption(page, page.getByRole('combobox', { name: 'Границы и качество', exact: true }), 'Исходное качество')
   await expect(page.getByRole('combobox', { name: 'Качество видео', exact: true })).toBeDisabled()
+  await closeExportSettings(page)
   const created = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
   const creation = await created

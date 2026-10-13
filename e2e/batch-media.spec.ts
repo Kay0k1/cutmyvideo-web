@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { expect, test } from '@playwright/test'
-import { addClip, chooseOption, goToExport, probeDownloadedFile, saveClip, showExactTimes, uploadThroughUI, waitJob } from './helpers'
+import { addClip, chooseOption, goToExport, probeDownloadedFile, saveClip, showExactTimes, uploadThroughUI, waitJob, showExportSettings, closeExportSettings } from './helpers'
 
 test('real joined MKV keeps selected audio and rebased subtitles; separate no-sound files decode', async ({ page }, testInfo) => {
   await page.goto('/?lang=en')
@@ -10,14 +10,17 @@ test('real joined MKV keeps selected audio and rebased subtitles; separate no-so
   const end = page.getByLabel('End', { exact: true })
   await start.fill('00:00:08.000'); await start.press('Tab')
   await end.fill('00:00:11.000'); await end.press('Tab')
-  await chooseOption(page, page.locator('#audio-track-preview'), /Audio #1.*rus.*aac/)
+  await showExportSettings(page)
+  await chooseOption(page, page.locator('#audio-track-export'), /Audio #1.*rus.*aac/)
+  await closeExportSettings(page)
   await saveClip(page)
   await addClip(page)
   await showExactTimes(page)
   await start.fill('00:00:01.000'); await start.press('Tab')
   await end.fill('00:00:04.000'); await end.press('Tab')
+  await closeExportSettings(page)
   await saveClip(page)
-  await goToExport(page)
+  await showExportSettings(page)
   await chooseOption(page, page.locator('#output-mode'), 'One joined file')
   await chooseOption(page, page.locator('#cut-mode'), 'Original quality')
   await chooseOption(page, page.locator('#copy-container'), 'MKV')
@@ -26,6 +29,7 @@ test('real joined MKV keeps selected audio and rebased subtitles; separate no-so
   const cleanup = page.getByRole('checkbox', { name: 'Delete source after export', exact: true })
   await cleanup.uncheck()
   await expect(cleanup).not.toBeChecked()
+  await closeExportSettings(page)
   const accepted = page.waitForResponse(response => response.url().endsWith('/api/v1/jobs') && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
   const response = await accepted
@@ -58,11 +62,13 @@ test('real joined MKV keeps selected audio and rebased subtitles; separate no-so
   await page.locator('.file-description .artifact-details summary').click()
   await expect(page.locator('.file-description')).toContainText('Included: Audio #1')
 
+  await showExportSettings(page)
   await chooseOption(page, page.locator('#output-mode'), 'Separate files')
   await chooseOption(page, page.locator('#subtitle-mode'), 'Omit subtitles')
   await chooseOption(page, page.locator('#copy-container'), 'MP4')
   await chooseOption(page, page.locator('#cut-mode'), 'Exact boundaries')
   await chooseOption(page, page.locator('#audio-track-export'), 'No sound')
+  await closeExportSettings(page)
   const silentAccepted = page.waitForResponse(response => response.url().endsWith('/api/v1/jobs') && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
   const silentResponse = await silentAccepted

@@ -1,7 +1,7 @@
 import { readBrowserDraft } from './browserProjectStorage';
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
-import { addClip, api, goToClips, goToExport, goToMoment, goToSource, probeDownloadedFile, setTheme, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
+import { addClip, api, goToClips, goToExport, goToMoment, goToSource, probeDownloadedFile, setTheme, showExactTimes, showExportSettings, closeExportSettings, uploadThroughUI, waitJob } from './helpers'
 import { textContrast } from './contrast'
 
 async function completedExport(page: Page) {
@@ -16,7 +16,9 @@ async function completedExport(page: Page) {
   await page.getByLabel('Конец', { exact: true }).press('Tab')
   await goToExport(page)
   // These scenarios return to the source after export to continue editing.
+  await showExportSettings(page)
   await page.getByRole('checkbox', { name: 'Удалить исходник после экспорта', exact: true }).uncheck()
+  await closeExportSettings(page)
   const jobPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
   const creation = await jobPromise
@@ -115,16 +117,15 @@ test('theme follows the system, explicit choice survives reload and is applied b
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
 })
 
-test('steps preserve work, keep export controls off the first screen and replace sources deliberately', async ({ page }) => {
+test('workspace preserves edits and export choices while sources are replaced deliberately', async ({ page }) => {
   await page.goto('/')
-  await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step')
-  await expect(stepButton(page, 2)).toBeDisabled()
-  await expect(stepButton(page, 3)).toBeDisabled()
-  await expect(stepButton(page, 4)).toBeDisabled()
+  await expect(page.locator('.source-chooser')).toBeVisible()
+  await expect(page.locator('.editor-workspace')).not.toBeVisible()
+  await expect(page.locator('.export-submit')).not.toBeVisible()
   await expect(page.getByLabel('Начало', { exact: true })).not.toBeVisible()
   await expect(page.getByRole('button', { name: 'MP3 Аудио', exact: true })).not.toBeVisible()
   await uploadThroughUI(page)
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await showExactTimes(page)
   await page.getByLabel('Начало', { exact: true }).fill('00:00:02.250')
   await page.getByLabel('Начало', { exact: true }).press('Tab')
@@ -134,16 +135,16 @@ test('steps preserve work, keep export controls off the first screen and replace
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(2.4)
   await page.getByRole('button', { name: 'Остановить просмотр', exact: true }).click()
   const playhead = await page.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)
-  await addClip(page)
   await goToExport(page)
   await page.getByRole('button', { name: 'MP3 Аудио', exact: true }).click()
   await goToMoment(page)
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).currentTime)).toBeCloseTo(playhead, 1)
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).paused)).toBe(true)
+  await addClip(page)
   await goToClips(page)
   await expect(page.locator('.range-list > li')).toHaveCount(2)
   await page.getByRole('button', { name: /Другое видео/ }).click()
-  await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.source-chooser')).toBeVisible()
   await goToClips(page)
   await expect(page.locator('.range-list > li')).toHaveCount(2)
   await page.getByRole('button', { name: 'Редактировать фрагмент 1', exact: true }).click()
@@ -153,9 +154,9 @@ test('steps preserve work, keep export controls off the first screen and replace
   await goToExport(page)
   await expect(page.getByRole('button', { name: 'MP3 Аудио', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await page.reload()
-  await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await uploadThroughUI(page)
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await showExactTimes(page)
   await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:00.000')
   await expect(page.getByLabel('Конец', { exact: true })).toHaveValue('00:00:12.000')
@@ -184,7 +185,7 @@ test('the website rejects unsupported files and unsafe URLs before an API mutati
     await page.locator('button.upload-button').click()
     await (await chooser).setFiles(file)
     await expect(page.getByRole('alert')).toBeVisible()
-    await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step')
+    await expect(page.locator('.source-chooser')).toBeVisible()
   }
   expect(mutations).toEqual([])
   await uploadThroughUI(page)
@@ -192,7 +193,7 @@ test('the website rejects unsupported files and unsafe URLs before an API mutati
   expect(mutations).toHaveLength(1)
 })
 
-test('both themes keep visible text readable through every editing stage', async ({ page }, testInfo) => {
+test('both themes keep visible text readable in the source chooser and workspace', async ({ page }, testInfo) => {
   await page.goto('/')
   await uploadThroughUI(page)
   const measurements: unknown[] = []
@@ -216,7 +217,7 @@ test('an MP4 containing only audio does not replace the current video or ranges'
   await page.getByLabel('Начало', { exact: true }).press('Tab')
   await uploadThroughUI(page, process.env.CUTMY_E2E_AUDIO_MP4!)
   await expect(page.getByRole('alert')).toBeVisible()
-  await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.source-chooser')).toBeVisible()
   await goToMoment(page)
   await showExactTimes(page)
   await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:02.250')
@@ -232,13 +233,13 @@ test('a completed job does not override the chosen moments or source step on rel
   await page.getByLabel('Конец', { exact: true }).fill('00:00:04.000')
   await page.getByLabel('Конец', { exact: true }).press('Tab')
   await page.reload()
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await showExactTimes(page)
   await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:02.000')
   await expect(page.getByLabel('Конец', { exact: true })).toHaveValue('00:00:04.000')
   await goToSource(page)
   await page.reload()
-  await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.source-chooser')).toBeVisible()
   await goToMoment(page)
   await showExactTimes(page)
   await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:02.000')
@@ -256,9 +257,9 @@ test('a surviving completed download stays usable when source restoration return
     json: { error: { code: 'source_unavailable', message: 'Source expired' } },
   }))
   await page.reload()
-  await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.output-stage')).toBeVisible()
   await expect(page.getByText('Видео больше недоступно, но результат экспорта сохранился. Чтобы вырезать новые моменты, откройте видео заново.', { exact: true })).toBeVisible()
-  await expect(stepButton(page, 2)).toBeDisabled()
+  await expect(page.locator('.editor-workspace')).not.toBeVisible()
   await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).not.toBeVisible()
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toHaveAttribute('href', job.items[0].artifact.download_url)
   await goToSource(page)
@@ -269,7 +270,7 @@ test('a surviving completed download stays usable when source restoration return
   expect(Math.abs(Number(probe.format.duration) - 2.5)).toBeLessThan(0.2)
 })
 
-test('a legacy three-step draft restores its real completed export in the fourth step', async ({ page }, testInfo) => {
+test('a legacy three-step draft restores its real completed export in the unified workspace', async ({ page }, testInfo) => {
   const { job } = await completedExport(page)
   const legacyDraft = await readBrowserDraft(page)
   delete legacyDraft.workflow_version; delete legacyDraft.selected_range_ids; legacyDraft.step = 3
@@ -280,7 +281,7 @@ test('a legacy three-step draft restores its real completed export in the fourth
     localStorage.setItem('cutmy.workbench.v1', JSON.stringify(draft))
   }, legacyDraft)
   await page.reload()
-  await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toHaveAttribute('href', job.items[0].artifact.download_url)
   await goToClips(page)
   await expect(page.getByRole('checkbox', { name: 'Выбрать фрагмент 1', exact: true })).toBeChecked()

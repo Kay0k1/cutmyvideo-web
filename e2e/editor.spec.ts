@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { addClip, api, chooseOption, goToClips, goToExport, goToMoment, goToSource, probeDownloadedFile, saveClip, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
+import { addClip, api, chooseOption, goToClips, goToExport, goToMoment, goToSource, probeDownloadedFile, saveClip, showExactTimes, showEditorTools, closeEditorTools, uploadThroughUI, waitJob } from './helpers'
 
 test('real editor supports exact multiple ranges, preview, reload and export', async ({ page }, testInfo) => {
   const errors: string[] = []
@@ -80,16 +80,15 @@ test('range handles support keyboard and invalid time input can be corrected', a
   await expect(start).toHaveAttribute('aria-invalid', 'true')
   const submittedJobs: string[] = []
   page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith(`${api}/jobs`)) submittedJobs.push(request.url()) })
-  const exportStep = stepButton(page, 4)
-  await exportStep.click()
-  await expect(start).toBeFocused()
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  const exportButton = page.locator('.export-submit')
+  await expect(exportButton).toBeDisabled()
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await expect(page.getByRole('alert')).toContainText('Введите время')
   expect(submittedJobs).toEqual([])
   await start.fill('00:00:02.000')
   await start.press('Tab')
   await expect(handle).toHaveAttribute('aria-valuenow', '2000')
-  await expect(exportStep).toBeEnabled()
+  await expect(exportButton).toBeEnabled()
   await goToExport(page)
   await expect(page.getByRole('button', { name: /Вырезать/ })).toBeEnabled()
 })
@@ -191,7 +190,9 @@ test('a real three-hour source supports a precise middle selection and export', 
   await showExactTimes(page)
   await page.getByLabel('Начало', { exact: true }).fill('01:23:10.000')
   await page.getByLabel('Начало', { exact: true }).press('Tab')
+  await showEditorTools(page)
   await chooseOption(page, page.getByRole('combobox', { name: 'Масштаб шкалы', exact: true }), '1 минута')
+  await closeEditorTools(page)
   const track = await page.locator('.trim-track').boundingBox()
   const selected = await page.locator('.trim-selection').boundingBox()
   expect(track).toBeTruthy()

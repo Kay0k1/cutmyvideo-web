@@ -1,0 +1,7 @@
+.timeline-media-disclosure { border-top: 1px solid var(--line); margin-top: 6px; }
+.timeline-media-disclosure > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; cursor: pointer; color: var(--muted); font-size: .8125rem; list-style: none; }
+.timeline-media-disclosure > summary::-webkit-details-marker { display: none; }
+.timeline-media-disclosure > summary svg { transform: rotate(90deg); }
+.timeline-media-disclosure[open] > summary svg { transform: rotate(-90deg); }
+.timeline-media-disclosure > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.timeline-media-content { min-width: 0; }

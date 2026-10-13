@@ -1,5 +1,46 @@
 # Acceptance and UX review
 
+## Unified workspace — 13 October 2026
+
+The source picker opens one editor with a persistent player, timeline, compact
+clip collection and direct export. Saved Moment/Clips/Export locations retain
+compatibility without exposing those as mandatory screens. Export settings and
+extra tools use optional native dialogs; thumbnails/waveform mount on request.
+Ready files replace the collection in the sidebar without replacing the player.
+
+A same-source comparison against `f3dc0ce` at 1280×720 measured document height
+**1452 → 720 CSS pixels**. The old timeline began below the viewport; the new
+player, handles and export are simultaneously visible. The ordinary single-clip
+journey removes its one mandatory editor-to-export navigation: mark the bounds,
+export directly, then download. It does not require visiting the clip collection
+or opening output settings.
+
+Eight real-media workspace scenarios cover landscape and portrait sources at
+1280×720, 1440×900 and 1920×1080, twelve clips with internal wheel scrolling, and
+native browser downloading. Each downloaded clip is independently probed for
+video/audio streams, duration and its first frame. All eight passed in Chromium,
+Firefox and WebKit on Linux; Firefox used isolated FFmpeg libraries and WebKit
+used an isolated dependency wrapper. A single large Firefox wheel event is
+clamped by the browser, so the test uses repeated natural wheel gestures and
+checks that document scrolling stays zero. This is engine testing, not a claim
+about a physical Mac or Safari device.
+
+Existing regressions retain project switching, cross-tab conflicts, undo/redo,
+exact pending-export replay, source expiry/deletion, joined multi-track outputs,
+subtitles, native crop gestures and keyboard dialogs. Narrow-screen checks cover
+360/390px touch interactions and 320px with 200% text. Small-window crop tools
+reflow below the player to keep pointer controls reachable. Initial verification
+also passed all 243 unit tests, the production build, and 72 deployment unit
+checks with one environment-dependent check skipped.
+
+Run the focused workspace checks against a disposable core instance:
+
+```sh
+npm run test:e2e -- --project=desktop --project=usability-firefox --project=usability-webkit e2e/unified-workspace.spec.ts
+```
+
+Historical sections below describe their original UI and verification scope.
+
 ## Web 0.4 / Core 1.2 — 12 October 2026
 
 The editor saves independent browser projects, restores retained jobs after original
@@ -127,13 +168,14 @@ and real FFmpeg outputs; screenshots or mocked API responses alone are not proof
   media. Unsupported containers, including a renamed WAV claiming `video/mp4`,
   fail the browser's container check before an upload. An audio-only MP4 does not replace an existing video.
   Invalid, oversized or unavailable inputs explain how to try another source.
-- The first screen shows source choices. The four steps are Video, Moment, Clips
-  and Export. The moment screen offers the player, handles and preview; precise
-  fields and zoom live behind an accessible disclosure. Moving backward or
-  forward preserves intervals and
-  output choices; returning to the source step keeps the current draft until a
-  new source is accepted. Accepted replacements start at the Moment step with
-  fresh ranges. Reload preserves the current step and completed files.
+- The first screen shows source choices. Opening a video reveals a single
+  workspace containing the player, timeline, clip collection and direct export.
+  A single-clip export needs no intermediate navigation or settings visit.
+  Precise fields, frames/waveform, crop and additional tools remain optional.
+  Returning to source choices preserves the current draft until a new source is
+  accepted; a return action resumes editing or retained downloads. Old saved
+  Moment/Clips/Export locations all resolve to the same workspace. Reload retains
+  ranges, output settings, pending request identity and ready downloads.
 - Play uploaded media, seek, and preview the selected interval. A platform embed
   and unavailable preview must be identified honestly; selection still works
   through exact time fields.
@@ -145,8 +187,8 @@ and real FFmpeg outputs; screenshots or mocked API responses alone are not proof
   duplicate and delete affect the intended clips; copies are independent, and
   the configured clip limit (twelve by default) prevents partial unannounced duplication. Deleting every
   clip leaves a usable empty state from which a new moment can be added. Legacy
-  three-step drafts restore their old Export step as the new fourth step, and
-  existing ranges default to selected when the legacy draft has no selection.
+  drafts retain their original export meaning and request identity in the unified
+  workspace. Existing ranges default to selected only when a legacy draft has no selection.
   Default export names retain their original list numbers when only clips 1
   and 3 are selected, including after language changes and job restoration.
 - Both range handles are named, focusable, keyboard-operable, and bounded by the
@@ -189,16 +231,17 @@ and real FFmpeg outputs; screenshots or mocked API responses alone are not proof
   Transient restoration errors preserve the draft for retry. Surviving outputs
   remain downloadable across further reloads after their source expires.
 - At 360 px and 390 px, controls remain reachable with no horizontal document
-  overflow on every step and in navigation dialogs. Touch preview, stage movement,
-  export and a real download work; focus indicators remain visible.
-- Laptop, desktop and tablet layouts keep the player, both handles, position
-  markers, preview, precision disclosure and Save clip on the first viewport.
-  The Clips step keeps its selection/actions, list and Continue accessible without
-  needless document scrolling. Source opening
-  and export/download controls also fit without unnecessary page scrolling. Twelve
-  clips use a bounded desktop list; adding a moment reveals its edited row.
-  Phones retain a natural vertical layout rather than shrinking controls to fit:
-  touch targets are at least 44 by 44 CSS pixels, with no horizontal clipping.
+  overflow in source choices, the workspace and optional dialogs. Touch preview,
+  clip selection, export and a real download work; focus indicators remain visible.
+- At 1280×720, 1440×900 and 1920×1080 the desktop document must not scroll:
+  the same player, both handles, timeline, preview and export are simultaneously
+  inside the first viewport. Portrait sources use contained video without
+  changing control positions. Twelve clips scroll within the collection panel;
+  adding/editing reveals the active row without moving the document. Exporting
+  switches the sidebar to ready files; the collection can be reopened beside
+  the same player. Optional tools/settings do not resize the video. Small windows,
+  phones and enlarged text reflow vertically with at least 44px touch targets,
+  visible focus and no horizontally clipped controls.
 - Light and dark choices persist. System mode follows changes to the browser's
   color preference. A stored theme is applied before the first rendering frame.
   Normal text reaches 4.5:1 contrast and large text 3:1 in both themes; computed
@@ -344,8 +387,9 @@ DOM pointer events prove physical dragging.
 
 The viewport matrix covers 1440×900, 1366×768, 1280×800, 1280×720, 1920×1080,
 2560×1440 and 1024×768; phones at 360×640, 390×844 and 430×932, plus each landscape
-orientation. Every size is measured on all four steps in both languages and
-themes. A 320×720 CSS-pixel viewport additionally checks narrow reflow. This is
+orientation. Each size measures source choices, the unified workspace, optional
+tools and export settings; languages and appearances alternate across the matrix.
+A 320×720 CSS-pixel viewport additionally checks narrow reflow. This is
 not a browser-zoom test or a claim that setting device pixel density simulates
 zoom. Reports include measured control rectangles, real files and screenshots.
 Landscape phone previews are capped below 70% of viewport height while retaining

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { api, assertFirstFrameMatchesSource, chooseOption, goToExport, goToMoment, goToSource, probeDownloadedFile, showExactTimes, uploadThroughUI, waitJob } from './helpers'
+import { api, assertFirstFrameMatchesSource, chooseOption, goToExport, goToMoment, goToSource, probeDownloadedFile, showExactTimes, uploadThroughUI, waitJob, showExportSettings, closeExportSettings, showEditorTools, closeEditorTools } from './helpers'
 
 // Exact addresses supplied by the owner, independent of the app catalog.
 const wallets = [
@@ -56,8 +56,10 @@ test('language switching preserves the real source, ranges and export', async ({
 
   await goToExport(page)
   // This language scenario revisits its source after a completed export.
+  await showExportSettings(page)
   await page.getByRole('checkbox', { name: 'Delete source after export', exact: true }).uncheck()
   await expect(page.getByRole('checkbox', { name: 'Delete source after export', exact: true })).not.toBeChecked()
+  await closeExportSettings(page)
   const creationPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
   const creation = await creationPromise
@@ -136,7 +138,9 @@ test('saved defaults survive reload and are applied without changing clip bounda
   await expect(page.getByRole('button', { name: 'MP3 Audio', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await goToMoment(page)
   await showExactTimes(page)
+  await showEditorTools(page)
   await expect(page.getByRole('combobox', { name: 'Timeline zoom', exact: true })).toContainText('10 seconds')
+  await closeEditorTools(page)
 
   // Reload must restore the genuine source even when metadata arrives after
   // the document. Delay only its real response; keep the source and draft intact.
@@ -153,7 +157,9 @@ test('saved defaults survive reload and are applied without changing clip bounda
   expect(restoredStatuses).toEqual([200])
   await page.unroute(sourceRestore)
   await expect(page.getByLabel('Start', { exact: true })).toHaveValue('00:00:02.000')
+  await showEditorTools(page)
   await expect(page.getByRole('combobox', { name: 'Timeline zoom', exact: true })).toContainText('10 seconds')
+  await closeEditorTools(page)
   await page.getByRole('button', { name: 'Settings', exact: true }).click()
   await expect(dialog.locator('#default-format')).toContainText('MP3')
   await expect(dialog.locator('#default-zoom')).toContainText('10 seconds')
@@ -161,7 +167,9 @@ test('saved defaults survive reload and are applied without changing clip bounda
   await uploadThroughUI(page)
   await showExactTimes(page)
   await expect(page.getByLabel('Start', { exact: true })).toHaveValue('00:00:00.000')
+  await showEditorTools(page)
   await expect(page.getByRole('combobox', { name: 'Timeline zoom', exact: true })).toContainText('10 seconds')
+  await closeEditorTools(page)
   await goToExport(page)
   await expect(page.getByRole('button', { name: 'MP3 Audio', exact: true })).toHaveAttribute('aria-pressed', 'true')
 })
@@ -177,6 +185,7 @@ test('a real failed audio export explains the cause in both languages and can re
   await page.getByLabel('End', { exact: true }).press('Tab')
   await goToExport(page)
   await page.getByRole('button', { name: 'MP3 Audio', exact: true }).click()
+  await closeExportSettings(page)
   const creationPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
   const creation = await creationPromise

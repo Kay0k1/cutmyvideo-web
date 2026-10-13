@@ -1,0 +1,169 @@
+.clip-library.compact {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 12px;
+  overflow: hidden;
+}
+
+.clip-library.compact .clip-library-heading {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  min-height: 44px;
+  margin-bottom: 2px;
+  gap: 8px;
+}
+
+.clip-library.compact .clip-library-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: .9375rem;
+}
+
+.clip-library.compact .clip-total {
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.clip-library.compact .clip-bulkbar {
+  flex: 0 0 auto;
+  gap: 0 4px;
+  padding: 0;
+  margin-bottom: 6px;
+  border-top: 0;
+}
+
+.clip-library.compact .clip-select-all {
+  flex: 1;
+  min-width: 0;
+  gap: 0;
+  font-size: .8125rem;
+}
+
+.clip-library.compact .clip-selected-count {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.clip-library.compact summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.clip-library.compact summary::-webkit-details-marker { display: none; }
+.clip-library.compact summary::marker { content: ''; }
+.clip-library.compact summary > span { font-size: 1.375rem; line-height: 1; letter-spacing: 2px; }
+.clip-library.compact summary[aria-disabled="true"] { opacity: .4; cursor: default; }
+.clip-library.compact summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.clip-library.compact .clip-bulk-menu { flex: 0 0 44px; }
+.clip-library.compact .clip-bulk-menu[open] { flex-basis: 100%; }
+.clip-library.compact .clip-bulk-menu[open] > summary { float: right; }
+
+.clip-library.compact .clip-bulk-actions {
+  clear: both;
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 0;
+  margin: 0;
+  padding: 2px 5px 7px;
+}
+
+.clip-library.compact .clip-bulk-actions .text-button {
+  justify-content: flex-start;
+  min-height: 44px;
+  text-align: left;
+  font-size: .8125rem;
+}
+
+.clip-library.compact .clip-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 2px;
+}
+
+.clip-library.compact .clip-list li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: start;
+  gap: 0;
+  padding: 3px 1px;
+  margin-bottom: 6px;
+}
+
+.clip-library.compact .clip-list li.editing {
+  border-color: var(--accent);
+  background: var(--soft);
+}
+
+.clip-library.compact .clip-row-body { grid-column: 2; grid-row: 1; }
+.clip-library.compact .clip-row-name { min-height: 44px; padding: 5px; font-size: .875rem; }
+
+.clip-library.compact .clip-compact-edit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 5px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  color: var(--muted);
+}
+
+.clip-library.compact .clip-compact-edit:hover:not(:disabled) { color: var(--ink); background: var(--input); }
+.clip-library.compact .clip-compact-edit > svg { flex-shrink: 0; }
+
+.clip-library.compact .clip-row-times {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+  padding: 0;
+  font-size: .75rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.clip-library.compact .clip-row-menu { grid-column: 3; grid-row: 1; min-width: 0; }
+.clip-library.compact .clip-row-menu[open] { grid-column: 1 / -1; grid-row: 2; border-top: 1px solid var(--line); }
+.clip-library.compact .clip-row-menu[open] > summary { float: right; }
+.clip-library.compact .clip-row-actions { display: flex; align-items: center; gap: 3px; min-height: 44px; padding-left: 4px; }
+.clip-library.compact .clip-row-actions .delete-range { margin-left: auto; }
+.clip-library.compact .clip-row-actions .icon-button { grid-column: auto; grid-row: auto; }
+
+.clip-library.compact .clip-empty { flex: 1; min-height: 0; padding: 14px 4px; }
+.clip-library.compact .clip-empty h3 { font-size: .9375rem; }
+.clip-library.compact .clip-empty p { font-size: .8125rem; }
+.clip-library.compact .clip-empty .button { width: 100%; margin-top: 12px; font-size: .8125rem; }
+
+.clip-library.compact .clip-compact-hint {
+  flex: 0 0 auto;
+  margin: 6px 0 0;
+  font-size: .75rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.clip-library.compact .clip-compact-preview {
+  flex: 0 0 auto;
+  width: 100%;
+  min-height: 44px;
+  margin-top: 8px;
+  font-size: .8125rem;
+}

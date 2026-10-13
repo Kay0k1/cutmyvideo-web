@@ -2,7 +2,7 @@ import { readBrowserDraft } from './browserProjectStorage';
 import { expect, test, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { api, goToExport, probeDownloadedFile, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers';
+import { api, goToClips, goToExport, probeDownloadedFile, showExactTimes, showEditorTools, closeEditorTools, showTimelineMedia, uploadThroughUI, waitJob } from './helpers';
 
 const source = { id: 'src_cutting_controls', title: 'Recorded interview', kind: 'upload', duration_ms: 12000, width: 640, height: 360,
   preview_kind: 'native', preview_url: `${api}/sources/src_cutting_controls/file`, embed_url: null, thumbnail_url: null };
@@ -47,9 +47,10 @@ async function prepare(page: Page, saved: Record<string, unknown> = {}, expired 
 
 test('small cut steps, boundary checks and frame search use actual source positions', async ({ page }) => {
   await prepare(page);
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step');
+  await expect(page.locator('.editor-workspace')).toBeVisible();
   const video = page.locator('video');
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+  await showEditorTools(page);
   await page.getByRole('button', { name: 'Start 0.1 s later', exact: true }).click();
   await expect(page.locator('#range-start')).toHaveValue('00:00:01.100');
   await page.getByRole('button', { name: 'End 0.1 s earlier', exact: true }).click();
@@ -58,16 +59,20 @@ test('small cut steps, boundary checks and frame search use actual source positi
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(0.1);
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).paused)).toBe(true);
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(2.6, 2);
+  await showEditorTools(page);
   await page.getByRole('button', { name: 'Check end', exact: true }).click();
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(1.5);
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).paused)).toBe(true);
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(4.4, 2);
+  await closeEditorTools(page);
+  await showTimelineMedia(page);
   const frames = page.getByRole('button', { name: /^Go to frame/ });
   await expect(frames).toHaveCount(3);
   await frames.nth(2).click();
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(10, 2);
   await expect(page.locator('#overview')).toHaveValue('10000');
   await page.getByRole('button', { name: 'Русский', exact: true }).click();
+  await showEditorTools(page);
   await expect(page.getByRole('button', { name: 'Проверить начало', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Начало на 0,1 с позже', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -94,7 +99,7 @@ test('committed short times restore canonically while malformed saved clips are 
   await expect(page.locator('#range-end')).toHaveValue('00:00:03.000');
   await expect(page.locator('.trim-handle.start')).toHaveAttribute('aria-valuenow', '1000');
   await expect(page.locator('.trim-handle.end')).toHaveAttribute('aria-valuenow', '3000');
-  await page.getByRole('button', { name: 'Clip list', exact: true }).click();
+  await goToClips(page);
   await expect(page.locator('.range-list > li')).toHaveCount(1);
 });
 
@@ -108,13 +113,13 @@ test('expired sources retain names and exact cuts across reload and reconnect', 
   await page.getByRole('checkbox', { name: 'Restore saved clips in the video you open', exact: true }).check();
   await page.getByLabel('Video link', { exact: true }).fill('https://video.example/recording.mp4');
   await page.getByRole('button', { name: 'Open video', exact: true }).click();
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step');
-  await page.getByRole('button', { name: 'Clip list', exact: true }).click();
+  await expect(page.locator('.editor-workspace')).toBeVisible();
+  await goToClips(page);
   await expect(page.getByLabel('Clip 1 name', { exact: true })).toHaveValue('Opening');
   await expect(page.getByLabel('Clip 2 name', { exact: true })).toHaveValue('Ending');
   await expect(page.getByRole('checkbox', { name: 'Select clip 1', exact: true })).not.toBeChecked();
   await expect(page.getByRole('checkbox', { name: 'Select clip 2', exact: true })).toBeChecked();
-  await stepButton(page, 4).click();
+  await goToExport(page);
   await expect(page.locator('.format-picker button.active')).toContainText('MP3');
 });
 
@@ -122,9 +127,11 @@ test('checking the final boundary stops exactly at the source end', async ({ pag
   await prepare(page, { selected_id: ranges[1].id });
   const video = page.locator('video');
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+  await showEditorTools(page);
   await page.getByRole('button', { name: 'Check end', exact: true }).click();
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(10.6);
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).paused)).toBe(true);
+  await closeEditorTools(page);
   await expect(page.getByRole('button', { name: 'Preview clip', exact: true })).toBeVisible();
   await expect(page.locator('#overview')).toHaveValue('12000');
 });
@@ -146,7 +153,7 @@ test('an expired draft with no export selection survives rejecting a shorter rep
 
 test('copy mode explains shifted boundaries before opening optional export controls', async ({ page }) => {
   await prepare(page, { step: 4, output: { format: 'mp4', quality: 'best', cut_mode: 'copy' } });
-  await expect(page.locator('details.export-options')).not.toHaveAttribute('open', '');
+  await expect(page.locator('.export-settings-dialog')).not.toHaveAttribute('open', '');
   await expect(page.getByRole('note')).toHaveText('Copying preserves original quality. The start may shift to a keyframe; actual boundaries will be shown with the finished file.');
   await page.getByRole('button', { name: 'Русский', exact: true }).click();
   await expect(page.getByRole('note')).toContainText('фактические границы будут указаны');
@@ -156,7 +163,7 @@ test('a source expiring during export offers recovery immediately without losing
   await prepare(page, { ranges: [{ ...ranges[0], start_ms: 1125, end_ms: 3875 }, ranges[1]], start_text: '1.125', end_text: '3.875', output: { format: 'mp3', quality: 'best', cut_mode: 'accurate' } });
   await page.route(`**${api}/jobs`, route => route.request().method() === 'POST'
     ? route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'Source expired while editing' } } }) : route.fallback());
-  await stepButton(page, 4).click();
+  await goToExport(page);
   await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Clips saved', exact: true })).toBeVisible();
   await expect(page.locator('.draft-recovery')).toContainText('00:00:01.125 — 00:00:03.875');
@@ -165,17 +172,18 @@ test('a source expiring during export offers recovery immediately without losing
   await page.getByRole('button', { name: 'Open video', exact: true }).click();
   await expect(page.locator('#range-start')).toHaveValue('00:00:01.125');
   await expect(page.locator('#range-end')).toHaveValue('00:00:03.875');
-  await page.getByRole('button', { name: 'Clip list', exact: true }).click();
+  await goToClips(page);
   await expect(page.getByLabel('Clip 1 name', { exact: true })).toHaveValue('Opening');
   await expect(page.getByLabel('Clip 2 name', { exact: true })).toHaveValue('Ending');
   await expect(page.getByRole('checkbox', { name: 'Select clip 1', exact: true })).not.toBeChecked();
   await expect(page.getByRole('checkbox', { name: 'Select clip 2', exact: true })).toBeChecked();
-  await stepButton(page, 4).click();
+  await goToExport(page);
   await expect(page.locator('.format-picker button.active')).toContainText('MP3');
 });
 
 test('frames still prepare after three refusals while foreground preview is busy', async ({ page }) => {
   await prepare(page, {}, false, source.duration_ms, 3);
+  await showTimelineMedia(page);
   await expect(page.getByRole('button', { name: /^Go to frame/ })).toHaveCount(3);
   await page.getByRole('button', { name: 'Go to frame 00:00:10', exact: true }).click();
   await expect(page.locator('#overview')).toHaveValue('10000');
@@ -186,12 +194,14 @@ test('late frame preparation keeps scrolled precision controls in place on a sho
   const storyboardReady = new Promise<void>(resolve => { release = resolve; });
   await page.setViewportSize({ width: 360, height: 640 });
   await prepare(page, { precision_open: false }, false, source.duration_ms, 0, storyboardReady);
+  await showTimelineMedia(page);
   const precision = page.getByRole('button', { name: 'Exact time and timeline', exact: true });
   await expect(precision).toBeVisible();
   await precision.scrollIntoViewIfNeeded();
   const before = await precision.boundingBox();
   expect(before).not.toBeNull();
   release();
+  await showTimelineMedia(page);
   await expect(page.getByRole('button', { name: /^Go to frame/ })).toHaveCount(3);
   const after = await precision.boundingBox();
   expect(after).not.toBeNull();
@@ -201,6 +211,9 @@ test('late frame preparation keeps scrolled precision controls in place on a sho
 });
 
 test('foreground preview retries brief contention promptly with bounded attempts', async ({ page }) => {
+  // Count foreground retry attempts independently of speculative continuation.
+  // Continuation and cache promotion have their own window-preview scenarios.
+  await page.addInitScript(() => Object.defineProperty(navigator, 'connection', { configurable: true, value: { saveData: true } }));
   await prepare(page);
   const windowSource = { ...source, duration_ms: 60000, preview_url: null, preview_kind: 'window' };
   const requests: number[] = [];
@@ -264,12 +277,16 @@ test('a real upload keeps precise boundaries from audition through decoded downl
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
     await page.locator('#range-start').fill('1.125'); await page.locator('#range-start').press('Tab');
     await page.locator('#range-end').fill('3.875'); await page.locator('#range-end').press('Tab');
+    await showEditorTools(page);
     await page.getByRole('button', { name: 'Start 0.1 s later', exact: true }).click();
     await expect(page.locator('#range-start')).toHaveValue('00:00:01.225');
+    await showEditorTools(page);
     await page.getByRole('button', { name: 'Check end', exact: true }).click();
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeGreaterThan(2.5);
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).paused)).toBe(true);
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(5.375, 2);
+    await closeEditorTools(page);
+    await showTimelineMedia(page);
     await expect(page.getByRole('button', { name: /^Go to frame/ })).toHaveCount(3);
     await page.screenshot({ path: testInfo.outputPath('cutting-editor.png'), fullPage: true });
     await testInfo.attach('cutting-editor.png', { path: testInfo.outputPath('cutting-editor.png'), contentType: 'image/png' });
@@ -292,6 +309,7 @@ test('a real upload keeps precise boundaries from audition through decoded downl
     expect(Number(decoded.format.duration)).toBeCloseTo(2.65, 1);
     execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', testInfo.outputPath('precise-cut.mp4'), '-f', 'null', '-'], { timeout: 15000 });
   } finally {
+    await page.goto('about:blank');
     const removed = await page.request.delete(`${api}/sources/${opened.id}`);
     expect(removed.ok(), await removed.text()).toBeTruthy();
   }

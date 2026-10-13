@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { addClip, api, assertFirstFrameMatchesSource, chooseOption, goToClips, goToExport, probeDownloadedFile, saveClip, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
+import { addClip, api, assertFirstFrameMatchesSource, chooseOption, goToClips, probeDownloadedFile, saveClip, showExactTimes, showExportSettings, uploadThroughUI, waitJob } from './helpers'
 
 async function exactRange(page: Page, start: string, end: string) {
   await showExactTimes(page)
@@ -7,6 +7,22 @@ async function exactRange(page: Page, start: string, end: string) {
   await page.getByLabel(/^(Начало|Start)$/, { exact: true }).press('Tab')
   await page.getByLabel(/^(Конец|End)$/, { exact: true }).fill(end)
   await page.getByLabel(/^(Конец|End)$/, { exact: true }).press('Tab')
+}
+
+async function openBulkActions(page: Page) {
+  const menu = page.locator('.clip-bulk-menu')
+  if (!await menu.evaluate(element => (element as HTMLDetailsElement).open)) await menu.locator('summary').click()
+}
+
+async function bulkAction(page: Page, name: string) {
+  await openBulkActions(page)
+  await page.locator('.clip-bulk-menu').getByRole('button', { name, exact: true }).click()
+}
+
+async function deleteClip(page: Page, index: number, name: string) {
+  const menu = page.locator('.clip-list > li').nth(index - 1).locator('.clip-row-menu')
+  if (!await menu.evaluate(element => (element as HTMLDetailsElement).open)) await menu.locator('summary').click()
+  await menu.getByRole('button', { name, exact: true }).click()
 }
 
 test('the export contains only checked clips in source-list order after language switch and reload', async ({ page }, testInfo) => {
@@ -24,12 +40,14 @@ test('the export contains only checked clips in source-list order after language
   await expect(page.getByRole('checkbox', { name: 'Выбрать все фрагменты', exact: true })).toHaveJSProperty('indeterminate', true)
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await page.reload()
-  await expect(stepButton(page, 3)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await expect(page.getByRole('checkbox', { name: 'Select clip 1', exact: true })).toBeChecked()
   await expect(page.getByRole('checkbox', { name: 'Select clip 2', exact: true })).not.toBeChecked()
   await expect(page.getByRole('checkbox', { name: 'Select clip 3', exact: true })).toBeChecked()
-  await goToExport(page)
+  await showExportSettings(page)
   await chooseOption(page, page.locator('#quality'), 'Up to 720p')
+  await page.keyboard.press('Escape')
+  await expect(page.locator('dialog.export-settings-dialog')).not.toBeVisible()
   const created = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`${api}/jobs`))
   await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
   const response = await created
@@ -52,7 +70,7 @@ test('the export contains only checked clips in source-list order after language
   await expect(page.getByRole('heading', { name: 'Clip 1', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Clip 3', exact: true })).toBeVisible()
   await page.reload()
-  await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.results-panel')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Clip 1', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Clip 3', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Русский', exact: true }).click()
@@ -66,7 +84,7 @@ test('bulk duplication and deletion preserve independent clips and an explicitly
   await exactRange(page, '00:00:02.000', '00:00:04.000')
   await saveClip(page)
   await page.getByLabel('Название фрагмента 1', { exact: true }).fill('Original')
-  await page.getByRole('button', { name: 'Дублировать выбранные', exact: true }).click()
+  await bulkAction(page, 'Дублировать выбранные')
   await expect(page.locator('.range-list > li')).toHaveCount(2)
   await expect(page.getByLabel('Название фрагмента 2', { exact: true })).toHaveValue('Original')
   await expect(page.getByRole('checkbox', { name: 'Выбрать фрагмент 2', exact: true })).toBeChecked()
@@ -80,23 +98,23 @@ test('bulk duplication and deletion preserve independent clips and an explicitly
   await goToClips(page)
   await page.getByRole('checkbox', { name: 'Выбрать все фрагменты', exact: true }).uncheck()
   await page.reload()
-  await expect(stepButton(page, 3)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await expect(page.getByRole('checkbox', { name: 'Выбрать фрагмент 1', exact: true })).not.toBeChecked()
   await expect(page.getByRole('checkbox', { name: 'Выбрать фрагмент 2', exact: true })).not.toBeChecked()
-  await expect(page.getByRole('button', { name: 'К настройкам экспорта', exact: true })).toBeDisabled()
+  await expect(page.locator('.export-submit')).toBeDisabled()
   await page.getByRole('checkbox', { name: 'Выбрать фрагмент 2', exact: true }).check()
-  await page.getByRole('button', { name: 'Удалить выбранные', exact: true }).click()
+  await bulkAction(page, 'Удалить выбранные')
   await expect(page.locator('.range-list > li')).toHaveCount(1)
   await expect(page.getByLabel('Название фрагмента 1', { exact: true })).toHaveValue('Original')
   await page.getByRole('checkbox', { name: 'Выбрать все фрагменты', exact: true }).check()
-  await page.getByRole('button', { name: 'Удалить выбранные', exact: true }).click()
+  await bulkAction(page, 'Удалить выбранные')
   await expect(page.getByText('Пока нет фрагментов', { exact: true })).toBeVisible()
-  await expect(stepButton(page, 2)).toBeDisabled()
-  await expect(page.getByRole('button', { name: 'К настройкам экспорта', exact: true })).toBeDisabled()
+  await expect(page.locator('.trim-handle')).toHaveCount(0)
+  await expect(page.locator('.export-submit')).toBeDisabled()
   await page.reload()
   await expect(page.getByText('Пока нет фрагментов', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Добавить первый фрагмент', exact: true }).click()
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.trim-handle.start')).toBeVisible()
   await saveClip(page)
   await expect(page.getByRole('checkbox', { name: 'Выбрать фрагмент 1', exact: true })).toBeChecked()
 })
@@ -109,6 +127,7 @@ test('the server clip limit prevents partial bulk duplication and still permits 
   expect(maximum).toBeLessThanOrEqual(128)
   await page.goto('/')
   await uploadThroughUI(page)
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await goToClips(page)
   const duplicate = page.getByRole('button', { name: 'Дублировать выбранные', exact: true })
   const all = page.getByRole('checkbox', { name: 'Выбрать все фрагменты', exact: true })
@@ -119,25 +138,28 @@ test('the server clip limit prevents partial bulk duplication and still permits 
   const target = Math.floor(maximum / 2) + 1
   let count = 1
   while (count * 2 <= target) {
+    await openBulkActions(page)
     await duplicate.click()
     count *= 2
     await expect(page.locator('.range-list > li')).toHaveCount(count)
   }
   if (count < target) {
     await selectFirst(target - count)
+    await openBulkActions(page)
     await duplicate.click()
     await expect(page.locator('.range-list > li')).toHaveCount(target)
   }
   await all.check()
+  await openBulkActions(page)
   await expect(duplicate).toBeDisabled()
-  await expect(page.locator('#clip-limit-hint')).toContainText(String(maximum))
+  await expect(page.locator('.clip-compact-hint')).toContainText(String(maximum))
   await selectFirst(maximum - target)
   await duplicate.click()
   await expect(page.locator('.range-list > li')).toHaveCount(maximum)
   await expect(page.getByRole('button', { name: 'Добавить фрагмент', exact: true })).toBeDisabled()
   await expect(duplicate).toBeDisabled()
   await all.check()
-  await page.getByRole('button', { name: 'Удалить выбранные', exact: true }).click()
+  await bulkAction(page, 'Удалить выбранные')
   await expect(page.getByText('Пока нет фрагментов', { exact: true })).toBeVisible()
 })
 
@@ -147,15 +169,16 @@ test('full undo restores deleted clip order, labels, selection and boundaries an
   await exactRange(page, '00:00:02.000', '00:00:04.000')
   await saveClip(page)
   await page.getByLabel('Название фрагмента 1', { exact: true }).fill('First')
-  await page.getByRole('button', { name: 'Дублировать выбранные', exact: true }).click()
+  await bulkAction(page, 'Дублировать выбранные')
   await page.getByLabel('Название фрагмента 2', { exact: true }).fill('Second')
   await page.getByRole('checkbox', { name: 'Выбрать фрагмент 1', exact: true }).uncheck()
   const ids = await page.locator('.clip-list > li').evaluateAll(rows => rows.map(row => (row as HTMLElement).dataset.rangeId))
 
-  await page.getByRole('button', { name: 'Удалить фрагмент 1', exact: true }).click()
+  await deleteClip(page, 1, 'Удалить фрагмент 1')
   await expect(page.getByLabel('Название фрагмента 1', { exact: true })).toHaveValue('Second')
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('button', { name: 'Undo change', exact: true }).scrollIntoViewIfNeeded()
   await expect(page.getByRole('button', { name: 'Undo change', exact: true })).toBeInViewport()
   await page.screenshot({ path: testInfo.outputPath('undo-mobile.png'), fullPage: true })
   await page.getByRole('button', { name: 'Undo change', exact: true }).click()
@@ -171,7 +194,7 @@ test('full undo restores deleted clip order, labels, selection and boundaries an
   await expect(page.getByLabel('End', { exact: true })).toHaveValue('00:00:04.000')
   await goToClips(page)
   await page.getByRole('checkbox', { name: 'Select all clips', exact: true }).check()
-  await page.getByRole('button', { name: 'Delete selected', exact: true }).click()
+  await bulkAction(page, 'Delete selected')
   await expect(page.getByText('No clips yet', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Undo change', exact: true }).click()
   await expect(page.locator('.clip-list > li')).toHaveCount(2)
@@ -179,7 +202,7 @@ test('full undo restores deleted clip order, labels, selection and boundaries an
   await expect(page.locator('.clip-list > li')).toHaveCount(2)
   await expect(page.getByLabel('Clip 1 name', { exact: true })).toHaveValue('First')
 
-  await page.getByRole('button', { name: 'Delete clip 1', exact: true }).click()
+  await deleteClip(page, 1, 'Delete clip 1')
   await page.getByLabel('Clip 1 name', { exact: true }).fill('Changed after deletion')
   await page.getByLabel('Clip 1 name', { exact: true }).press('Tab')
   await expect(page.getByLabel('Clip 1 name', { exact: true })).toHaveValue('Changed after deletion')

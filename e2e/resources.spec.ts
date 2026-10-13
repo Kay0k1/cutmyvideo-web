@@ -1,6 +1,6 @@
 import { readBrowserDraft } from './browserProjectStorage';
 import { expect, test, type Page } from '@playwright/test'
-import { api, showExactTimes, stepButton, uploadThroughUI } from './helpers'
+import { api, closeEditorTools, closeExportSettings, goToClips, goToExport, goToSource, showEditorTools, showExactTimes, showExportSettings, uploadThroughUI } from './helpers'
 
 const source = {
   id: 'src_resources', title: 'Resource lifecycle fixture', kind: 'upload', duration_ms: 12000,
@@ -112,14 +112,14 @@ test('resource lifecycle: deletion explains all consequences, respects dismissal
     if (route.request().method() !== 'DELETE') return route.fallback()
     deletes++; return route.fulfill({ status: 204, body: '' })
   })
-  await page.reload(); await stepButton(page, 1).click()
+  await page.reload(); await expect(page.locator('.editor-workspace')).toBeVisible(); await goToSource(page)
   await expect(page.locator('.retention-note').first()).toContainText('Видео будет удалено после')
   const remove = page.getByRole('button', { name: 'Удалить видео и файлы', exact: true })
   page.once('dialog', async dialog => { expect(dialog.message()).toMatch(/все его задания и готовые файлы/); await dialog.dismiss() })
   await remove.click(); expect(deletes).toBe(0); await expect(remove).toBeEnabled()
   page.once('dialog', dialog => dialog.accept())
   await remove.click()
-  await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.source-chooser')).toBeVisible()
   await expect(remove).not.toBeVisible(); expect(deletes).toBe(1)
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
   expect(await readBrowserDraft(page)).not.toHaveProperty('source_id')
@@ -129,11 +129,11 @@ test('resource lifecycle: source-in-use conflict keeps the editable source and e
   await prepare(page)
   await page.route(`**${api}/sources/${source.id}`, route => route.request().method() === 'DELETE'
     ? route.fulfill({ status: 409, json: { error: { code: 'source_in_use', message: 'in use' } } }) : route.fallback())
-  await page.reload(); await stepButton(page, 1).click(); page.once('dialog', dialog => dialog.accept())
+  await page.reload(); await expect(page.locator('.editor-workspace')).toBeVisible(); await goToSource(page); page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Удалить видео и файлы', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Видео используется активным заданием')
   await expect(page.getByRole('button', { name: 'Удалить видео и файлы', exact: true })).toBeEnabled()
-  await expect(stepButton(page, 2)).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Вернуться к редактированию', exact: true })).toBeEnabled()
 })
 
 test('resource lifecycle: waiting-storage is active, cancellable, bounded and translated', async ({ page }) => {
@@ -143,14 +143,14 @@ test('resource lifecycle: waiting-storage is active, cancellable, bounded and tr
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Ждём свободного места', exact: true })).toBeVisible()
   await expect(page.locator('.job-status')).toContainText('Ожидание места — до')
-  await stepButton(page, 1).click()
+  await goToSource(page)
   await expect(page.getByRole('button', { name: 'Удалить видео и файлы', exact: true })).toBeDisabled()
-  await stepButton(page, 4).click()
+  await goToExport(page)
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Waiting for storage', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Cancel processing', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Processing cancelled', exact: true })).toBeVisible()
-  await stepButton(page, 1).click()
+  await goToSource(page)
   await expect(page.getByRole('button', { name: 'Delete video and files', exact: true })).toBeEnabled()
 })
 
@@ -192,7 +192,7 @@ test('resource lifecycle: a transient restore failure preserves the saved draft 
   await page.waitForTimeout(1200)
   expect(await readBrowserDraft(page).then(saved => saved.source_id)).toBe(source.id)
   await page.getByRole('button', { name: 'Повторить подключение', exact: true }).click()
-  await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.export-panel')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled()
 })
 
@@ -223,6 +223,7 @@ test('resource lifecycle: malformed IDs and oversized JSON never start restore r
 })
 
 test('resource lifecycle: upload displays measured bytes before server inspection without buffering File', async ({ page }) => {
+  type UploadFixtureWindow = Window & { uploadFixture?: { progress(loaded: number, total: number): void; finish(): void } }
   await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
   await page.addInitScript(source => {
     const fake = class {
@@ -232,20 +233,29 @@ test('resource lifecycle: upload displays measured bytes before server inspectio
       open(method: string, url: string) { if (method !== 'POST' || !url.endsWith('/uploads')) throw new Error('Unexpected upload route') }
       send(body: FormData) {
         if (!(body instanceof FormData) || !(body.get('file') instanceof File)) throw new Error('Upload must use native File/FormData')
-        setTimeout(() => this.upload.onprogress?.({ lengthComputable: true, loaded: 524288, total: 1048576 }), 20)
-        setTimeout(() => this.upload.onprogress?.({ lengthComputable: true, loaded: 1048576, total: 1048576 }), 500)
-        setTimeout(() => this.onload?.(), 1500)
+        Object.assign(window, { uploadFixture: {
+          progress: (loaded: number, total: number) => this.upload.onprogress?.({ lengthComputable: true, loaded, total }),
+          finish: () => this.onload?.(),
+        } })
       }
       abort() { this.onabort?.() }
     }
     Object.defineProperty(window, 'XMLHttpRequest', { value: fake })
     File.prototype.arrayBuffer = () => { throw new Error('Whole-file JS read is forbidden') }
   }, source)
-  await page.goto('/'); await uploadThroughUI(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Файл', exact: true }).click()
+  const chooser = page.waitForEvent('filechooser')
+  await page.locator('button.upload-button').click()
+  await (await chooser).setFiles(process.env.CUTMY_E2E_MEDIA!)
+  await expect.poll(() => page.evaluate(() => !!(window as UploadFixtureWindow).uploadFixture)).toBe(true)
+  await page.evaluate(() => (window as UploadFixtureWindow).uploadFixture!.progress(524288, 1048576))
   await expect(page.getByRole('progressbar', { name: 'Загрузка видео', exact: true })).toBeVisible()
   await expect(page.locator('.upload-progress')).toContainText('Передано')
+  await page.evaluate(() => (window as UploadFixtureWindow).uploadFixture!.progress(1048576, 1048576))
   await expect(page.locator('.source-progress')).toContainText('Проверяем видео')
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await page.evaluate(() => (window as UploadFixtureWindow).uploadFixture!.finish())
+  await expect(page.locator('.editor-workspace')).toBeVisible()
 })
 
 test('resource lifecycle: previous sources can be removed while the current job waits for disk', async ({ page }) => {
@@ -256,7 +266,7 @@ test('resource lifecycle: previous sources can be removed while the current job 
   await page.route(`**${api}/jobs/${job.id}`, route => route.fulfill({ json: { ...job, status: 'waiting_storage', stage: 'waiting_storage', storage_wait_until: '2099-10-05T12:30:00Z' } }))
   let deletes = 0
   await page.route(`**${api}/sources/${previous.id}`, route => { deletes++; remaining = remaining.filter(item => item.id !== previous.id); return route.fulfill({ status: 204 }) })
-  await page.reload(); await stepButton(page, 1).click()
+  await page.reload(); await expect(page.locator('.editor-workspace')).toBeVisible(); await goToSource(page)
   await page.getByRole('button', { name: 'Мои видео на сервере', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Previous upload', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: `Удалить видео «${source.title}» и файлы`, exact: true })).toBeDisabled()
@@ -264,7 +274,7 @@ test('resource lifecycle: previous sources can be removed while the current job 
   await page.getByRole('button', { name: 'Удалить видео «Previous upload» и файлы', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Previous upload', exact: true })).not.toBeVisible()
   expect(deletes).toBe(1); await expect(page.getByRole('button', { name: 'Мои видео на сервере', exact: true })).toBeFocused()
-  await stepButton(page, 4).click(); await expect(page.getByRole('heading', { name: 'Ждём свободного места', exact: true })).toBeVisible()
+  await goToExport(page); await expect(page.getByRole('heading', { name: 'Ждём свободного места', exact: true })).toBeVisible()
 })
 
 test('resource lifecycle: leaving the source list during deletion still clears the deleted draft', async ({ page }) => {
@@ -277,15 +287,15 @@ test('resource lifecycle: leaving the source list during deletion still clears t
     if (route.request().method() !== 'DELETE') return route.fallback()
     deleting = true; await pending; await route.fulfill({ status: 204 })
   })
-  await page.reload(); await stepButton(page, 1).click()
+  await page.reload(); await expect(page.locator('.editor-workspace')).toBeVisible(); await goToSource(page)
   await page.getByRole('button', { name: 'Мои видео на сервере', exact: true }).click()
   page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: `Удалить видео «${source.title}» и файлы`, exact: true }).click()
   await expect.poll(() => deleting).toBe(true)
-  await stepButton(page, 4).click(); await expect(page.locator('.source-library')).not.toBeVisible()
+  await goToExport(page); await expect(page.locator('.source-library')).not.toBeVisible()
   finish()
-  await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step')
-  await expect(stepButton(page, 2)).toBeDisabled()
+  await expect(page.locator('.source-chooser')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Вернуться к редактированию', exact: true })).not.toBeVisible()
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
   expect(await readBrowserDraft(page)).not.toHaveProperty('source_id')
 })
@@ -304,11 +314,14 @@ test('resource lifecycle: real multipart export results and source are explicitl
     };
   });
   await page.goto('/'); await uploadThroughUI(page)
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   const uploadEvidence = await page.evaluate(() => (window as typeof window & { uploadEvidence: { nativeFile: boolean; progress: number; loaded: number } }).uploadEvidence)
   expect(uploadEvidence.nativeFile).toBe(true); expect(uploadEvidence.progress).toBeGreaterThan(0); expect(uploadEvidence.loaded).toBeGreaterThan(0)
   const storedSource = await readBrowserDraft(page).then(saved => saved.source_id as string)
-  await stepButton(page, 4).click()
+  await goToExport(page)
+  await showExportSettings(page)
+  await page.getByRole('checkbox', { name: 'Удалить исходник после экспорта', exact: true }).uncheck()
+  await closeExportSettings(page)
   const createdResponse = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
   const response = await createdResponse; expect(response.ok(), await response.text()).toBeTruthy()
@@ -317,9 +330,9 @@ test('resource lifecycle: real multipart export results and source are explicitl
   const download = await page.getByRole('link', { name: 'Скачать', exact: true }).getAttribute('href')
   const list = await page.request.get(`${api}/sources`); expect(list.ok()).toBeTruthy()
   expect((await list.json()).sources.some((item: { id: string }) => item.id === storedSource)).toBe(true)
-  await stepButton(page, 1).click(); page.once('dialog', dialog => dialog.accept())
+  await goToSource(page); page.once('dialog', dialog => dialog.accept())
   await page.getByRole('button', { name: 'Удалить видео и файлы', exact: true }).click()
-  await expect(stepButton(page, 1)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.source-chooser')).toBeVisible()
   expect((await page.request.get(`${api}/sources/${storedSource}`)).status()).toBe(404)
   expect((await page.request.get(`${api}/jobs/${created.id}`)).status()).toBe(404)
   expect((await page.request.get(download!)).status()).toBe(404)
@@ -343,20 +356,22 @@ test('resource policy: shorter range and total duration limits preserve drafts a
   await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true, limits: { max_source_bytes: 1024 ** 3, max_ranges: 2, max_range_ms: 2000, max_job_ms: 3000 } } }))
   let posts = 0
   await page.route(`**${api}/jobs`, route => { posts++; return route.fulfill({ json: job }) })
-  await page.reload(); await expect(page.locator('.output-selection ol > li')).toHaveCount(2)
+  await page.reload(); await expect(page.locator('.clip-list > li')).toHaveCount(2)
   await expect(page.getByRole('alert')).toContainText('Один фрагмент может длиться до 2 с.')
   await expect(page.getByRole('button', { name: 'Вырезать фрагменты', exact: true })).toBeDisabled()
-  await stepButton(page, 3).click()
+  await goToClips(page)
   await page.getByRole('button', { name: 'Редактировать фрагмент 2', exact: true }).click()
+  await showExactTimes(page)
   await page.getByLabel('Конец', { exact: true }).fill('7'); await page.getByLabel('Конец', { exact: true }).press('Tab')
   await expect(page.locator('#range-error')).toHaveText('Один фрагмент может длиться до 2 с.')
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await expect(page.locator('#range-error')).toHaveText('A single clip can be up to 2 s long.')
   await page.getByRole('button', { name: 'Русский', exact: true }).click()
   await page.getByLabel('Конец', { exact: true }).fill('6'); await page.getByLabel('Конец', { exact: true }).press('Tab')
-  await stepButton(page, 4).click()
+  await goToExport(page)
   await expect(page.getByRole('button', { name: 'Вырезать фрагменты', exact: true })).toBeEnabled(); expect(posts).toBe(0)
   await page.getByRole('button', { name: 'English', exact: true }).click()
+  await showExportSettings(page)
   await expect(page.locator('.export-limits')).toContainText('Each clip: up to 2 s; entire export: up to 3 s.')
 })
 
@@ -368,10 +383,10 @@ test('resource policy: lowered count limits keep all saved clips and existing do
     id: 'artifact_resources', filename: 'previous.mp4', size_bytes: 1000, download_url: `${api}/artifacts/artifact_resources`, actual_start_ms: 0, actual_end_ms: 3000,
   } }] } }))
   await page.reload()
-  await expect(page.locator('.output-selection ol > li')).toHaveCount(3)
+  await expect(page.locator('.clip-list > li')).toHaveCount(3)
   await expect(page.getByRole('alert')).toContainText('Можно экспортировать не больше 2 фрагментов')
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
-  await stepButton(page, 3).click(); await expect(page.locator('.clip-list > li')).toHaveCount(3)
+  await goToClips(page); await expect(page.locator('.clip-list > li')).toHaveCount(3)
   await expect(page.getByRole('button', { name: 'Добавить фрагмент', exact: true })).toBeDisabled()
 })
 
@@ -392,11 +407,13 @@ test('long recordings: 42-minute and full-stream selections, fast export, and a 
   await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://www.twitch.tv/videos/2896088341')
   await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
   await showExactTimes(page)
+  await showEditorTools(page)
   await page.getByRole('button', { name: 'Выбрать всё видео', exact: true }).click()
+  await closeEditorTools(page)
   await expect(page.getByLabel('Конец', { exact: true })).toHaveValue('09:00:00.000')
   await page.getByLabel('Конец', { exact: true }).fill('00:42:00')
   await page.getByLabel('Конец', { exact: true }).press('Tab')
-  await page.getByRole('button', { name: 'К скачиванию', exact: true }).click()
+  await showExportSettings(page)
   await expect(page.getByText('Один фрагмент — до 12 ч; весь экспорт — до 24 ч.', { exact: true })).toBeVisible()
   await expect(page.getByText('Готовый файл — до 16.0 ГБ.', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Ускорить без перекодирования', exact: true }).click()
@@ -405,6 +422,7 @@ test('long recordings: 42-minute and full-stream selections, fast export, and a 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.screenshot({ path: testInfo.outputPath('long-export-mobile.png'), fullPage: true })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
+  await closeExportSettings(page)
   await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
   await expect.poll(() => submitted?.cut_mode).toBe('copy')
   expect(submitted.ranges).toMatchObject([{ start_ms: 0, end_ms: 2520000 }])
@@ -417,7 +435,7 @@ test('long recordings: 42-minute and full-stream selections, fast export, and a 
   await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://www.twitch.tv/videos/2896088342')
   await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
   await expect(page.locator('.source-title')).toContainText(second.title)
-  await stepButton(page, 1).click()
+  await goToSource(page)
   const library = page.getByRole('button', { name: 'Экспорты и файлы', exact: true })
   if (await library.getAttribute('aria-expanded') !== 'true') await library.click()
   await expect(page.locator('.job-library').getByRole('heading', { name: recording.title, exact: true })).toBeVisible()
@@ -445,12 +463,12 @@ test('background exports: replacing a source ignores the previous job poll alrea
   try {
     await page.reload()
     await expect.poll(() => reads).toBe(2)
-    await stepButton(page, 1).click()
+    await goToSource(page)
     await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://www.twitch.tv/videos/123456789')
     await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
     await expect(page.locator('.source-title')).toContainText(replacement.title)
     release(); await responded
-    await stepButton(page, 4).click()
+    await goToExport(page)
     await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled()
     await expect(page.locator('.job-status')).toHaveCount(0)
     const draft = await readBrowserDraft(page)
