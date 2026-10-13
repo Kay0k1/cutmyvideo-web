@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { holdDatabaseTableLock } from './databaseContract'
 import { parseTimecode } from '../src/timecode'
-import { api, goToExport, goToMoment, goToSource, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
+import { api, goToExport, goToMoment, goToSource, showExactTimes, uploadThroughUI, waitJob } from './helpers'
 
 test.describe('current core database contract', () => {
   test.skip(process.env.CUTMY_E2E_DATABASE_CONTROL !== 'hosted-disposable',
@@ -45,7 +45,7 @@ test.describe('current core database contract', () => {
     const retry = page.waitForResponse(r => r.url().endsWith(`${api}/uploads`) && r.request().method() === 'POST')
     await uploadThroughUI(page)
     expect((await retry).status()).toBe(201)
-    await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+    await expect(page.locator('.editor-workspace')).toBeVisible()
     expect(uploads).toBe(2)
   })
 
@@ -77,7 +77,7 @@ test.describe('current core database contract', () => {
     await page.waitForTimeout(2200)
     expect(attempts).toHaveLength(1)
     await page.reload()
-    await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
+    await expect(page.locator('.export-panel')).toBeVisible()
     const accepted = page.waitForResponse(r => r.url().endsWith(`${api}/jobs`) && r.request().method() === 'POST')
     await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
     const response = await accepted

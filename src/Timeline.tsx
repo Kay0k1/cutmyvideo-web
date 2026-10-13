@@ -7,14 +7,17 @@ import { keyboardTrimValue, pointerSeekValue, pointerTrimValue } from './timelin
 import type { PlaybackPosition } from './playbackPosition';
 import { Waveform } from './Waveform';
 import { Storyboard } from './Storyboard';
+import { Icon } from './Icons';
+import './Timeline.css';
 
-export function Timeline({ duration, position, ranges, selected, view, showOverview = true, sourceID, active, audioTrack, noAudio, onSeek, onRange, onReveal, onBeginChange, onEndChange }: {
+export function Timeline({ duration, position, ranges, selected, view, showOverview = true, compact = false, sourceID, active, audioTrack, noAudio, onSeek, onRange, onReveal, onBeginChange, onEndChange }: {
   duration: number;
   position: PlaybackPosition;
   ranges: ClipRange[];
   selected: ClipRange;
   view: [number, number];
   showOverview?: boolean;
+  compact?: boolean;
   sourceID: string;
   active: boolean;
   audioTrack?: number;
@@ -33,7 +36,9 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
   const [dragging, setDragging] = useState<'start' | 'end' | null>(null);
   const [scrubbing, setScrubbing] = useState(false);
   const [trackWidth, setTrackWidth] = useState(0);
+  const [mediaOpen, setMediaOpen] = useState(false);
   const span = view[1] - view[0];
+  useEffect(() => { setMediaOpen(false); }, [sourceID]);
   useEffect(() => {
     const node = track.current;
     if (!node) return;
@@ -92,7 +97,12 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
     ><span className="trim-grip" aria-hidden="true" /><span className={`trim-tooltip ${pct(value) < 50 ? 'align-start' : 'align-end'}`} aria-hidden="true">{which === 'start' ? t('Начало') : t('Конец')}<strong>{formatTimecode(value, true)}</strong></span></button>;
   };
 
-  return <div className="timeline">
+  const mediaTools = <>
+    <Waveform sourceID={sourceID} duration={duration} current={current} view={view} active={active} audioTrack={audioTrack} noAudio={noAudio} onSeek={ms => { onSeek(ms); onReveal(ms); }} />
+    <Storyboard sourceID={sourceID} duration={duration} current={current} active={active} onSeek={ms => { onSeek(ms); onReveal(ms); }} />
+  </>;
+
+  return <div className={`timeline${compact ? ' timeline-compact' : ''}`}>
     <div className="overview-label">{showOverview ? <label htmlFor="overview">{t("Всё видео")}</label> : <span>{t('Позиция плеера')}</span>}<span>{formatTimecode(current)} / {formatTimecode(duration)}</span></div>
     {showOverview && <div className="overview-track">
       <div className="overview-selections" aria-hidden="true">{ranges.map(range => <span key={range.id} style={{ left: `${range.start_ms / duration * 100}%`, width: `${Math.max(.3, (range.end_ms - range.start_ms) / duration * 100)}%` }} />)}</div>
@@ -139,8 +149,10 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
       {current >= view[0] && current <= view[1] && <div className="playhead" style={{ left: `${pct(current)}%` }} aria-hidden="true" />}
     </div>
     <div className="tick-labels" aria-hidden="true"><span>{formatTimecode(view[0])}</span><span>{formatTimecode((view[0] + view[1]) / 2)}</span><span>{formatTimecode(view[1])}</span></div>
-    <Waveform sourceID={sourceID} duration={duration} current={current} view={view} active={active} audioTrack={audioTrack} noAudio={noAudio} onSeek={ms => { onSeek(ms); onReveal(ms); }} />
-    <Storyboard sourceID={sourceID} duration={duration} current={current} active={active} onSeek={ms => { onSeek(ms); onReveal(ms); }} />
+    {compact ? <details className="timeline-media-disclosure" open={mediaOpen} onToggle={event => setMediaOpen(event.currentTarget.open)}>
+      <summary>{t('Кадры и звук')}<Icon name="chevron" size={15} /></summary>
+      {mediaOpen && <div className="timeline-media-content">{mediaTools}</div>}
+    </details> : mediaTools}
     <p id="trim-hint" className="sr-only">{t('Двигайте ручки начала и конца. Стрелки меняют время на 0,1 секунды, Shift — на секунду.')}</p>
     <p id="seek-hint" className="sr-only">{t('Нажмите на шкалу или двигайте указатель, чтобы перемотать. Стрелки — 0,1 секунды, Shift — секунда; Home и End — начало и конец видео.')}</p>
   </div>;

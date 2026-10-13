@@ -1,7 +1,7 @@
 import { readBrowserProject } from './browserProjectStorage';
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
-import { goToClips, showExactTimes, stepButton } from './helpers';
+import { goToClips, goToExport, goToSource, showExactTimes, showEditorTools, closeEditorTools } from './helpers';
 
 const source = { id: 'efficient-source', title: 'Long recording.mp4', duration_ms: 3600000, width: 640, height: 360, kind: 'upload', preview_kind: 'native', preview_url: '/efficient-source.mp4', embed_url: null, thumbnail_url: null };
 const cuts = [{ id: 'later', label: 'Later', start_ms: 8000, end_ms: 8500 }, { id: 'excluded', label: 'Excluded', start_ms: 5000, end_ms: 5500 }, { id: 'earlier', label: 'Earlier', start_ms: 1000, end_ms: 1500 }];
@@ -25,22 +25,33 @@ async function prepare(page: Page, saved: Record<string, unknown> = {}, beforeOp
     localStorage.setItem('cutmy.workbench.v1', JSON.stringify({ workflow_version: 2, source_id: source.id, source_title: source.title, source_duration_ms: source.duration_ms, ranges: cuts, selected_id: cuts[0].id, selected_range_ids: cuts.map(range => range.id), output: { format: 'mp4', quality: '720p', cut_mode: 'accurate' }, step: 2, ...saved }));
     localStorage.setItem('efficient-seeded', 'yes');
   }, { source, cuts, saved });
-  await page.goto('/'); await expect(stepButton(page, saved.step === 4 ? 4 : 2)).toHaveAttribute('aria-current', 'step');
+  await page.goto('/'); await expect(page.locator('.export-panel').first()).toBeVisible();
   return { previewQueries };
+}
+
+async function moveClipUp(page: Page, index: number) {
+  const menu = page.locator('.clip-list > li').nth(index - 1).locator('.clip-row-menu');
+  if (!await menu.evaluate(node => (node as HTMLDetailsElement).open)) await menu.locator('summary').click();
+  await page.getByRole('button', { name: `Переместить фрагмент ${index} вверх`, exact: true }).click();
+}
+
+async function saveNext(page: Page) {
+  await page.locator('h1').focus();
+  await page.keyboard.press('KeyN');
 }
 
 for (const count of [2, 10, 20]) test(`create ${count} cuts without leaving the player and undo one add`, async ({ page }) => {
   await prepare(page, { ranges: [cuts[0]], selected_range_ids: [cuts[0].id] });
-  const next = page.getByRole('button', { name: 'Сохранить и добавить следующий', exact: true });
+  const next = page.getByRole('button', { name: 'Добавить фрагмент', exact: true });
   for (let index = 1; index < count; index++) {
     await next.click();
-    await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step');
-    await expect(page.locator('.moment-clip-navigation')).toContainText(`из ${index + 1}.`);
+    await expect(page.locator('.editor-workspace')).toBeVisible();
+    await expect(page.locator('.clip-list > li')).toHaveCount(index + 1);
   }
   await page.getByRole('button', { name: 'Отменить изменение', exact: true }).click();
-  await expect(page.locator('.moment-clip-navigation')).toContainText(`из ${count - 1}.`);
+  await expect(page.locator('.clip-list > li')).toHaveCount(count - 1);
   await page.getByRole('button', { name: 'Повторить изменение', exact: true }).click();
-  await expect(page.locator('.moment-clip-navigation')).toContainText(`из ${count}.`);
+  await expect(page.locator('.clip-list > li')).toHaveCount(count);
   await goToClips(page); await expect(page.locator('.clip-list > li')).toHaveCount(count);
   await expect(page.getByRole('checkbox', { name: /^Выбрать фрагмент / }).filter({ visible: true })).toHaveCount(count);
   for (const checkbox of await page.getByRole('checkbox', { name: /^Выбрать фрагмент / }).all()) await expect(checkbox).toBeChecked();
@@ -49,22 +60,22 @@ for (const count of [2, 10, 20]) test(`create ${count} cuts without leaving the 
 test('safe shortcuts and switching clips seek to their start', async ({ page }) => {
   await prepare(page);
   const video = page.locator('video'); await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
-  await page.getByRole('button', { name: 'Следующий фрагмент', exact: true }).click();
+  await page.getByRole('button', { name: 'Редактировать фрагмент 2', exact: true }).click();
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(5, 1);
   await page.locator('h1').focus(); await page.keyboard.press('BracketRight');
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(1, 1);
   await showExactTimes(page); await page.locator('#range-start').focus(); await page.keyboard.press('KeyN');
-  await expect(page.locator('.moment-clip-navigation')).toContainText('из 3.');
+  await expect(page.locator('.clip-list > li')).toHaveCount(3);
   await page.keyboard.press('Escape'); await page.locator('h1').focus(); await page.keyboard.press('KeyN');
-  await expect(page.locator('.moment-clip-navigation')).toContainText('из 4.');
+  await expect(page.locator('.clip-list > li')).toHaveCount(4);
 });
 
 test('draft playback follows reordered selected cuts and stops without exporting', async ({ page }) => {
   await prepare(page, { selected_range_ids: ['later', 'earlier'] });
   const video = page.locator('video'); await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
-  await goToClips(page); await page.getByRole('button', { name: 'Переместить фрагмент 3 вверх', exact: true }).click();
+  await goToClips(page); await moveClipUp(page, 3);
   await page.getByRole('button', { name: 'Посмотреть подборку', exact: true }).click();
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step');
+  await expect(page.locator('.editor-workspace')).toBeVisible();
   await expect(page.locator('.sequence-preview')).toContainText('Сейчас: Later');
   await expect(page.locator('.sequence-preview')).toContainText('Сейчас: Earlier');
   await expect(page.getByRole('button', { name: 'Остановить подборку', exact: true })).toHaveCount(0);
@@ -78,7 +89,9 @@ test('draft playback follows reordered selected cuts and stops without exporting
 test('a released or nudged boundary shows its new position', async ({ page }) => {
   await prepare(page, { ranges: [cuts[2]], selected_id: cuts[2].id, selected_range_ids: [cuts[2].id], precision_open: true });
   const video = page.locator('video'); await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+  await showEditorTools(page);
   await page.getByRole('button', { name: 'Начало на 0,1 с позже', exact: true }).click();
+  await closeEditorTools(page);
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(1.1, 1);
   const handle = page.getByRole('slider', { name: 'Конец фрагмента на шкале', exact: true });
   await handle.focus(); await handle.press('ArrowRight');
@@ -93,7 +106,7 @@ test('phone controls fit 320 and 360 pixels and retain the compact frame disclos
   await prepare(page);
   for (const width of [320, 360]) {
     await page.setViewportSize({ width, height: 780 });
-    const next = page.getByRole('button', { name: 'Сохранить и добавить следующий', exact: true }); await next.scrollIntoViewIfNeeded();
+    const next = page.getByRole('button', { name: 'Добавить фрагмент', exact: true }); await next.scrollIntoViewIfNeeded();
     await expect(next).toBeVisible();
     const box = await next.boundingBox(); expect(box!.height).toBeGreaterThanOrEqual(44); expect(box!.width).toBeLessThanOrEqual(width);
     const frame = await page.locator('.player-frame').boundingBox(); expect(frame).toBeTruthy();
@@ -131,15 +144,15 @@ for (const loseResponse of [false, true]) test(`selective retry retains earlier 
   });
   await expect(page.getByRole('button', { name: 'Повторить неудавшиеся', exact: true })).toBeVisible();
   await goToClips(page);
-  await page.getByRole('button', { name: 'Переместить фрагмент 3 вверх', exact: true }).click();
-  await page.getByRole('button', { name: 'Переместить фрагмент 2 вверх', exact: true }).click();
-  await stepButton(page, 4).click();
+  await moveClipUp(page, 3);
+  await moveClipUp(page, 2);
+  await goToExport(page);
   await page.getByRole('button', { name: 'Повторить неудавшиеся', exact: true }).click();
   await expect.poll(() => requests.length).toBe(1);
   expect(requests[0].body.ranges).toEqual(cuts.slice(1).map(({ label, start_ms, end_ms }) => ({ label, start_ms, end_ms })));
   expect(requests[0].body.cleanup_source).toBe(true);
   if (loseResponse) {
-    await expect(stepButton(page, 1)).toBeDisabled(); await expect(stepButton(page, 3)).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Другое видео', exact: true })).toBeDisabled(); await expect(page.locator('.export-submit')).toBeDisabled();
     releasePost();
     await expect(page.locator('.error-message')).toBeVisible();
     await page.reload();
@@ -152,24 +165,25 @@ for (const loseResponse of [false, true]) test(`selective retry retains earlier 
   const all = page.getByRole('link', { name: 'Скачать всё ZIP', exact: true });
   await expect(all).toHaveAttribute('href', '/api/v1/jobs/retry-job/download.zip?artifact_id=ready-original&artifact_id=retry-0&artifact_id=retry-1');
   await page.reload(); await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toHaveCount(3); await expect(all).toBeVisible();
-  await stepButton(page, 1).click();
+  await goToSource(page);
   await page.getByRole('button', { name: 'Мои проекты', exact: true }).click();
   await page.getByRole('button', { name: 'Открыть проект «Long recording.mp4»', exact: true }).click();
-  await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step');
+  await expect(page.locator('.export-panel').first()).toBeVisible();
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toHaveCount(3);
   await expect(all).toHaveAttribute('href', '/api/v1/jobs/retry-job/download.zip?artifact_id=ready-original&artifact_id=retry-0&artifact_id=retry-1');
 });
 
 for (const sound of ['selected', 'silent'] as const) test(`selection preview retains global framing and ${sound} audio settings`, async ({ page }, testInfo) => {
   const { previewQueries } = await prepare(page, { ranges: [{ ...cuts[2], end_ms: 3500 }, { ...cuts[0], start_ms: 6500, end_ms: 9500 }], selected_id: 'earlier', selected_range_ids: ['earlier', 'later'], output: { format: 'mp4', quality: '720p', cut_mode: 'accurate', crop: { x: .21875, y: 0, width: .5625, height: 1 }, ...(sound === 'selected' ? { audio_track: 1 } : { no_audio: true }) } });
+  const mask = page.locator('.draft-crop-preview'); await expect(mask).toBeVisible();
   await expect(page.getByRole('button', { name: 'Посмотреть подборку', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Посмотреть подборку', exact: true }).click();
-  const mask = page.locator('.draft-crop-preview'); await expect(mask).toBeVisible();
+  await expect(mask).toBeVisible();
   const ratio = await mask.evaluate(node => node.querySelector('span')!.getBoundingClientRect().width / node.getBoundingClientRect().width);
   expect(ratio).toBeCloseTo(.5625, 3);
   await expect.poll(() => previewQueries.some(url => sound === 'selected' ? url.searchParams.get('audio_track') === '1' && !url.searchParams.has('no_audio') : url.searchParams.get('no_audio') === 'true')).toBe(true);
   await page.screenshot({ path: testInfo.outputPath(`selection-crop-${sound}.png`), fullPage: true });
-  await page.getByRole('button', { name: 'Остановить подборку', exact: true }).click(); await expect(mask).toHaveCount(0);
+  await page.getByRole('button', { name: 'Остановить подборку', exact: true }).click(); await expect(mask).toBeVisible();
 });
 
 test('retrying a joined result keeps its original selected cuts and request order', async ({ page }) => {
@@ -223,7 +237,12 @@ test('a cropped embed keeps its server preview when the frame controls close', a
     await page.route('**/tracks', route => route.fulfill({ json: { tracks: [{ index: 0, type: 'video', codec: 'h264' }, { index: 1, type: 'audio', codec: 'aac', default: true }] } }));
   });
   await expect(page.locator('video')).toBeVisible();
-  await page.locator('.crop-editor summary').click(); await page.locator('.crop-editor summary').click();
+  const mask = page.locator('.draft-crop-preview');
+  await expect(mask).toBeVisible();
+  await page.locator('.crop-editor summary').click();
+  await expect(mask).not.toBeVisible();
+  await page.locator('.crop-editor summary').click();
+  await expect(mask).toBeVisible();
   await expect(page.locator('video')).toBeVisible();
   await page.getByRole('button', { name: 'Посмотреть подборку', exact: true }).click();
   await expect(page.locator('.draft-crop-preview')).toBeVisible();
@@ -235,18 +254,18 @@ test('save-next at the end preserves cuts and history until another moment is ch
     await page.route(`**/api/v1/sources/${source.id}`, route => route.fulfill({ json: { ...source, duration_ms: 12000 } }));
   });
   await expect(page.locator('.window-player-seek input')).toHaveValue('8000');
-  await page.getByRole('button', { name: 'Сохранить и добавить следующий', exact: true }).click();
-  await expect(page.locator('.moment-clip-navigation')).toContainText('из 1.');
+  await saveNext(page);
+  await expect(page.locator('.clip-list > li')).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Отменить изменение', exact: true })).toBeDisabled();
   await expect(page.getByRole('alert')).toContainText('Видео закончилось.');
   await page.locator('.window-player-seek input').focus(); await page.keyboard.press('Home');
-  await page.getByRole('button', { name: 'Сохранить и добавить следующий', exact: true }).click();
-  await expect(page.locator('.moment-clip-navigation')).toContainText('из 2.');
+  await saveNext(page);
+  await expect(page.locator('.clip-list > li')).toHaveCount(2);
 });
 
 test('save-next preserves an existing excluded clip while including the new one', async ({ page }) => {
   await prepare(page, { selected_id: 'excluded', selected_range_ids: ['later', 'earlier'] });
-  await page.getByRole('button', { name: 'Сохранить и добавить следующий', exact: true }).click(); await goToClips(page);
+  await saveNext(page); await goToClips(page);
   await expect(page.getByRole('checkbox', { name: 'Выбрать фрагмент 2', exact: true })).not.toBeChecked();
   await expect(page.getByRole('checkbox', { name: 'Выбрать фрагмент 4', exact: true })).toBeChecked();
 });
@@ -257,14 +276,16 @@ for (const playhead of [0, 3000, 12000]) test(`library add opens an editable cut
   });
   await goToClips(page);
   await page.getByRole('button', { name: 'Добавить фрагмент', exact: true }).click();
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step');
-  await expect(page.locator('.moment-clip-navigation')).toContainText('Фрагмент 2 из 2.');
+  await expect(page.locator('.editor-workspace')).toBeVisible();
+  await expect(page.locator('.clip-list > li')).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'Редактировать фрагмент 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await showExactTimes(page);
   // At the exact source end, choose a usable default interval ending there.
   await expect(page.locator('#range-start')).toHaveValue(playhead === 3000 ? '00:00:03.000' : '00:00:00.000');
   await expect(page.locator('#range-end')).toHaveValue('00:00:12.000');
   await page.getByRole('button', { name: 'Отменить изменение', exact: true }).click();
-  await expect(page.locator('.moment-clip-navigation')).toContainText('Фрагмент 1 из 1.');
+  await expect(page.locator('.clip-list > li')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'Редактировать фрагмент 1', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page.getByRole('button', { name: 'Повторить изменение', exact: true }).click();
   await goToClips(page); await expect(page.locator('.clip-list > li')).toHaveCount(2);
   await expect(page.getByRole('checkbox', { name: 'Выбрать фрагмент 2', exact: true })).toBeChecked();

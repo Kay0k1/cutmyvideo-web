@@ -2,6 +2,18 @@ export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  'Действия с фрагментом {index}': 'Actions for clip {index}',
+  'Действия с выбранными': 'Selected clip actions',
+  'Кадры и звук': 'Frames and audio',
+  'Фрагменты и экспорт': 'Clips and export',
+  'Вернуться к редактированию': 'Return to editing',
+  'Инструменты': 'Tools',
+  'Кадрирование': 'Cropped',
+  'Готово': 'Done',
+  'Фрагменты и файлы': 'Clips and files',
+  'Вернуться к скачиванию': 'Return to downloads',
+  'Исходник удалится после экспорта.': 'The source will be deleted after export.',
+
   "Нарежьте видео": "Cut your video",
   "Отметьте моменты и добавляйте фрагменты, оставаясь возле плеера.": "Mark moments and add clips without leaving the player.",
   "Границы по позиции плеера": "Set boundaries from the player",

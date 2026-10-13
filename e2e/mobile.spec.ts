@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { api, goToClips, goToExport, setTheme, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
+import { api, goToClips, goToExport, setTheme, showExactTimes, stepButton, uploadThroughUI, waitJob, showExportSettings } from './helpers'
 
 test('mobile source and range controls remain usable at 360 and 390 px', async ({ page }, testInfo) => {
   await page.goto('/')
@@ -19,7 +19,7 @@ test('mobile source and range controls remain usable at 360 and 390 px', async (
   await page.getByLabel('Конец', { exact: true }).press('Tab')
   await goToClips(page)
   await page.getByRole('button', { name: 'Добавить фрагмент', exact: true }).tap()
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await showExactTimes(page)
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
   await page.getByRole('button', { name: 'Посмотреть фрагмент', exact: true }).tap()
@@ -88,10 +88,11 @@ test('touch selectors and clip selection remain usable without native select pop
   const first = page.getByRole('checkbox', { name: 'Select clip 1', exact: true })
   await first.tap()
   await expect(first).not.toBeChecked()
-  await expect(page.getByRole('button', { name: 'Export settings', exact: true })).toBeDisabled()
+  await expect(page.locator('.export-submit')).toBeDisabled()
   await first.tap()
   await expect(first).toBeChecked()
   await goToExport(page)
+  await showExportSettings(page)
   const quality = page.getByRole('combobox', { name: 'Video quality', exact: true })
   await quality.tap()
   const popup = page.getByRole('listbox')

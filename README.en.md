@@ -11,10 +11,14 @@ The [cutmy.video](https://cutmy.video) product browser interface for selecting m
 
 ## Usage
 
-1. **Video.** Paste a public link to a video, completed recording or clip, or choose an MP4, MOV, MKV or WebM file. The interface shows the actual title, duration, provider and limits returned by the API. A failed import preserves the previous video and draft.
-2. **Moment.** Choose an audio track by index, language and title, or No sound; the same choice applies to preview and export. Set start/end on the timeline, mark boundaries at the player position and preview the range. Precise time fields and zoom are available separately. Seconds (`15`), total minutes (`83:10`) and hours with milliseconds (`01:23:10.250`) are accepted.
-3. **Clips, if needed.** Add and name several moments, then check those to export. Select all, duplicate, delete, reorder and undo/redo edits are available. A single moment can go straight to export.
-4. **Export.** Choose MP4 or MP3, quality and cut mode, then save separate files or one joined file in the selected list order. Video copy mode offers MP4/MKV for every supported source, including platform links; uploaded files and direct links also offer compatible text-subtitle preservation. The summary shows included and omitted tracks; results show actual boundaries and track details. Jobs continue when another video opens; **Exports and files** lists recent jobs, cancellation and retained results.
+1. **Open a video.** Paste a public video, stream recording or clip URL, or choose an MP4, MOV, MKV or WebM file. A failed import preserves the previous video and draft.
+2. **Trim and download.** The player, timeline boundaries, clip collection and export share one workspace. Drag the boundaries or mark the player position, preview the cut and press **Cut a clip**. A normal MP4 needs no visit to export settings.
+
+Desktop editing follows the browser viewport height. The player, timeline and export remain visible without page scrolling in windows at least 1100×620 CSS pixels. Long clip lists scroll inside their panel. During and after an export, the sidebar switches between **Clips** and **Ready files** while the same player stays in place. Small windows, phones and browser zoom reflow with accessible ordinary scrolling.
+
+**Exact time and timeline** or clicking a timecode reveals precise inputs, supporting seconds (`15`), minutes (`83:10`) and hours with milliseconds (`01:23:10.250`). **Frames and audio** prepares thumbnails and the waveform only on request. **Tools** contains boundary checks, ±0.1 s adjustments, zoom and shortcuts. Add, rename, select and reorder clips beside the video; deletion and duplication live in action menus.
+
+**Export settings** opens an optional dialog for quality, audio selection, source copying, joined files, compatible subtitles and source cleanup. Audio selection applies to both playback and export. Processing continues while another video is opened; **Exports and files** lists recent jobs, cancellation and retained results.
 
 **Exact boundaries** re-encode video to H.264/AAC or audio to MP3. **Original quality** preserves compatible MP4/MKV streams without re-encoding; the start can move to a preceding keyframe. Each result shows its actual boundaries. Successful files remain downloadable when another clip fails.
 
@@ -44,7 +48,7 @@ The waveform follows the selected audio track and original source time. The deta
 
 ## Projects and edit history
 
-Open **My projects** in the Video step to resume a previous edit. Projects are saved in this browser without registration. Removing original server media preserves clip boundaries, names and settings. Reopen the same recording and explicitly enable restoration to continue; mismatched title, duration, geometry or recording ID requires confirmation. Server media always requires the current owner's session.
+Open **My projects** on the open-video screen to resume a previous edit. Projects are saved in this browser without registration. Removing original server media preserves clip boundaries, names and settings. Reopen the same recording and explicitly enable restoration to continue; mismatched title, duration, geometry or recording ID requires confirmation. Server media always requires the current owner's session.
 
 **Download plan** saves selected clips in list order using the core's strict plan v1 schema, with no server resource IDs or authenticated URLs. For the local CLI, set `input` to the media path. The browser can import the same JSON and then open the corresponding recording. Importing into an open project asks before replacing its cuts and supports undo.
 

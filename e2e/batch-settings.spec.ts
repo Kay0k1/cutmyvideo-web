@@ -1,7 +1,7 @@
 import { readBrowserDraft } from './browserProjectStorage';
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
-import { chooseOption, goToExport, goToMoment } from './helpers'
+import { chooseOption, goToExport, goToMoment, showExportSettings, closeExportSettings } from './helpers'
 
 const source = { id: 'src_batch_ui', title: 'Multiple tracks', kind: 'upload', duration_ms: 12000,
   width: 640, height: 360, preview_url: '/native-fixture.mp4', embed_url: null, thumbnail_url: null, preview_kind: 'native' }
@@ -31,7 +31,8 @@ async function prepare(page: Page, options: { platform?: boolean; subtitleCodec?
       output: output ?? { format: 'mp4', quality: '1080p', cut_mode: 'accurate' } }))
   }, { ranges, output: options.output, sourceID: source.id })
   await page.goto('/?lang=en')
-  await expect(page.locator('#audio-track-preview')).toContainText('Source default')
+  await showExportSettings(page)
+  await expect(page.locator('#audio-track-export')).toContainText('Source default')
 }
 
 test('audio selection follows preview, joined export, language switching and retained result details', async ({ page }) => {
@@ -40,9 +41,9 @@ test('audio selection follows preview, joined export, language switching and ret
   await prepare(page)
   await expect.poll(() => requests.some(url => url.includes('audio_track=2'))).toBeTruthy()
   // A browser that picks the first track must still preview the exporter default.
-  await chooseOption(page, page.locator('#audio-track-preview'), 'Audio #1 · rus · Original · aac · 1 channel · 48000 Hz')
+  await chooseOption(page, page.locator('#audio-track-export'), 'Audio #1 · rus · Original · aac · 1 channel · 48000 Hz')
   await expect.poll(() => requests.some(url => url.includes('audio_track=1'))).toBeTruthy()
-  await goToExport(page)
+  await showExportSettings(page)
   await expect(page.locator('#copy-container')).toHaveCount(0)
   await expect(page.locator('#subtitle-mode')).toHaveCount(0)
   await chooseOption(page, page.locator('#output-mode'), 'One joined file')
@@ -50,9 +51,13 @@ test('audio selection follows preview, joined export, language switching and ret
   await chooseOption(page, page.locator('#copy-container'), 'MKV')
   await chooseOption(page, page.locator('#subtitle-mode'), 'Preserve text subtitles')
   await expect(page.locator('#quality')).toBeDisabled()
+  await closeExportSettings(page)
   await page.getByRole('button', { name: 'Русский', exact: true }).click()
+  await showExportSettings(page)
   await expect(page.locator('#output-mode')).toContainText('Один объединённый файл')
+  await closeExportSettings(page)
   await page.getByRole('button', { name: 'English', exact: true }).click()
+  await showExportSettings(page)
   await expect(page.locator('#audio-track-export')).toContainText('Original')
   let submitted: any
   await page.route('**/api/v1/jobs', async route => {
@@ -67,6 +72,7 @@ test('audio selection follows preview, joined export, language switching and ret
         track_manifest: tracks.map(track => ({ ...track, included: track.index !== 2, reason: track.index === 2 ? 'audio_not_selected' : '' })) },
     }] } })
   })
+  await closeExportSettings(page)
   await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Joined result' })).toBeVisible()
   expect(submitted).toMatchObject({ output_mode: 'joined', format: 'mkv', quality: 'best', cut_mode: 'copy', audio_track: 1, subtitle_mode: 'preserve' })
@@ -79,7 +85,7 @@ test('audio selection follows preview, joined export, language switching and ret
 
 test('keyboard no-sound selection reaches the same preview and export and disables MP3', async ({ page }) => {
   await prepare(page)
-  const selected = page.locator('#audio-track-preview')
+  const selected = page.locator('#audio-track-export')
   const preview = page.waitForRequest(request => request.url().includes('/preview?') && request.url().includes('no_audio=true'))
   await selected.focus()
   await selected.press('ArrowDown')
@@ -90,8 +96,10 @@ test('keyboard no-sound selection reaches the same preview and export and disabl
   await page.keyboard.press('Enter')
   await expect(selected).toContainText('No sound')
   await preview
-  await goToExport(page)
+  await showExportSettings(page)
+  await closeExportSettings(page)
   await expect(page.getByRole('button', { name: 'MP3 Audio', exact: true })).toBeDisabled()
+  await showExportSettings(page)
   await expect(page.locator('#audio-track-export')).toContainText('No sound')
   await goToMoment(page)
   await expect.poll(() => readBrowserDraft(page).then(saved => saved.output)).toMatchObject({ no_audio: true })
@@ -99,9 +107,9 @@ test('keyboard no-sound selection reaches the same preview and export and disabl
 
 test('platform and unsupported subtitles explain available choices without silent fallback', async ({ page }) => {
   await prepare(page, { platform: true })
-  await expect(page.locator('#audio-track-preview-hint')).toContainText('Upload the original file')
-  await chooseOption(page, page.locator('#audio-track-preview'), 'No sound')
-  await goToExport(page)
+  await expect(page.locator('#audio-track-export-hint')).toContainText('Upload the original file')
+  await chooseOption(page, page.locator('#audio-track-export'), 'No sound')
+  await showExportSettings(page)
   await chooseOption(page, page.locator('#cut-mode'), 'Original quality')
   await expect(page.locator('#copy-container')).toContainText('MP4')
   await expect(page.locator('#subtitle-mode')).toHaveCount(0)
@@ -110,8 +118,8 @@ test('platform and unsupported subtitles explain available choices without silen
 
 test('platform copy offers MKV while retaining explicit quality and no-sound settings', async ({ page }) => {
   await prepare(page, { platform: true, output: { format: 'mp4', quality: '720p', cut_mode: 'accurate' } })
-  await chooseOption(page, page.locator('#audio-track-preview'), 'No sound')
-  await goToExport(page)
+  await chooseOption(page, page.locator('#audio-track-export'), 'No sound')
+  await showExportSettings(page)
   await chooseOption(page, page.locator('#cut-mode'), 'Original quality')
   await chooseOption(page, page.locator('#copy-container'), 'MKV')
   await expect(page.locator('#quality')).toBeEnabled()
@@ -122,6 +130,7 @@ test('platform copy offers MKV while retaining explicit quality and no-sound set
     submitted = route.request().postDataJSON()
     return route.fulfill({ json: { id: 'job_platform_mkv', status: 'cancelled', stage: 'cancelled', message: '', items: [] } })
   })
+  await closeExportSettings(page)
   const exportButton = page.getByRole('button', { name: 'Cut clips', exact: true })
   await expect(exportButton).toBeEnabled()
   await exportButton.click()
@@ -133,7 +142,7 @@ test('platform copy offers MKV while retaining explicit quality and no-sound set
 
 test('unsupported subtitle tracks remain excluded and preservation is disabled', async ({ page }) => {
   await prepare(page, { subtitleCodec: 'ass' })
-  await goToExport(page)
+  await showExportSettings(page)
   await chooseOption(page, page.locator('#cut-mode'), 'Original quality')
   await page.locator('#subtitle-mode').click()
   await expect(page.getByRole('option', { name: 'Preserve text subtitles', exact: true })).toHaveAttribute('aria-disabled', 'true')
@@ -144,8 +153,8 @@ test('unsupported subtitle tracks remain excluded and preservation is disabled',
 
 test('joined audio retry retains one request identity after restoring reordered settings', async ({ page }) => {
   await prepare(page)
-  await chooseOption(page, page.locator('#audio-track-preview'), 'Audio #1 · rus · Original · aac · 1 channel · 48000 Hz')
-  await goToExport(page)
+  await chooseOption(page, page.locator('#audio-track-export'), 'Audio #1 · rus · Original · aac · 1 channel · 48000 Hz')
+  await showExportSettings(page)
   await chooseOption(page, page.locator('#output-mode'), 'One joined file')
   const attempts: Array<{ body: object; key: string | undefined }> = []
   await page.route('**/api/v1/jobs', async route => {
@@ -153,11 +162,14 @@ test('joined audio retry retains one request identity after restoring reordered 
     attempts.push({ body: route.request().postDataJSON(), key: route.request().headers()['idempotency-key'] })
     await route.fulfill({ status: 503, json: { error: { code: 'database_unavailable', message: 'Controlled lost confirmation' } } })
   })
+  await closeExportSettings(page)
   await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('The export may have been accepted.')
   await page.reload()
+  await showExportSettings(page)
   await expect(page.locator('#output-mode')).toContainText('One joined file')
   await expect(page.locator('#audio-track-export')).toContainText('Original')
+  await closeExportSettings(page)
   await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('The export may have been accepted.')
   expect(attempts).toHaveLength(2)

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
-import { addClip, chooseOption, goToClips, goToExport, goToMoment, goToSource, showExactTimes, stepButton, uploadThroughUI } from './helpers'
+import { addClip, chooseOption, goToClips, goToExport, goToMoment, goToSource, showExactTimes, showExportSettings, closeExportSettings, uploadThroughUI } from './helpers'
 
 // Text-only resizing leaves the viewport and layout media queries unchanged.
 // It complements the 320 CSS-pixel reflow matrix; device scale is not text zoom.
@@ -33,6 +33,8 @@ async function assertReflow(page: Page, description: string, textScale?: number)
   })
   const result = await page.evaluate(textScale => {
     const visible = (element: HTMLElement) => {
+      const disclosure = element.closest('details:not([open])')
+      if (disclosure && !disclosure.querySelector(':scope > summary')?.contains(element)) return false
       const style = getComputedStyle(element)
       return element.getClientRects().length > 0 && style.visibility !== 'hidden'
         && !element.closest('[hidden],dialog:not([open])') && !element.classList.contains('skip-link')
@@ -103,7 +105,8 @@ test('200% text measures the final selector when its lazy module is delayed', as
       output: { format: 'mp4', quality: '1080p', cut_mode: 'accurate' } }))
   }, source.id)
   await page.goto('/?lang=en')
-  const selector = page.locator('#audio-track-preview')
+  await showExportSettings(page)
+  const selector = page.locator('#audio-track-export')
   await expect(selector).toHaveAttribute('aria-busy', 'true')
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(1)
   const baseline = await selector.evaluate(element => parseFloat(getComputedStyle(element).fontSize))
@@ -125,7 +128,7 @@ test('200% text measures the final selector when its lazy module is delayed', as
 })
 
 for (const width of [320, 390, 1280]) {
-  test(`200% text remains readable through all steps at ${width}px without changing the viewport`, async ({ page }, testInfo) => {
+  test(`200% text remains readable throughout the workspace at ${width}px without changing the viewport`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: width < 600 ? 844 : 800 })
     await page.goto('/')
     await page.getByRole('button', { name: 'English', exact: true }).click()
@@ -139,7 +142,7 @@ for (const width of [320, 390, 1280]) {
     }
     await measure('source')
     await uploadThroughUI(page)
-    await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+    await expect(page.locator('.editor-workspace')).toBeVisible()
     await expect(page.locator('.moment-controls')).toBeVisible()
     await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(1)
     // The simplified clickable boundary values are the default Moment view;
@@ -157,7 +160,7 @@ for (const width of [320, 390, 1280]) {
     await goToExport(page)
     await measure('export')
     await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled()
-    await expect(page.locator('.output-selection')).toContainText('Birthday 🎂 — family memories')
+    await expect(page.getByRole('textbox', { name: 'Clip 1 name', exact: true })).toHaveValue('Birthday 🎂 — family memories')
     await testInfo.attach('text-resize-measurements', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' })
   })
 }
@@ -179,7 +182,7 @@ test('long Unicode source and clip names keep actions reachable on a narrow phon
   await assertReflow(page, 'Long editable clip name')
   await goToExport(page)
   await assertReflow(page, 'Long export clip name')
-  await expect(page.locator('.output-selection')).toContainText(clipName)
+  await expect(page.getByRole('textbox', { name: 'Clip 1 name', exact: true })).toHaveValue(clipName)
   await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled()
   await testInfo.attach('narrow-phone-long-names', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' })
 })
@@ -207,12 +210,10 @@ test('Russian ready downloads remain readable at 200% text on a 320px phone', as
   })
 })
 
-test('keyboard stage navigation identifies the destination and preserves exact edits', async ({ page }) => {
+test('keyboard source and workspace navigation preserves exact edits and restores heading focus', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await page.waitForFunction(() => Boolean(history.state?.cutmyWorkflow))
-  // The native skip link creates a hash history entry. It must remain a valid
-  // destination for closing a dialog, Back, and Forward in every engine.
   await page.locator('.skip-link').focus(); await page.keyboard.press('Enter')
   const settings = page.getByRole('button', { name: 'Settings', exact: true })
   await settings.click()
@@ -225,16 +226,19 @@ test('keyboard stage navigation identifies the destination and preserves exact e
   await uploadThroughUI(page)
   await showExactTimes(page)
   await page.getByLabel('Start', { exact: true }).fill('1.250')
+  await page.getByLabel('Start', { exact: true }).press('Tab')
   await page.getByLabel('End', { exact: true }).fill('4.750')
-  for (const stage of [3, 4, 1, 2] as const) {
-    const control = stepButton(page, stage)
-    await control.focus(); await page.keyboard.press('Enter')
-    await expect(control).toHaveAttribute('aria-current', 'step')
-    await expect(page.locator('.page-heading h1')).toBeFocused()
-    const next = page.waitForFunction(() => document.activeElement?.tagName !== 'H1')
-    await page.keyboard.press('Tab'); await next
-    expect(await page.evaluate(() => !!document.activeElement?.closest('#editor'))).toBe(true)
-  }
+  await page.getByLabel('End', { exact: true }).press('Tab')
+  const changeSource = page.getByRole('button', { name: 'Change video', exact: true })
+  await changeSource.focus(); await page.keyboard.press('Enter')
+  await expect(page.locator('.source-chooser')).toBeVisible()
+  await expect(page.locator('.page-heading h1')).toBeFocused()
+  const resume = page.getByRole('button', { name: 'Return to editing', exact: true })
+  await resume.focus(); await page.keyboard.press('Enter')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
+  await expect(page.locator('.page-heading h1')).toBeFocused()
+  await page.keyboard.press('Tab')
+  expect(await page.evaluate(() => !!document.activeElement?.closest('#editor'))).toBe(true)
   await showExactTimes(page)
   await expect(page.getByLabel('Start', { exact: true })).toHaveValue('1.250')
   await expect(page.getByLabel('End', { exact: true })).toHaveValue('4.750')
@@ -310,25 +314,27 @@ test('reduced-motion preference removes nonessential transitions without blockin
   expect(motion.requested).toBe(true)
   expect(motion.transitions.every(duration => duration === 0)).toBe(true)
   await uploadThroughUI(page)
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await goToSource(page); await goToMoment(page)
   await expect(page.locator('.page-heading h1')).toBeFocused()
 })
 
-test('single-clip export keeps advanced options behind a native disclosure', async ({ page }) => {
+test('single-clip export keeps optional settings in a dismissible native dialog', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await uploadThroughUI(page)
-  await stepButton(page, 4).click()
-  const details = page.locator('details.export-options')
-  await expect(details).not.toHaveAttribute('open', '')
+  await goToExport(page)
+  const dialog = page.locator('.export-settings-dialog')
+  const toggle = page.getByRole('button', { name: 'Export settings', exact: true })
+  await expect(dialog).not.toBeVisible()
   await expect(page.locator('#quality')).not.toBeVisible()
   await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled()
-  await details.locator('summary').focus(); await page.keyboard.press('Enter')
-  await expect(details).toHaveAttribute('open', '')
+  await toggle.focus(); await page.keyboard.press('Enter')
+  await expect(dialog).toBeVisible()
   await expect(page.getByRole('combobox', { name: 'Video quality', exact: true })).toBeVisible()
-  await details.locator('summary').press('Space')
+  await page.keyboard.press('Escape')
   await expect(page.locator('#quality')).not.toBeVisible()
+  await expect(toggle).toBeFocused()
 })
 
 test('new editing controls keep full touch targets on narrow phones', async ({ browser, browserName }, testInfo) => {
@@ -358,10 +364,12 @@ test('new editing controls keep full touch targets on narrow phones', async ({ b
       }
       await page.goto('/?lang=en')
       await uploadThroughUI(page)
-      await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+      await expect(page.locator('.editor-workspace')).toBeVisible()
       await showExactTimes(page)
+      await page.locator('.timeline-media-disclosure > summary').click()
       await expect(page.locator('.audio-waveform')).toBeVisible()
       await measure('history and waveform', '.edit-history-actions,.audio-waveform')
+      await page.locator('.timeline-media-disclosure > summary').click()
       const frame = page.locator('.crop-editor')
       await expect(frame.locator('select')).not.toBeVisible()
       await frame.locator('summary').click()
@@ -378,9 +386,12 @@ test('new editing controls keep full touch targets on narrow phones', async ({ b
       await expect(frame.locator('select')).not.toBeVisible()
       await addClip(page)
       await goToClips(page)
-      await measure('clip reordering and history', '.clip-reorder,.edit-history-actions')
+      await page.locator('.clip-list > li').first().locator('.clip-row-menu > summary').click()
+      await measure('clip reordering and history', '.clip-row-actions,.edit-history-actions')
       await goToExport(page)
+      await showExportSettings(page)
       await measure('source cleanup', '.source-cleanup-choice')
+      await closeExportSettings(page)
       await goToSource(page)
       await page.getByRole('button', { name: 'My projects', exact: true }).click()
       await expect(page.locator('.project-row-actions')).toHaveCount(1)

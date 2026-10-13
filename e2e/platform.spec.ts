@@ -1,7 +1,7 @@
 import { readBrowserDraft, replaceBrowserDraft } from './browserProjectStorage';
 import { expect, test } from '@playwright/test'
 import { readFileSync } from 'node:fs'
-import { api, goToExport, goToSource, probeDownloadedFile, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
+import { api, goToExport, goToMoment, goToSource, probeDownloadedFile, showExactTimes, uploadThroughUI, waitJob } from './helpers'
 
 type YoutubeProbe = { commands: string[]; state: number; polls: number; destroyed: boolean; throwDestroy: boolean; throwSeek: boolean; destroy?: () => void; ready(): void; fail(): void }
 type YoutubeProbeWindow = Window & { __youtubeProbe: { instances: YoutubeProbe[] } }
@@ -79,7 +79,7 @@ test('YouTube navigation and controls wait for readiness and ignore replaced or 
     await goToSource(page)
     await page.getByLabel('Ссылка на видео', { exact: true }).fill(`https://www.youtube.com/watch?v=${id}`)
     await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
-    await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+    await expect(page.locator('.editor-workspace')).toBeVisible()
     await expect.poll(() => page.evaluate(() => (window as YoutubeProbeWindow).__youtubeProbe.instances.length)).toBe(sources)
   }
   const preview = page.getByRole('button', { name: 'Посмотреть фрагмент', exact: true })
@@ -90,7 +90,7 @@ test('YouTube navigation and controls wait for readiness and ignore replaced or 
   await page.locator('.trim-track').click({ position: { x: 80, y: 4 } })
   await goToSource(page)
   await expect(page.getByLabel('Ссылка на видео', { exact: true })).toHaveValue('https://www.youtube.com/watch?v=N3REfH4N9Dg')
-  await stepButton(page, 2).click()
+  await goToMoment(page)
   expect((await snapshot(0)).commands).toEqual([])
   await page.evaluate(() => { (window as YoutubeProbeWindow).__youtubeProbe.instances[0].throwDestroy = true })
 
@@ -111,7 +111,7 @@ test('YouTube navigation and controls wait for readiness and ignore replaced or 
   await ready(1)
   await page.clock.runFor(300)
   expect((await snapshot(1)).commands).toEqual(['seek:0.1', 'pause'])
-  await stepButton(page, 2).click()
+  await goToMoment(page)
   await expect(position).toHaveValue('100')
   await page.getByRole('button', { name: 'Начало по позиции плеера', exact: true }).click()
   await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:00.100')
@@ -134,7 +134,7 @@ test('YouTube navigation and controls wait for readiness and ignore replaced or 
   const failed = await snapshot(1)
   await page.locator('.trim-track').click({ position: { x: 80, y: 4 } })
   await goToSource(page)
-  await stepButton(page, 2).click()
+  await goToMoment(page)
   await ready(1)
   await page.clock.runFor(300)
   await expect(preview).toBeEnabled()
@@ -211,9 +211,10 @@ test('a real public platform source exposes honest preview availability and expo
   const sourcePage = new URL(source.source_url)
   expect(sourcePage.username).toBe('')
   expect(sourcePage.password).toBe('')
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await expect(page.getByText(source.title, { exact: true }).first()).toBeVisible()
   if (source.preview_kind === 'none') {
+    await showExactTimes(page)
     // Provider metadata is real, but no controllable player was promised.
     await expect(page.locator('video')).not.toBeVisible()
     await expect(page.locator('iframe')).not.toBeVisible()
@@ -311,7 +312,7 @@ test('platform failures are actionable in both languages and preserve the existi
     }
   }
   await page.getByRole('button', { name: 'Русский', exact: true }).click()
-  await stepButton(page, 2).click()
+  await goToMoment(page)
   await showExactTimes(page)
   await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:02.250')
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).duration)).toBeCloseTo(12, 1)
@@ -373,7 +374,7 @@ test('playback coalesces draft writes, flushes the latest position and suspends 
   await page.clock.runFor(3000)
   expect(await page.evaluate(() => (window as ProbeWindow).__playbackProbe.polls)).toBe(inactivePolls)
   await page.reload()
-  await stepButton(page, 2).click()
+  await goToMoment(page)
   await showExactTimes(page)
   expect(Number(await page.locator('#overview').getAttribute('value'))).toBe(current)
 })

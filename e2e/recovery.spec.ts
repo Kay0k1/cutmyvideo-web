@@ -1,6 +1,6 @@
 import { readBrowserDraft, replaceBrowserDraft } from './browserProjectStorage';
 import { expect, test, type Page } from '@playwright/test'
-import { api, goToExport, goToSource, showExactTimes, stepButton, uploadThroughUI, waitJob } from './helpers'
+import { api, goToExport, goToSource, showExactTimes, uploadThroughUI, waitJob } from './helpers'
 
 for (const input of ['link', 'upload'] as const) {
   test(`an uncertain ${input} response recovers the saved video without another source POST`, async ({ page }) => {
@@ -65,7 +65,7 @@ for (const input of ['link', 'upload'] as const) {
     await page.getByRole('button', { name: 'Русский', exact: true }).click()
     await expect(page.locator('#source-error')).toHaveText(message)
     await page.getByRole('button', { name: `Открыть видео «${source.title}»`, exact: true }).click()
-    await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+    await expect(page.locator('.editor-workspace')).toBeVisible()
     expect(sourceReads).toBe(1)
     expect(listReads).toBe(1)
     await expect.poll(() => previewReads).toBe(1)
@@ -91,12 +91,13 @@ test('malformed saved clips do not discard the valid source and remaining clips'
     saved.ranges = [null, 42, {}, saved.ranges[0], { ...saved.ranges[0], start_ms: 4000, end_ms: 5000 }]
   await replaceBrowserDraft(page, saved)
   await page.reload()
-  await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
   await showExactTimes(page)
   await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:01.000')
   await expect(page.getByLabel('Конец', { exact: true })).toHaveValue('00:00:03.000')
   await goToExport(page)
-  await expect(page.locator('.output-selection ol > li')).toHaveCount(1)
+  await expect(page.locator('.clip-list > li')).toHaveCount(1)
+  await expect(page.locator('.clip-list input[type="checkbox"]:checked')).toHaveCount(1)
 })
 
 test('saved output settings normalize MP3 copy mode and omit unknown request fields', async ({ page }) => {
@@ -106,7 +107,7 @@ test('saved output settings normalize MP3 copy mode and omit unknown request fie
     saved.output = { format: 'mp3', quality: 'best', cut_mode: 'copy', old_setting: true }
   await replaceBrowserDraft(page, saved)
   await page.reload()
-  await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('.export-panel')).toBeVisible()
   const created = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
   await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
   const response = await created
@@ -138,7 +139,8 @@ test('a lost export response can be retried without creating a duplicate server 
   const sourceID = await readBrowserDraft(page).then(saved => saved.source_id)
   await expect.poll(async () => (await (await page.request.get(`${api}/sources/${sourceID}`)).json()).media_removed).toBe(true)
   await page.reload()
-  await expect(stepButton(page, 4)).toHaveAttribute('aria-current', 'step')
+  await goToExport(page)
+  await expect(page.locator('.export-panel')).toBeVisible()
   const retry = page.getByRole('button', { name: /^(Вырезать фрагмент|Повторить экспорт)$/ })
   await expect(retry).toBeEnabled()
   await retry.click()
@@ -195,7 +197,7 @@ test('a failed YouTube SDK download is retried when another video opens', async 
     await goToSource(page)
     await page.getByLabel('Ссылка на видео', { exact: true }).fill(`https://www.youtube.com/watch?v=${id}`)
     await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
-    await expect(stepButton(page, 2)).toHaveAttribute('aria-current', 'step')
+    await expect(page.locator('.editor-workspace')).toBeVisible()
   }
   await open('N3REfH4N9Dg')
   await expect(page.getByRole('status').filter({ hasText: 'Не удалось загрузить участок видео.' })).toBeVisible()
