@@ -43,6 +43,37 @@ async function workspaceFits(page: Page, collection = '.clip-library') {
   expect(documentSize.scrollY).toBe(0)
 }
 
+for (const language of ['ru', 'en']) {
+  test(`fresh ${language} source screen fits with Safari tab chrome`, async ({ page }) => {
+    await page.route('**/api/v1/**', route => {
+      const path = new URL(route.request().url()).pathname;
+      return route.fulfill({ json: path.endsWith('/session') ? { authenticated: true, limits: { max_source_bytes: 1073741824 } } : { sources: [], jobs: [] } });
+    });
+    await page.goto(`/?lang=${language}`);
+    await expect(page.locator('main')).toHaveAttribute('data-bootstrap-state', 'ready');
+    for (const height of [800, 762, 620, 582, 540, 500]) {
+      await page.setViewportSize({ width: 1280, height });
+      for (const mode of ['link', 'file']) {
+        await page.locator('.source-choice button').nth(mode === 'link' ? 0 : 1).click();
+        await fullyInViewport(page.locator(mode === 'link' ? '.source-open' : '.upload-button'), 'Open/upload action');
+        await fullyInViewport(page.locator('.page-footer'), 'Footer');
+        const geometry = await page.evaluate(() => ({ document: document.documentElement.scrollHeight, viewport: innerHeight, content: document.querySelector('main')!.scrollHeight, available: document.querySelector('main')!.clientHeight }));
+        expect(geometry.document).toBeLessThanOrEqual(geometry.viewport + 1);
+        expect(geometry.content, 'The fresh screen needs no internal scrolling either').toBeLessThanOrEqual(geometry.available + 1);
+        await page.locator('.source-chooser').hover(); await page.mouse.wheel(0, 500);
+        expect(await page.evaluate(() => scrollY)).toBe(0);
+      }
+    }
+    await page.locator('.project-library > button').click();
+    await expect(page.locator('.project-library > button')).toHaveAttribute('aria-expanded', 'true');
+    await page.locator('.project-library button').last().scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => scrollY)).toBe(0);
+    await page.setViewportSize({ width: 390, height: 600 });
+    await expect.poll(() => page.locator('.app-shell').evaluate(node => getComputedStyle(node).position)).not.toBe('fixed');
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(600);
+  });
+}
+
 for (const orientation of ['landscape', 'portrait']) {
   test(`${orientation} workspace remains whole below Safari toolbar breakpoints`, async ({ page }, testInfo) => {
     const errors: string[] = []

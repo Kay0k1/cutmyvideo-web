@@ -184,7 +184,7 @@ export default function App() {
   const busy = activeJob(job) || submitting || deletingSource;
   const duration = source?.duration_ms ?? 0;
   const workspaceVisible = !!source && step !== 1;
-  useWorkspaceViewport(workspaceVisible);
+  useWorkspaceViewport(workspaceVisible || step === 1);
   const view = timelineView(simpleView, viewCenter, span);
   const zoomOptions = [duration, 300000, 60000, 10000, view[1] - view[0]].filter((value, index, all) => value > 0 && value <= duration && all.indexOf(value) === index);
   const totalDuration = exportRanges.reduce((sum, range) => sum + range.end_ms - range.start_ms, 0);
@@ -1246,7 +1246,7 @@ export default function App() {
     {jobError && <p className="error-message" role="alert">{t(jobError)}</p>}
   </form></section>;
 
-  return <div className={`app-shell${workspaceVisible ? ' workspace-shell' : ''}`}>
+  return <div className={`app-shell${workspaceVisible ? ' workspace-shell' : step === 1 ? ' source-shell' : ''}`}>
     <a className="skip-link" href="#editor">{t('К выбору фрагмента')}</a>
     <header className="site-header"><div className="header-inner">
       <a className="brand" href="/" aria-label={t('cutmyvideo — главная')}><span className="brand-symbol"><Icon name="cut" size={20} /></span><span>cutmy<span className="brand-suffix">video</span></span></a>
