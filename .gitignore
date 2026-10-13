@@ -9,3 +9,8 @@ coverage/
 *.log
 *.tsbuildinfo
 __pycache__/
+artifacts/
+reports/
+benchmark-results/
+.cache/
+/docs/audit-data/raw/

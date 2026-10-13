@@ -18,7 +18,7 @@ compatibility without exposing those as mandatory screens. Export settings and
 extra tools use optional native dialogs; thumbnails/waveform mount on request.
 Ready files replace the collection in the sidebar without replacing the player.
 
-Submission holds new server preview preparation, drains existing reads, and
+Submission pauses only speculative server preview preparation, keeps foreground playback and seeking active, and
 then posts one export request. Controlled pending reads cover successful,
 unavailable and busy previews without requiring decoded frames. Restoration
 checks delay both source and saved-job reads before navigation; a failed saved

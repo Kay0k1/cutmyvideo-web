@@ -6,7 +6,7 @@ import './Player.css';
 import { WindowPlayer } from './WindowPlayer';
 import { usePlaybackClock } from './usePlaybackClock';
 
-export interface PlayerControls { seek(ms: number): void; play(): void; pause(): void; toggle(): void; holdPreparation?(): Promise<() => void>; }
+export interface PlayerControls { seek(ms: number): void; play(): void; pause(): void; toggle(): void; holdBackgroundPreparation?(): Promise<() => void>; }
 interface YTPlayer {
   seekTo(seconds: number, allowSeekAhead: boolean): void;
   playVideo(): void;
@@ -129,7 +129,7 @@ export const Player = memo(forwardRef<PlayerControls, {
   }
 
   useImperativeHandle(ref, () => ({
-    holdPreparation: () => windowPlayer.current?.holdPreparation?.() ?? Promise.resolve(() => undefined),
+    holdBackgroundPreparation: () => windowPlayer.current?.holdBackgroundPreparation?.() ?? Promise.resolve(() => undefined),
     seek: ms => {
       if (windowPlayer.current) { windowPlayer.current.seek(ms); return; }
       if (video.current) { nativeSeek.current = { node: video.current, ms }; video.current.currentTime = ms / 1000; }

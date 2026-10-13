@@ -1038,7 +1038,7 @@ export default function App() {
     setRanges(committed); setSubmitting(true); setJobError('');
     let resumePreparation: (() => void) | undefined;
     try {
-      resumePreparation = await player.current?.holdPreparation?.();
+      resumePreparation = await player.current?.holdBackgroundPreparation?.();
       // Recover an uncertain accepted request before starting another one. A
       // terminal retry has no pending identity and therefore gets a fresh key.
       const pending = recoverExportRequest(source.id, committed, output, exportAttempt.current);

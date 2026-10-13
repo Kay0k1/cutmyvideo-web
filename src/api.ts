@@ -122,10 +122,21 @@ export const api = {
   }, 123 * 60 * 1000),
   upload,
   deleteSource: (id: string) => request<void>(`/sources/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  createJob: (source_id: string, ranges: ClipRange[], output: OutputSettings, key: string) => request<Job>('/jobs', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
-    body: jobRequestBody(source_id, ranges, output),
-  }),
+  createJob: async (source_id: string, ranges: ClipRange[], output: OutputSettings, key: string): Promise<Job> => {
+    const options = {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+      body: jobRequestBody(source_id, ranges, output),
+    };
+    for (let attempt = 0; ; attempt++) {
+      try { return await request<Job>('/jobs', options); }
+      catch (error) {
+        // Only an explicit refused decoder admission is safe to retry here.
+        // Playback continues; uncertain mutations retain the existing recovery.
+        if (!key || !(error instanceof ApiError) || error.code !== 'server_busy' || ![429, 503].includes(error.httpStatus ?? 0) || attempt >= 3) throw error;
+        await new Promise(resolve => setTimeout(resolve, 200 * 2 ** attempt));
+      }
+    }
+  },
   job: (id: string, signal?: AbortSignal) => request<Job>(`/jobs/${encodeURIComponent(id)}`, { signal }),
   cancel: (id: string) => request<Job>(`/jobs/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
 };
