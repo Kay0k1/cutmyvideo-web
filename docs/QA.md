@@ -8,6 +8,12 @@ compatibility without exposing those as mandatory screens. Export settings and
 extra tools use optional native dialogs; thumbnails/waveform mount on request.
 Ready files replace the collection in the sidebar without replacing the player.
 
+Submission holds new server preview preparation, drains existing reads, and
+then posts one export request. Controlled pending reads cover successful,
+unavailable and busy previews without requiring decoded frames. Restoration
+checks delay both source and saved-job reads before navigation; a failed saved
+job read keeps Reconnect reachable and preserves the restored cuts.
+
 A same-source comparison against `f3dc0ce` at 1280×720 measured document height
 **1452 → 720 CSS pixels**. The old timeline began below the viewport; the new
 player, handles and export are simultaneously visible. The ordinary single-clip

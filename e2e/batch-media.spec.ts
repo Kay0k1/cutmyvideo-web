@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { expect, test } from '@playwright/test'
-import { addClip, chooseOption, goToExport, probeDownloadedFile, saveClip, showExactTimes, uploadThroughUI, waitJob, showExportSettings, closeExportSettings } from './helpers'
+import { addClip, chooseOption, probeDownloadedFile, saveClip, showExactTimes, uploadThroughUI, waitJob, showExportSettings, closeExportSettings } from './helpers'
 
 test('real joined MKV keeps selected audio and rebased subtitles; separate no-sound files decode', async ({ page }, testInfo) => {
   await page.goto('/?lang=en')

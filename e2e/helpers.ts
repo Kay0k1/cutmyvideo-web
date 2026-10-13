@@ -13,7 +13,19 @@ export function stepButton(page: Page, step: 1 | 2 | 3 | 4) {
   return stepNavigation(page).getByRole('button', { name: labels[step - 1] })
 }
 
+async function waitForBootstrap(page: Page) {
+  const editor = page.locator('main#editor')
+  await expect(editor).toBeVisible()
+  // The chooser and saved editor can both render before source/job restoration
+  // settles. Its completion signal also distinguishes a failed session from a
+  // still-pending restore, without blocking later cancellable source uploads.
+  if (await editor.getAttribute('data-bootstrap-state') !== null) {
+    await expect(editor).toHaveAttribute('data-bootstrap-state', /^(ready|error)$/)
+  }
+}
+
 async function unifiedWorkspace(page: Page) {
+  await waitForBootstrap(page)
   const workspace = page.locator('.editor-workspace')
   if (await workspace.isVisible()) return true
   if (!await stepNavigation(page).count()) {
@@ -38,6 +50,7 @@ async function closeWorkspaceDialogs(page: Page) {
 }
 
 export async function goToSource(page: Page) {
+  await waitForBootstrap(page)
   await closeWorkspaceDialogs(page)
   if (await page.locator('.source-chooser').isVisible()) return
   const changeSource = page.getByRole('button', { name: /^(Другое видео|Открыть другое видео|Change video|Another video|Open another video)$/ }).first()

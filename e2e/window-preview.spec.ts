@@ -61,3 +61,49 @@ test('rapid distant seeks keep the last target and reuse its cached preview', as
   await expect(page.locator('.window-player-navigation input')).toHaveValue('71000');
   expect(foreground.length).toBe(requests);
 });
+
+for (const outcome of ['ready', 'unavailable', 'busy'] as const) test(`export drains its pending preview once even when preparation is ${outcome}`, async ({ page }) => {
+  await windowSource(page, false);
+  const media = await readFile(process.env.CUTMY_E2E_MEDIA!);
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let attempts = 0, posted = 0, preparationFinished = false;
+  const admissions: number[] = [], errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/v1/sources/window-compat/preview?*', async route => {
+    const url = new URL(route.request().url());
+    if (Number(url.searchParams.get('start_ms')) !== 66_000 || url.searchParams.has('priority')) return route.fallback();
+    if (++attempts > 1) return route.fallback();
+    await held;
+    preparationFinished = true;
+    if (outcome === 'ready') await route.fulfill({ contentType: 'video/mp4', body: media, headers: { 'X-Preview-Start-MS': '66000', 'X-Preview-End-MS': '72000' } });
+    else await route.fulfill({ status: outcome === 'busy' ? 429 : 404, json: { error: { code: outcome === 'busy' ? 'server_busy' : 'preview_unavailable', message: 'Controlled preparation result' } } });
+  });
+  await page.route('**/api/v1/jobs', async route => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    expect(preparationFinished, 'Export must not race its own admitted preview read').toBe(true);
+    posted++; admissions.push(attempts);
+    await route.fulfill({ status: 202, json: { id: 'job-preview-hold', status: 'succeeded', stage: 'finished', message: '', items: [] } });
+  });
+  await seekWindow(page, 70_000);
+  await expect.poll(() => attempts).toBe(1);
+  const accepted = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/jobs');
+  await page.locator('.export-submit').click();
+  await expect(page.locator('.export-submit')).toBeDisabled();
+  expect(posted, 'One click waits for in-flight preparation without posting early').toBe(0);
+  if (outcome === 'ready') {
+    // A later cached seek must replace an earlier deferred, uncached intent.
+    await seekWindow(page, 90_000);
+    await seekWindow(page, 1_000);
+  }
+  release();
+  expect((await accepted).status()).toBe(202);
+  expect(posted).toBe(1);
+  expect(admissions).toEqual([1]);
+  await expect(page.locator('.export-submit')).toBeEnabled();
+  if (outcome !== 'unavailable') {
+    await expect(page.locator('.window-player-navigation input')).toHaveValue(outcome === 'ready' ? '1000' : '70000');
+    await expect.poll(() => page.locator('.window-player video').evaluate((video: HTMLVideoElement) => video.currentTime)).toBeCloseTo(outcome === 'ready' ? 1 : 4, 1);
+  }
+  expect(errors).toEqual([]);
+});

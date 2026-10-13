@@ -100,6 +100,7 @@ export default function App() {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [deletingSource, setDeletingSource] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [sessionAttempt, setSessionAttempt] = useState(0);
   const [sourceError, setSourceError] = useState('');
   const [ranges, setRanges] = useState<ClipRange[]>([]);
@@ -320,6 +321,7 @@ export default function App() {
   useEffect(() => {
     let disposed = false;
     const controller = new AbortController();
+    setSessionLoading(true);
     void (async () => {
       try {
         const session = await api.session();
@@ -384,7 +386,8 @@ export default function App() {
           restored.current = true;
         }
         if (!disposed) setSessionReady(true);
-      } catch (error) { if (!disposed) setSourceError(errorMessage(error)); }
+      } catch (error) { if (!disposed) { setSourceError(errorMessage(error)); setStep(1); } }
+      finally { if (!disposed) setSessionLoading(false); }
     })();
     return () => { disposed = true; controller.abort(); };
   }, [sessionAttempt, setFields]);
@@ -659,7 +662,7 @@ export default function App() {
   }, [step]);
 
   function goToStep(next: WorkbenchStep) {
-    if (submitting || mutationPending.current) return;
+    if (!sessionReady || submitting || mutationPending.current) return;
     if (next > 1 && !source && !(next === 4 && (job || retryOutput))) return;
     if (next === 4 && !exportRanges.length && !job && !retryOutput) return;
     if (next === 2 && !selected) return;
@@ -1008,12 +1011,14 @@ export default function App() {
   }
 
   async function submitExport(included: ClipRange[], committed: ClipRange[], selective = false) {
-    if (!source || busy || sourceBusy || mutationPending.current || !included.length || invalidAudio || incompatibleOutput) return;
+    if (!sessionReady || !source || busy || sourceBusy || mutationPending.current || !included.length || invalidAudio || incompatibleOutput) return;
     const includedDuration = included.reduce((total, item) => total + item.end_ms - item.start_ms, 0);
     if (included.length > limits.max_ranges || included.some(item => item.end_ms - item.start_ms > limits.max_range_ms) || includedDuration > limits.max_job_ms) { setJobError(exportLimitError || t('Общая длительность одного экспорта — до {limit}. Разделите фрагменты на несколько заданий.', { limit: durationLabel(limits.max_job_ms, locale) })); return; }
     mutationPending.current = true;
     setRanges(committed); setSubmitting(true); setJobError('');
+    let resumePreparation: (() => void) | undefined;
     try {
+      resumePreparation = await player.current?.holdPreparation?.();
       // Recover an uncertain accepted request before starting another one. A
       // terminal retry has no pending identity and therefore gets a fresh key.
       const pending = recoverExportRequest(source.id, committed, output, exportAttempt.current);
@@ -1050,7 +1055,7 @@ export default function App() {
       if (error instanceof ApiError && (error.httpStatus === 404 || error.httpStatus === 410 || ['expired', 'source_expired', 'source_unavailable'].includes(error.code))) void sourceUnavailable(source.id);
       setJobError(errorMessage(error, 'export'));
     }
-    finally { mutationPending.current = false; setSubmitting(false); }
+    finally { resumePreparation?.(); mutationPending.current = false; setSubmitting(false); }
   }
 
   async function recoverExport() {
@@ -1185,7 +1190,7 @@ export default function App() {
           {videoCopy && <p className="copy-boundary-warning" role="note">{t('Копирование сохраняет исходное качество. Начало может сдвинуться к ключевому кадру; фактические границы будут указаны у готового файла.')}</p>}
     {exportLimitError && <p className="error-message" role="alert">{exportLimitError}</p>}
 <div className="export-summary"><span>{source ? countLabel(exportRanges.length, 'clip', locale) : t("Фрагменты не выбраны")}</span>{source && <strong>{durationLabel(totalDuration, locale)}</strong>}</div>
-          <button className="button primary export-submit" type="submit" disabled={!source || !exportRanges.length || busy || sourceBusy || invalidDraft || !!exportLimitError || invalidAudio || incompatibleOutput}>{submitting ? <><span className="spinner" />{t("Создаём задание…")}</> : activeJob(job) ? <><span className="spinner" />{t("Идёт обработка…")}</> : <><Icon name="cut" size={18} />{repeatExport ? t('Повторить экспорт') : exportRanges.length > 1 ? t("Вырезать фрагменты") : t("Вырезать фрагмент")}</>}</button>
+          <button className="button primary export-submit" type="submit" disabled={!sessionReady || !source || !exportRanges.length || busy || sourceBusy || invalidDraft || !!exportLimitError || invalidAudio || incompatibleOutput}>{submitting ? <><span className="spinner" />{t("Создаём задание…")}</> : activeJob(job) ? <><span className="spinner" />{t("Идёт обработка…")}</> : <><Icon name="cut" size={18} />{repeatExport ? t('Повторить экспорт') : exportRanges.length > 1 ? t("Вырезать фрагменты") : t("Вырезать фрагмент")}</>}</button>
     <p className="export-empty-hint">{output.output_mode === 'joined' || exportRanges.length === 1 ? t('один файл') : t('отдельные файлы')} {output.format.toUpperCase()}{output.no_audio ? ` · ${t('Без звука')}` : ''}{output.crop ? ` · ${t('Кадрирование')}` : ''}</p>
     {output.cleanup_source !== false && <p className="export-source-notice">{t('Исходник удалится после экспорта.')}</p>}
     {jobError && <p className="error-message" role="alert">{t(jobError)}</p>}
@@ -1198,10 +1203,10 @@ export default function App() {
       <WorkspaceNav panel={panel} onOpen={setPanel} onClose={navigation.closePanel} preferences={preferences} onSave={applyPreferences} busy={!sessionReady || sourceBusy || busy} onExample={value => { setUrl(value); setStep(1); void openSource(undefined, value); }} />
       <div className="header-actions"><LanguageSwitch /><ThemeToggle /></div>
     </div></header>
-    <main id="editor" className={`stage-page stage-${step}${workspaceVisible ? ' workspace-page' : ''}`}>
+    <main id="editor" data-bootstrap-state={sessionLoading ? 'loading' : sessionReady ? 'ready' : 'error'} aria-busy={sessionLoading} className={`stage-page stage-${step}${workspaceVisible ? ' workspace-page' : ''}`}>
       <div className="page-heading"><div><h1 ref={stageHeading} tabIndex={-1}>{t(workspaceVisible ? 'Нарежьте видео' : step === 4 ? 'Сохраните фрагменты' : 'Откройте видео')}</h1>{!workspaceVisible && <p>{t('Ссылка на запись или видеофайл с вашего устройства.')}</p>}</div>
-        {workspaceVisible ? <div className="workspace-heading-actions"><div className="edit-history-actions" role="group" aria-label={t('История изменений')}><button type="button" className="icon-button" aria-label={t('Отменить изменение')} title={t('Отменить изменение')} disabled={!currentHistory().past.length || busy || sourceBusy} onClick={() => historyAction('undo')}><Icon name="undo" size={19} /></button><button type="button" className="icon-button" aria-label={t('Повторить изменение')} title={t('Повторить изменение')} disabled={!currentHistory().future.length || busy || sourceBusy} onClick={() => historyAction('redo')}><Icon name="redo" size={19} /></button></div><button className="text-button change-source" type="button" disabled={submitting} onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button></div>
-          : source ? <button className="button secondary return-to-editor" type="button" onClick={() => setStep(2)}>{t('Вернуться к редактированию')}</button> : (job || retryOutput) && <button className="button secondary return-to-results" type="button" onClick={() => goToStep(4)}>{t('Вернуться к скачиванию')}</button>}
+        {workspaceVisible ? <div className="workspace-heading-actions"><div className="edit-history-actions" role="group" aria-label={t('История изменений')}><button type="button" className="icon-button" aria-label={t('Отменить изменение')} title={t('Отменить изменение')} disabled={!currentHistory().past.length || busy || sourceBusy} onClick={() => historyAction('undo')}><Icon name="undo" size={19} /></button><button type="button" className="icon-button" aria-label={t('Повторить изменение')} title={t('Повторить изменение')} disabled={!currentHistory().future.length || busy || sourceBusy} onClick={() => historyAction('redo')}><Icon name="redo" size={19} /></button></div><button className="text-button change-source" type="button" disabled={!sessionReady || submitting} onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button></div>
+          : source ? <button className="button secondary return-to-editor" type="button" disabled={!sessionReady} onClick={() => goToStep(selected ? 2 : 3)}>{t('Вернуться к редактированию')}</button> : (job || retryOutput) && <button className="button secondary return-to-results" type="button" disabled={!sessionReady} onClick={() => goToStep(4)}>{t('Вернуться к скачиванию')}</button>}
       </div>
       {recoverableSource && step === 1 && <section className="draft-recovery" aria-labelledby="draft-recovery-heading"><h2 id="draft-recovery-heading">{t('Фрагменты сохранены')}</h2>{recoverableSource.title && <p>{recoverableSource.title}</p>}<p>{t('Загрузите ту же запись или откройте её ссылку. Границы, названия и настройки экспорта восстановятся.')}</p><ol>{ranges.map(range => <li key={range.id}><strong>{range.label || t('Фрагмент')}</strong><span>{formatTimecode(range.start_ms, true)} — {formatTimecode(range.end_ms, true)}</span></li>)}</ol><label><input type="checkbox" checked={keepRecoveredCuts} onChange={event => setKeepRecoveredCuts(event.target.checked)} />{t('Восстановить фрагменты в открываемом видео')}</label></section>}
       {step === 1 && <SourceChooser url={url} onUrl={value => { setUrl(value); setSourceError(''); }} onOpen={() => void openSource()} onFile={file => void openSource(file)} busy={sourceBusy} progress={uploadProgress} maximumBytes={limits.max_source_bytes} blocked={deletingSource} processing={submitting || cancelling} ready={sessionReady} error={sourceError} onCancel={() => { sourceController.current?.abort(); sourceController.current = null; setSourceBusy(false); setUploadProgress(null); }} onReconnect={() => { setSourceError(''); setSessionAttempt(n => n + 1); }} />}

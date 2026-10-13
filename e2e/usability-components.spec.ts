@@ -168,6 +168,33 @@ test('an expired saved video reports the failure without replacing the current d
   await expect(page.getByLabel('End', { exact: true })).toHaveValue('00:00:03.250')
 })
 
+test('a temporary saved-job failure preserves restored cuts and permits reconnecting', async ({ page }) => {
+  const job: Job = { id: 'job_bootstrap_retry', status: 'succeeded', stage: 'finished', message: '',
+    items: [{ id: 'item_bootstrap_retry', label: 'First moment', start_ms: 1500, end_ms: 3250, status: 'succeeded',
+      artifact: { id: 'artifact_bootstrap_retry', filename: 'first-moment.mp4', size_bytes: 2048,
+        download_url: `${api}/artifacts/artifact_bootstrap_retry/download`, actual_start_ms: 1500, actual_end_ms: 3250 } }] }
+  await prepare(page, { step: 2, job_id: job.id })
+  let reads = 0
+  await page.route(`**${api}/jobs/${job.id}`, route => ++reads === 1
+    ? route.fulfill({ status: 503, json: { error: { code: 'database_unavailable', message: 'Temporary job metadata failure' } } })
+    : route.fulfill({ json: job }))
+  await page.reload()
+  await expect(page.locator('main#editor')).toHaveAttribute('data-bootstrap-state', 'error')
+  await expect(page.locator('.source-chooser')).toBeVisible()
+  await expect(page.locator('.return-to-editor')).toBeDisabled()
+  await expect(page.locator('.export-submit')).toBeDisabled()
+  await expect(page.locator('#range-start')).toHaveValue('00:00:01.500')
+  await expect(page.locator('#range-end')).toHaveValue('00:00:03.250')
+  await page.getByRole('button', { name: 'Reconnect', exact: true }).click()
+  await expect(page.locator('main#editor')).toHaveAttribute('data-bootstrap-state', 'ready')
+  await expect(page.locator('.editor-workspace')).toBeVisible()
+  await expect(page.getByLabel('Start', { exact: true })).toHaveValue('00:00:01.500')
+  await expect(page.getByLabel('End', { exact: true })).toHaveValue('00:00:03.250')
+  await expect(page.getByRole('link', { name: 'Download', exact: true })).toHaveAttribute('href', job.items[0].artifact!.download_url)
+  await expect(page.locator('.export-submit')).toBeEnabled()
+  expect(reads).toBe(2)
+})
+
 test('Enter keeps invalid times focused, Escape restores the committed range, and time buttons describe their values', async ({ page }) => {
   await prepare(page, { step: 2 })
   await page.reload()
@@ -387,11 +414,36 @@ test('closing a directly linked dialog replaces its URL in place and the initial
 
 test('reload preserves the workspace and a refreshed settings dialog closes in place', async ({ page }) => {
   await prepare(page, { step: 2 })
+  let releaseRestoration!: () => void
+  const restoration = new Promise<void>(resolve => { releaseRestoration = resolve })
+  let reads = 0
+  await page.route(`**${api}/sources/${source.id}`, async route => {
+    if (++reads === 1) await restoration
+    await route.fulfill({ json: source }).catch(() => {})
+  })
+  const restoring = page.waitForRequest(request => new URL(request.url()).pathname === `${api}/sources/${source.id}`)
   await page.reload()
-  await goToSource(page)
+  await restoring
+  // The initial chooser is visible while the saved source is restoring. It is
+  // not the destination of a real source/workspace history transition yet.
+  await expect(page.locator('.source-chooser')).toBeVisible()
+  await expect(page.locator('.source-open')).toBeDisabled()
+  let sourceReached = false
+  const sourceNavigation = goToSource(page).then(() => { sourceReached = true })
+  try {
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+    expect(sourceReached, 'Source navigation waits for saved-source restoration').toBe(false)
+  } finally { releaseRestoration() }
+  await sourceNavigation
+  await expect(page.locator('.source-chooser')).toBeVisible()
+  await expect.poll(() => page.evaluate(() => history.state?.cutmyWorkflow)).toMatchObject({ step: 1, index: 1 })
   await goToMoment(page)
+  await expect(page.locator('.editor-workspace')).toBeVisible()
+  await expect.poll(() => page.evaluate(() => history.state?.cutmyWorkflow)).toMatchObject({ step: 2, index: 2 })
   await page.reload()
   await expect(page.locator('.editor-workspace')).toBeVisible()
+  await expect(page.locator('main#editor')).toHaveAttribute('data-bootstrap-state', 'ready')
+  await expect.poll(() => page.evaluate(() => history.state?.cutmyWorkflow)).toMatchObject({ step: 2, index: 2 })
   await page.goBack()
   await expect(page.locator('.source-chooser')).toBeVisible()
   await page.goForward()
@@ -400,6 +452,7 @@ test('reload preserves the workspace and a refreshed settings dialog closes in p
   await page.reload()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
+  await expect(page.locator('main#editor')).toHaveAttribute('data-bootstrap-state', 'ready')
   const length = await page.evaluate(() => history.length)
   await dialog.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(dialog).not.toBeVisible()

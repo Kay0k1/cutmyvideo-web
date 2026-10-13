@@ -118,7 +118,10 @@ test('retry identity is written to the project before POST and restored after na
   });
   await page.goto('/?lang=en'); await goToExport(page); await submitClip(page); await expect.poll(() => keys.length).toBe(1); await expect.poll(() => checkedPreflight).toBe(true);
   await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled();
-  await openProjects(page); await page.getByRole('button', { name: 'Open project “B.mp4”', exact: true }).click(); await openProjects(page); await page.getByRole('button', { name: 'Open project “A.mp4”', exact: true }).click(); await goToExport(page);
+  await openProjects(page); await page.getByRole('button', { name: 'Open project “B.mp4”', exact: true }).click();
+  await expect(page.locator('.source-title')).toContainText('B.mp4');
+  await openProjects(page); await page.getByRole('button', { name: 'Open project “A.mp4”', exact: true }).click();
+  await expect(page.locator('.source-title')).toContainText('A.mp4'); await goToExport(page);
   await submitClip(page); await expect.poll(() => keys.length).toBe(2); expect(keys[1]).toBe(keys[0]); await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled();
   await page.reload(); await goToExport(page); await submitClip(page); await expect.poll(() => keys.length).toBe(3); expect(keys[2]).toBe(keys[0]);
 });

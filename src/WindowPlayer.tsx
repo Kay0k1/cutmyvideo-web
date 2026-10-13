@@ -13,6 +13,7 @@ type PendingWindow = {
   promotion?: Promise<PreviewWindow>; foregroundStart?: number; foregroundWindow?: number;
 };
 const speculativePromotionWaitMS = 400;
+class PreparationHeld extends Error {}
 
 // Keep source time independent of the short preview files. Recently visited
 // intervals stay in a bounded cache; only the next interval is speculative.
@@ -31,6 +32,8 @@ export const WindowPlayer = forwardRef<PlayerControls, {
   const cache = useRef<PreviewWindowCache | null>(null);
   if (!cache.current) cache.current = new PreviewWindowCache(url => URL.revokeObjectURL(url));
   const pending = useRef(new Map<string, PendingWindow>());
+  const preparationHolds = useRef(0);
+  const deferredPosition = useRef<number | null>(null);
   const seekTimer = useRef<number | undefined>(undefined);
   const prefetchTimer = useRef<number | undefined>(undefined);
   const [url, setUrl] = useState('');
@@ -69,6 +72,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     const key = `${start}:${end}`;
     const cached = cache.current!.get(start, end);
     if (cached) return Promise.resolve(cached);
+    if (preparationHolds.current) return Promise.reject(new PreparationHeld());
     const existing = pending.current.get(key) ?? (!background
       ? [...pending.current.values()].find(request => request.start <= start && request.end >= end)
       : undefined);
@@ -86,6 +90,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     request.promise = Promise.resolve().then(async () => {
       let response: Response | undefined;
       for (let attempt = 0; attempt < 30; attempt++) {
+        if (preparationHolds.current) throw new PreparationHeld();
         response = await fetch(`/api/v1/sources/${encodeURIComponent(source.id)}/preview?start_ms=${start}${windowMS !== PREVIEW_WINDOW_MS ? `&window_ms=${windowMS}` : ''}${audioTrack !== undefined ? `&audio_track=${audioTrack}` : ''}${noAudio ? '&no_audio=true' : ''}${request.background ? '&priority=background' : ''}`, { credentials: 'same-origin', signal: controller.signal });
         if (response.ok) break;
         const body = await response.json().catch(() => null);
@@ -94,6 +99,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
         if (body?.error?.code === 'tracks_unavailable') throw new Error('tracks_unavailable');
         if (['audio_track_invalid', 'audio_track_unavailable'].includes(body?.error?.code)) throw new Error('audio_track_invalid');
         if (request.background || body?.error?.code !== 'server_busy') throw new Error('preview unavailable');
+        if (preparationHolds.current) throw new PreparationHeld();
         await new Promise<void>((resolve, reject) => {
           const stop = () => { window.clearTimeout(wait); reject(new DOMException('Aborted', 'AbortError')); };
           const wait = window.setTimeout(() => { controller.signal.removeEventListener('abort', stop); resolve(); }, foregroundPreviewRetryDelay(attempt));
@@ -135,6 +141,8 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     let timer: number;
     const timeout = new Promise<never>((_, reject) => { timer = window.setTimeout(() => reject(deadline), speculativePromotionWaitMS); });
     const replace = () => {
+      // An aborted fetch alone does not acknowledge server lease cleanup.
+      if (preparationHolds.current) throw new PreparationHeld();
       if (!mounted.current || !enabled.current || request.controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
       request.controller.abort();
       for (const [key, current] of pending.current) if (current === request) pending.current.delete(key);
@@ -159,10 +167,10 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     const next = Math.floor(current.end / PREVIEW_WINDOW_MS) * PREVIEW_WINDOW_MS;
     const nextEnd = Math.min(next + PREVIEW_WINDOW_MS, source.duration_ms);
     const connection = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
-    if (!enabled.current || document.hidden || current.loading || !current.ready || current.end >= source.duration_ms || cache.current!.get(next, nextEnd) || connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType ?? '')) return;
+    if (preparationHolds.current || !enabled.current || document.hidden || current.loading || !current.ready || current.end >= source.duration_ms || cache.current!.get(next, nextEnd) || connection?.saveData || ['slow-2g', '2g'].includes(connection?.effectiveType ?? '')) return;
     prefetchTimer.current = window.setTimeout(() => {
       prefetchTimer.current = undefined;
-      if (!mounted.current || !enabled.current || document.hidden || state.current.end !== expectedEnd || state.current.loading) return;
+      if (preparationHolds.current || !mounted.current || !enabled.current || document.hidden || state.current.end !== expectedEnd || state.current.loading) return;
       setPrefetching(true);
       void requestWindow(next, true).catch(() => undefined).finally(() => {
         if (mounted.current) setPrefetching([...pending.current.values()].some(request => request.background));
@@ -191,14 +199,16 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     const start = Math.floor(target / QUICK_PREVIEW_WINDOW_MS) * QUICK_PREVIEW_WINDOW_MS;
     const generation = ++current.generation;
     const cached = cache.current!.covering(target);
-    cancelRequests(start, cached ? Math.floor(cached.end / PREVIEW_WINDOW_MS) * PREVIEW_WINDOW_MS : undefined, !!cached);
-    if (cached) { show(cached); return; }
+    if (!preparationHolds.current) cancelRequests(start, cached ? Math.floor(cached.end / PREVIEW_WINDOW_MS) * PREVIEW_WINDOW_MS : undefined, !!cached);
+    if (cached) { deferredPosition.current = null; show(cached); return; }
+    if (preparationHolds.current) { deferredPosition.current = ms; return; }
     status(true);
     try {
       const entry = await requestWindow(start, false, QUICK_PREVIEW_WINDOW_MS);
       if (mounted.current && enabled.current && generation === current.generation) show(entry);
     } catch (error) {
       if (mounted.current && enabled.current && generation === current.generation) {
+        if (error instanceof PreparationHeld) { deferredPosition.current = ms; return; }
         if (error instanceof Error && ['source_expired', 'source_not_found'].includes(error.message)) onSourceUnavailable(source.id, error.message === 'source_not_found');
         setFailureMessage(error instanceof Error && error.message === 'tracks_unavailable'
           ? 'Чтобы выбрать аудиодорожку площадки, загрузите исходный файл. Экспорт без звука доступен.'
@@ -217,6 +227,10 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     const clamped = Math.min(target, Math.max(0, source.duration_ms - 1));
     const start = Math.floor(clamped / QUICK_PREVIEW_WINDOW_MS) * QUICK_PREVIEW_WINDOW_MS;
     if (cache.current!.covering(clamped)) { void load(target); return; }
+    if (preparationHolds.current) {
+      current.generation++; status(true); video.current?.pause();
+      deferredPosition.current = target; return;
+    }
     // Protect the desired position from timeupdate events from the old file.
     current.generation++; status(true); cancelRequests(start);
     video.current?.pause();
@@ -229,8 +243,29 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     if (!seekTimer.current && current.ready && !current.loading && !current.failed) void video.current?.play().catch(() => { current.playing = false; });
   }
 
+  async function holdPreparation(): Promise<() => void> {
+    preparationHolds.current++;
+    if (seekTimer.current !== undefined) deferredPosition.current = state.current.position;
+    window.clearTimeout(seekTimer.current); seekTimer.current = undefined;
+    window.clearTimeout(prefetchTimer.current); prefetchTimer.current = undefined;
+    // Hold new reads synchronously, then drain existing server work. Neither a
+    // successful preview nor decoded frames are required for export admission.
+    while (mounted.current && pending.current.size) {
+      await Promise.allSettled([...pending.current.values()].flatMap(request => request.promotion ? [request.promise, request.promotion] : [request.promise]));
+    }
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true; preparationHolds.current--;
+      if (preparationHolds.current || !mounted.current || !enabled.current) return;
+      const target = deferredPosition.current; deferredPosition.current = null;
+      if (target !== null) void load(target);
+      else schedulePrefetch();
+    };
+  }
+
   useImperativeHandle(ref, () => ({
-    seek, play,
+    seek, play, holdPreparation,
     pause: () => { state.current.playing = false; video.current?.pause(); },
     toggle: () => { if (state.current.playing) { state.current.playing = false; video.current?.pause(); } else play(); },
   }));
@@ -239,7 +274,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
     mounted.current = true;
     callbacks.current.onAvailable(true);
     const visibility = () => {
-      if (document.hidden) { window.clearTimeout(prefetchTimer.current); for (const [start, request] of pending.current) if (request.background) { request.controller.abort(); pending.current.delete(start); } setPrefetching(false); }
+      if (document.hidden) { window.clearTimeout(prefetchTimer.current); if (!preparationHolds.current) for (const [start, request] of pending.current) if (request.background) { request.controller.abort(); pending.current.delete(start); } setPrefetching(false); }
       else schedulePrefetch();
     };
     document.addEventListener('visibilitychange', visibility);
