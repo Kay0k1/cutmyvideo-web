@@ -89,6 +89,24 @@ for (const orientation of ['landscape', 'portrait']) {
       await page.locator('video').hover(); await page.mouse.wheel(0, 500)
       await expect.poll(() => page.evaluate(() => scrollY)).toBe(0)
     }
+    // Safari chrome can change the visible height before CSS viewport units
+    // catch up. Exercise tab-bar appearance, disappearance and tab restoration.
+    for (const toolbar of [38, 72, 0, 38]) {
+      await page.evaluate(toolbar => {
+        Object.defineProperty(visualViewport!, 'height', { configurable: true, value: innerHeight - toolbar });
+        visualViewport!.dispatchEvent(new Event('resize'));
+        window.dispatchEvent(new Event('pageshow'));
+      }, toolbar)
+      await expect.poll(() => page.locator('.workspace-shell').evaluate(node => node.getBoundingClientRect().height)).toBe(600 - toolbar)
+      for (const selector of ['video', '.trim-track', '.export-submit']) {
+        const bottom = await page.locator(selector).evaluate(node => node.getBoundingClientRect().bottom)
+        expect(bottom).toBeLessThanOrEqual(601 - toolbar)
+      }
+      await page.locator('video').hover(); await page.mouse.wheel(0, 500)
+      await expect.poll(() => page.evaluate(() => scrollY)).toBe(0)
+      expect(await page.locator('video').evaluate((node, original) => node === original, originalPlayer)).toBe(true)
+    }
+    await page.evaluate(() => { Reflect.deleteProperty(visualViewport!, 'height'); visualViewport!.dispatchEvent(new Event('resize')); })
     await screenshot(page, testInfo, `${orientation}-safari-1280x600`)
     await page.locator('.clip-list').hover(); await page.mouse.wheel(0, 500)
     await expect.poll(() => page.locator('.clip-list').evaluate(node => node.scrollTop)).toBeGreaterThan(0)
