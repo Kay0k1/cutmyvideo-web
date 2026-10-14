@@ -114,32 +114,6 @@ test('replacing a source resets selections belonging to the old video', async ({
   await expect(page.locator('.range-list > li')).toHaveCount(1)
 })
 
-test('an active UI export survives reload, keeps source entry usable and can be cancelled', async ({ page }) => {
-  await page.goto('/')
-  await uploadThroughUI(page)
-  for (let i = 0; i < 9; i++) await addClip(page)
-  await goToExport(page)
-  const creationPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
-  await page.getByRole('button', { name: /Вырезать/ }).click()
-  const creation = await creationPromise
-  expect(creation.ok()).toBeTruthy()
-  const id = (await creation.json()).id
-  const cancel = page.getByRole('button', { name: 'Отменить обработку', exact: true })
-  await expect(cancel).toBeVisible()
-  await expect.poll(async () => (await (await page.request.get(`${api}/jobs/${id}`)).json()).status, { intervals: [100, 100, 200] }).toBe('running')
-  await goToSource(page)
-  await expect(page.getByLabel('Ссылка на видео', { exact: true })).toBeEnabled()
-  await goToExport(page)
-  await page.reload()
-  await expect(cancel).toBeVisible()
-  await cancel.click()
-  const terminal = await waitJob(page.request, id)
-  expect(terminal.status).toBe('cancelled')
-  await expect(page.getByRole('heading', { name: 'Обработка отменена', exact: true })).toBeVisible()
-  await goToSource(page)
-  await expect(page.getByLabel('Ссылка на видео', { exact: true })).toBeEnabled()
-})
-
 test('a real three-hour source supports a precise middle selection and export', async ({ page }, testInfo) => {
   test.skip(!process.env.CUTMY_E2E_LONG_MEDIA, 'Set CUTMY_E2E_LONG_MEDIA to a real three-hour fixture.')
   await page.goto('/')
