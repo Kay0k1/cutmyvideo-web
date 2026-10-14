@@ -10,7 +10,7 @@ Notable product changes are recorded here.
 - Download all ready clips as a streaming ZIP and retry only failed intervals, retaining earlier successes across navigation, cleanup and reload.
 
 ### Changed
-- Production pins core 1.2.0 and its exact source/build metadata; deployment documents compatible recovery for migration 007.
+- Production pins core 1.3.0 and its exact source/build metadata, enabling editable clip collections and distinct draft/final assemblies through the engine API. Database schema remains 007.
 - Projects use per-record compare-and-save under browser locks, independent tab views, deletion tombstones and explicit same-project conflict recovery. Legacy projects migrate without overwriting their original records.
 - Short foreground preview windows load first, while bounded background windows retain ordinary playback and revisit coverage.
 
