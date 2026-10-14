@@ -418,7 +418,8 @@ jobs:
   browser-gate:
     name: Complete browser coverage
     needs: [scope, frontend, database-access, integration, integration-webkit]
-    if: always() && needs.scope.outputs.full == 'true'
+    # Observe failed/skipped prerequisites, but do not keep cancelled runs alive.
+    if: ${{ !cancelled() && needs.scope.outputs.full == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
