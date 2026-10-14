@@ -7,11 +7,11 @@ test.describe('current core database contract', () => {
   test.skip(process.env.CUTMY_E2E_DATABASE_CONTROL !== 'hosted-disposable',
     'Requires the explicitly disposable hosted PostgreSQL integration job')
 
-  test('an active UI export survives reload, keeps source entry usable and can be cancelled', async ({ page }) => {
+  test('a queued UI export survives reload, keeps source entry usable and can be cancelled', async ({ page }) => {
     await page.goto('/')
     await uploadThroughUI(page)
     await goToExport(page)
-    // Hold the real worker before storage admission, after its running claim.
+    // Hold real worker storage admission so the accepted job stays queued.
     // HTTP creation, job reads and cancellation use jobs, not this table.
     // Repeated clips can finish immediately through verified result reuse.
     const release = await holdDatabaseTableLock('storage_counters')
@@ -23,7 +23,7 @@ test.describe('current core database contract', () => {
       const id = (await creation.json()).id
       const cancel = page.getByRole('button', { name: 'Отменить обработку', exact: true })
       await expect(cancel).toBeVisible()
-      await expect.poll(async () => (await (await page.request.get(`${api}/jobs/${id}`)).json()).status, { intervals: [100, 100, 200] }).toBe('running')
+      await expect.poll(async () => (await (await page.request.get(`${api}/jobs/${id}`)).json()).status, { intervals: [100, 100, 200] }).toBe('queued')
       await goToSource(page)
       await expect(page.getByLabel('Ссылка на видео', { exact: true })).toBeEnabled()
       await goToExport(page)
