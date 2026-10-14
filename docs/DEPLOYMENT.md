@@ -149,6 +149,20 @@ core and product commits. Set `CUTMY_SSH_TARGET`, `CUTMY_SSH_KEY`, and optionall
 `CUTMY_CORE_DIR`; it does not need GitHub credentials on the server.
 The core checkout must match `core.version`, the revision verified by product CI.
 
+The final core 1.2.0 release also includes ordered migration 007 for persisted
+metadata-resolution leases. A binary supporting only 006 refuses the upgraded
+database. For a 006-to-007 rollout, follow the compatibility-release procedure
+below with the exact new 007 core and the currently deployed website. Build and
+test that image against an isolated restored production database/media pair
+first, including an ordinary application role, a compatible restart and the old
+binary's explicit schema refusal. Keep both a private coordinated 006 snapshot
+and the original environment/release identity. After the final snapshot, keep
+writers stopped while atomically pinning both the environment and `current` to
+the verified 007-compatible release under the deployment lock; release the lock
+before activation. Every automatic fallback must then select a 007-compatible
+image. Returning to 006 requires coordinated database/media restoration into
+inactive resources rather than selecting the previous image against live 007.
+
 Core 1.2 introduces ordered migration 006. A core supporting only 005 refuses
 that schema, so the previous 005 image is not an automatic recovery target after
 this upgrade. Before migration, stop media writers and hold the deployment lock
