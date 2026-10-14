@@ -4,6 +4,10 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+### Changed
+- Run all eight browser projects in isolated parallel Linux/macOS jobs while preserving one worker, existing cases, timeouts, real media and database fault checks. Require collected-versus-executed coverage across every project before acceptance.
+- Cancel superseded PR/main runs while protecting tag and manual verification from automatic cancellation.
+
 ### Added
 - Save and add the next clip, previous/next clip navigation and input-safe shortcuts beside the player; compact controls remain accessible on phones.
 - Draft playback of the selected sequence in list order, with boundary seek feedback, selected audio and read-only crop framing.

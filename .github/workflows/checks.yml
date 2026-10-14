@@ -8,8 +8,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: product-checks-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: product-checks-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')) }}
 jobs:
   scope:
     runs-on: ubuntu-latest
@@ -105,6 +105,10 @@ jobs:
     if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [desktop, mobile, layout-chromium, layout-firefox, usability-chromium, usability-firefox]
     container:
       image: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
       options: --init --ipc=host
@@ -165,6 +169,12 @@ jobs:
         working-directory: core
       - run: npm ci
         working-directory: web
+      - name: Collect the complete browser project inventory
+        working-directory: web
+        run: |
+          mkdir "$RUNNER_TEMP/browser-evidence"
+          printf 'CUTMY_E2E_JSON_OUTPUT=%s\n' "$RUNNER_TEMP/browser-evidence/tests.json" >> "$GITHUB_ENV"
+          node node_modules/@playwright/test/cli.js test --config=e2e/playwright.config.ts --project="${{ matrix.project }}" --list --reporter=json > "$RUNNER_TEMP/browser-evidence/inventory.json"
       - name: Start real backend and website
         run: |
           /tmp/cutmy server > /tmp/cutmy-server.log 2>&1 &
@@ -184,15 +194,31 @@ jobs:
           cat /tmp/cutmy-server.log /tmp/cutmy-web.log
           exit 1
       - name: Verify actual database fault contract first
+        if: matrix.project == 'desktop'
+        env:
+          CUTMY_E2E_JSON_OUTPUT: ${{ runner.temp }}/browser-evidence/contract.json
         run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed --project=desktop --grep='current core database contract'
         working-directory: web
-      - name: Run remaining browser checks with a virtual display
-        run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed --project=desktop --project=mobile --project=layout-chromium --project=layout-firefox --project=usability-chromium --project=usability-firefox --grep-invert='current core database contract'
+      - name: Run isolated browser project with a virtual display
+        run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed --project="${{ matrix.project }}" --grep-invert='current core database contract'
         working-directory: web
+      - name: Require every collected case in this project
+        working-directory: web
+        run: |
+          reports=("$RUNNER_TEMP/browser-evidence/tests.json")
+          if [ "${{ matrix.project }}" = desktop ]; then reports+=("$RUNNER_TEMP/browser-evidence/contract.json"); fi
+          python3 deploy/browser-coverage.py --project "${{ matrix.project }}" --inventory "$RUNNER_TEMP/browser-evidence/inventory.json" --reports "${reports[@]}" --output "$RUNNER_TEMP/browser-evidence/coverage.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: browser-evidence-${{ matrix.project }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/browser-evidence/
+          retention-days: 3
+          if-no-files-found: error
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
-          name: integration-diagnostics
+          name: integration-diagnostics-${{ matrix.project }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             web/playwright-report
             web/test-results
@@ -207,6 +233,10 @@ jobs:
     if: needs.scope.outputs.full == 'true'
     runs-on: macos-15
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [layout-webkit, usability-webkit]
     defaults:
       run:
         shell: bash
@@ -267,6 +297,12 @@ jobs:
         working-directory: core
       - run: npm ci
         working-directory: web
+      - name: Collect the complete browser project inventory
+        working-directory: web
+        run: |
+          mkdir "$RUNNER_TEMP/browser-evidence"
+          printf 'CUTMY_E2E_JSON_OUTPUT=%s\n' "$RUNNER_TEMP/browser-evidence/tests.json" >> "$GITHUB_ENV"
+          node node_modules/@playwright/test/cli.js test --config=e2e/playwright.config.ts --project="${{ matrix.project }}" --list --reporter=json > "$RUNNER_TEMP/browser-evidence/inventory.json"
       - run: npx playwright install webkit
         working-directory: web
       - name: Start real backend and website
@@ -298,7 +334,7 @@ jobs:
           done
           cat "$CUTMY_CI_DIR/server.log" "$CUTMY_CI_DIR/web.log"
           exit 1
-      - name: Run complete native macOS WebKit matrix
+      - name: Run isolated native macOS WebKit project
         run: |
           # macOS otherwise excludes native buttons from Tab navigation.
           # Limit Keyboard Navigation to this disposable Playwright app domain.
@@ -316,8 +352,18 @@ jobs:
           trap restore_keyboard_mode EXIT
           defaults write org.webkit.Playwright AppleKeyboardUIMode -int 2
           [[ $(defaults read org.webkit.Playwright AppleKeyboardUIMode) == 2 ]]
-          npm run test:e2e -- --project=layout-webkit --project=usability-webkit
+          npm run test:e2e -- --project="${{ matrix.project }}"
         working-directory: web
+      - name: Require every collected case in this project
+        working-directory: web
+        run: python3 deploy/browser-coverage.py --project "${{ matrix.project }}" --inventory "$RUNNER_TEMP/browser-evidence/inventory.json" --reports "$RUNNER_TEMP/browser-evidence/tests.json" --output "$RUNNER_TEMP/browser-evidence/coverage.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: browser-evidence-${{ matrix.project }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/browser-evidence/
+          retention-days: 3
+          if-no-files-found: error
       - name: Stop only owned backend and website
         if: always()
         run: |
@@ -359,7 +405,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: failure()
         with:
-          name: native-webkit-diagnostics
+          name: native-webkit-diagnostics-${{ matrix.project }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             web/playwright-report
             web/test-results
@@ -367,4 +413,44 @@ jobs:
             ${{ runner.temp }}/cutmy-webkit-ci/worker.log
             ${{ runner.temp }}/cutmy-webkit-ci/web.log
             ${{ runner.temp }}/cutmy-webkit-ci/postgres.log
+          retention-days: 3
+
+  browser-gate:
+    name: Complete browser coverage
+    needs: [scope, frontend, database-access, integration, integration-webkit]
+    if: always() && needs.scope.outputs.full == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every prerequisite
+        env:
+          PREREQUISITES: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          results = {name: value['result'] for name, value in json.loads(os.environ['PREREQUISITES']).items()}
+          print(json.dumps(results))
+          if set(results.values()) != {'success'}:
+              raise SystemExit('Browser prerequisites failed, were cancelled or skipped')
+          PYTHON
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: browser-evidence-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/browser-reports
+      - name: Require the full inventory across all eight browser projects
+        run: |
+          node node_modules/@playwright/test/cli.js test --config=e2e/playwright.config.ts --list --reporter=json > "$RUNNER_TEMP/browser-inventory.json"
+          reports=("$RUNNER_TEMP/browser-reports"/*/tests.json "$RUNNER_TEMP/browser-reports"/*/contract.json)
+          python3 deploy/browser-coverage.py --inventory "$RUNNER_TEMP/browser-inventory.json" --reports "${reports[@]}" --output "$RUNNER_TEMP/browser-coverage.json"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-coverage-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/browser-coverage.json
+          if-no-files-found: error
           retention-days: 3
