@@ -1,5 +1,25 @@
 # Acceptance and UX review
 
+## Core v1.3.0 release integration
+
+The website pins core commit
+`e4a0477b727ccfbbf21f86027fdd07f6ffe78419`. Production image metadata uses
+`v1.3.0`, that same commit and its UTC build timestamp
+`2026-10-14T21:23:39Z`. This stage adds editable clip collections, validation,
+selected-clip exports and distinct draft/final assemblies in the reusable core;
+the browser continues to use its existing export workflow.
+
+The engine retains ordered database schema 007, so the existing core v1.2.0
+production release remains a compatible rollback target. The release still
+requires a fresh verified backup and all Product checks on this exact core pin
+before activation. Product checks exercise the ordinary browser workflow
+against the new engine in Chromium, Firefox and native macOS WebKit.
+
+Local verification passed the production build, 260 unit tests, browser-contract
+type checks, 73 deployment checks with one optional database integration check
+skipped, the dependency audit, artifact policy and shell/local Compose checks.
+These local results do not replace the required integration checks of the pin.
+
 ## Unified workspace — 13 October 2026
 
 The follow-up desktop check covers browser content windows below the original
