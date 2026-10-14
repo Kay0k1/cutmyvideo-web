@@ -58,6 +58,21 @@ font keeps its separate [SIL Open Font License](public/licenses/geologica.txt).
 
 ## CI scope and resource use
 
+Full browser acceptance runs each of the six Linux projects and two native macOS
+WebKit projects in separate jobs. Each job has its own PostgreSQL, backend, worker
+and fixture files; keep `workers: 1` within a job so database fault injection does
+not race other cases. The desktop job runs the real database contract first.
+
+Each job collects its complete test inventory and emits a JSON execution report.
+The final browser gate requires all eight projects, the exact collected test
+identities, successful prerequisites and source/run/attempt identity. Existing
+explicit opt-in/device skips remain visible; database contract skips, missing
+cases, retries, interruptions and unexpected results fail acceptance.
+
+New PR commits cancel stale runs. Tag/manual verification uses separate event
+groups and is protected from automatic cancellation. Compare total elapsed time,
+queue delay and summed job execution separately when measuring CI changes.
+
 Every pull request runs the frontend checks. Changes outside root/docs Markdown, LICENSE
 and issue templates also run the real database and complete Linux/macOS browser
 matrix; unfamiliar paths default to the full matrix. Main pushes verify the

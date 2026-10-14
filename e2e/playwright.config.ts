@@ -1,8 +1,15 @@
 import { defineConfig, devices } from '@playwright/test'
+import type { ReporterDescription } from '@playwright/test'
 import { localArtifactDirectory } from './local-artifacts'
 
 const temporaryOutput = !process.env.CI && !process.env.CUTMY_E2E_OUTPUT
 const resultRoot = process.env.CUTMY_E2E_OUTPUT || (temporaryOutput ? localArtifactDirectory() : undefined)
+const reporters: ReporterDescription[] = temporaryOutput
+  ? [['list'], ['./local-artifacts.ts', { root: resultRoot! }]]
+  : [['list'], ['html', { outputFolder: resultRoot ? `${resultRoot}/playwright-report` : '../playwright-report', open: 'never' }]]
+if (process.env.CUTMY_E2E_JSON_OUTPUT) {
+  reporters.push(['json', { outputFile: process.env.CUTMY_E2E_JSON_OUTPUT }])
+}
 
 // An isolated Linux dependency wrapper can be supplied without changing the
 // bundled browser or host packages. Normal CI uses Playwright's own executable.
@@ -19,9 +26,8 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   outputDir: resultRoot ? `${resultRoot}/test-results` : '../test-results',
-  reporter: temporaryOutput
-    ? [['list'], ['./local-artifacts.ts', { root: resultRoot! }]]
-    : [['list'], ['html', { outputFolder: resultRoot ? `${resultRoot}/playwright-report` : '../playwright-report', open: 'never' }]],
+  reporter: reporters,
+  metadata: { ci: { commit: process.env.GITHUB_SHA || 'local', run: process.env.GITHUB_RUN_ID || 'local', attempt: process.env.GITHUB_RUN_ATTEMPT || 'local' } },
   use: {
     baseURL: process.env.CUTMY_E2E_URL || 'http://127.0.0.1:5173',
     screenshot: 'only-on-failure',
