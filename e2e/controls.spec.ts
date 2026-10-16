@@ -186,8 +186,8 @@ test('zoomed timeline seek and scrubbing preserve time offsets and all sliders r
   await expect(scrubber).toBeVisible()
   await expect(start).toBeVisible()
   await expect(end).toBeVisible()
-  // Coordinate gestures need the track inside its scroll panel and clear of
-  // the anchored toolbar. Hover scrolls it into view and verifies hit testing.
+  // Reveal and hit-test the track inside its scroll panel before capturing
+  // coordinates for pointer gestures.
   await scrubber.hover()
   const bounds = await scrubber.boundingBox()
   expect(bounds).not.toBeNull()

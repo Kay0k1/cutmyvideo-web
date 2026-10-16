@@ -231,6 +231,28 @@ test('desktop panels track tab-bar height changes and restored Safari viewports 
   }
 })
 
+test('short desktop windows expose trim values without toolbar overlap on first open', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 600 })
+  await fixture(page, testInfo)
+  await settle(page)
+  const start = page.locator('.moment-boundaries .time-value').first()
+  const end = page.locator('.moment-boundaries .time-value').last()
+  for (const control of [start, end]) {
+    const point = await control.evaluate(node => {
+      const rect = node.getBoundingClientRect()
+      const x = rect.x + rect.width / 2, y = rect.y + rect.height / 2
+      return { x, y, hit: node.contains(document.elementFromPoint(x, y)) }
+    })
+    expect(point.hit, 'Trim time values must accept a real click without scrolling first').toBe(true)
+  }
+  const box = (await start.boundingBox())!
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)
+  await expect(page.locator('#range-start')).toBeFocused()
+  expect(await page.evaluate(() => scrollY)).toBe(0)
+  expect(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(1)
+  await capture(page, testInfo, 'short-desktop-trim-values-1280x600')
+})
+
 test('native preview and editing stay readable across desktop, laptop and tablet sizes', async ({ page }, testInfo) => {
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
