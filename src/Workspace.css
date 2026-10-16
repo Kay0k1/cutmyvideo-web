@@ -33,6 +33,7 @@
 .workspace-page .window-player-screen { flex: none; width: 100%; aspect-ratio: 16 / 9; max-height: min(54dvh, 640px); }
 .workspace-page .moment-layout .window-player-screen video { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; max-height: none; object-fit: contain; }
 .workspace-page .moment-layout .player-unavailable { position: absolute; inset: 0; height: 100%; min-height: 0; overflow: auto; padding: 20px; }
+.workspace-page .moment-mobile-markers { display: none; }
 .workspace-page .moment-controls { min-width: 0; padding: 22px; border: 0; }
 .trim-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; margin-bottom: 18px; }
 .trim-heading > div { min-width: 0; max-width: 100%; }
@@ -190,4 +191,11 @@
   .brand-symbol { width: 24px; }
   .header-actions > .text-button { font-size: .6875rem; }
   .workspace-page .time-value { font-size: .8125rem; }
+}
+
+@media (max-width: 600px) {
+  .workspace-page .moment-mobile-markers { display: grid; margin-bottom: 16px; }
+  .workspace-page .moment-mobile-markers > .marker-button { flex-wrap: wrap; gap: 4px; }
+  .workspace-page .moment-mobile-markers .marker-text { display: inline; }
+  .workspace-page .moment-mobile-markers kbd { display: inline-grid; }
 }
