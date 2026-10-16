@@ -101,14 +101,13 @@ async function checkLayout(page: Page, state: LayoutState, touch: boolean, descr
   expect(result.overflow, `${description}: horizontal document overflow`).toBeLessThanOrEqual(1)
   expect(result.controls.filter(control => control.clippedHorizontally), `${description}: horizontally clipped controls`).toEqual([])
   expect(result.controls.filter(control => control.smallTouchTarget), `${description}: targets smaller than 44 CSS px`).toEqual([])
-  const compactDesktop = result.width >= 1100 && result.height >= 620
-  if ((state === 'workspace' || state === 'files') && compactDesktop) {
-    expect(result.scrollHeight, `${description}: desktop workspace does not scroll the document`).toBeLessThanOrEqual(result.height + 1)
+  if (state === 'workspace' || state === 'files') {
     const primary = ['video', '.trim-handle.start', '.trim-handle.end', '.export-submit', ...(state === 'workspace' ? ['.clip-library', '.clip-list'] : ['.workspace-results'])]
     for (const selector of primary) {
-      await withinFirstViewport(page.locator(selector), `${description}: ${selector}`)
+      await reachableByScrolling(page.locator(selector), `${description}: ${selector}`)
     }
-    expect(await page.evaluate(() => scrollY)).toBe(0)
+    const frame = (await page.locator('.player-frame').boundingBox())!
+    expect(frame.height, `${description}: a readable preview keeps its height`).toBeGreaterThanOrEqual(Math.min(frame.width * 9 / 16, result.height * .42, 240) - 1)
   }
   if (touch && state === 'workspace' && result.width > result.height) {
     const video = await page.locator('video').boundingBox()
@@ -117,10 +116,8 @@ async function checkLayout(page: Page, state: LayoutState, touch: boolean, descr
     expect(video!.height, `${description}: readable native controls`).toBeGreaterThanOrEqual(140)
   }
   if (state === 'source') {
-    if (!touch || result.width <= 430 && result.height >= 640) {
-      for (const selector of ['.source-choice', '.source-form input', '.source-open']) {
-        await withinFirstViewport(page.locator(selector), `${description}: ${selector}`)
-      }
+    for (const selector of ['.source-choice', '.source-form input', '.source-open']) {
+      await reachableByScrolling(page.locator(selector), `${description}: ${selector}`)
     }
   } else if (state === 'workspace' || state === 'files') {
     const primary = [page.locator('.format-picker'), page.locator('.export-submit'),
@@ -255,7 +252,7 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
           const uploadLayout = await collectLayout(target, touch)
           expect(uploadLayout.overflow, `${key}: file chooser overflow`).toBeLessThanOrEqual(1)
           expect(uploadLayout.controls.filter(control => control.clippedHorizontally || control.smallTouchTarget), `${key}: file controls`).toEqual([])
-          if (!touch) await withinFirstViewport(target.locator('.upload-button'), `${key}: choose video`)
+          await reachableByScrolling(target.locator('.upload-button'), `${key}: choose video`)
           evidence.push({ key: `${key}-upload`, ...uploadLayout })
         }
         if (state === 'workspace' || size.width === 1280 && size.height === 720 || size.width === 320) {

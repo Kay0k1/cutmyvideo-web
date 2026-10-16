@@ -24,12 +24,3 @@
 .timeline-section-track[data-dragging] .timeline-section-range { opacity: 1; }
 .timeline-section-track[data-disabled], .timeline-section-window:disabled { cursor: default; }
 .timeline-section-labels { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: .75rem; line-height: 1.5; font-variant-numeric: tabular-nums; }
-
-@media (min-width: 900px) and (max-height: 700px) and (hover: hover) and (pointer: fine) {
-  .workspace-page .timeline-section { margin: 0; }
-  .workspace-page .timeline-section-heading { font-size: .6875rem; line-height: 1.5; }
-  .workspace-page .timeline-section-track, .workspace-page .timeline-section-window, .workspace-page .timeline-section-playback { height: 32px; min-height: 32px; }
-  .workspace-page .timeline-section-baseline, .workspace-page .timeline-section-clips > span { top: 14px; }
-  .workspace-page .timeline-section-range { top: 6px; }
-  .workspace-page .timeline-section-labels { display: none; }
-}

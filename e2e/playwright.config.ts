@@ -39,8 +39,8 @@ export default defineConfig({
     { name: 'layout-chromium', testMatch: /layout\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
     { name: 'layout-firefox', testMatch: /layout\.spec\.ts/, use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 900 } } },
     { name: 'layout-webkit', testMatch: /layout\.spec\.ts/, use: { ...devices['Desktop Safari'], ...webkitLaunch, viewport: { width: 1440, height: 900 } } },
-    { name: 'usability-chromium', testMatch: /(?:agent-projects|timeline-section|unified-workspace|project-safety|window-preview|efficient-cutting|usability)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
-    { name: 'usability-firefox', testMatch: /(?:agent-projects|timeline-section|unified-workspace|project-safety|window-preview|efficient-cutting|usability)\.spec\.ts/, use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 900 } } },
-    { name: 'usability-webkit', testMatch: /(?:agent-projects|timeline-section|unified-workspace|project-safety|window-preview|efficient-cutting|usability)\.spec\.ts/, use: { ...devices['Desktop Safari'], ...webkitLaunch, viewport: { width: 1440, height: 900 } } },
+    { name: 'usability-chromium', testMatch: /(?:editor-responsive|agent-projects|timeline-section|unified-workspace|project-safety|window-preview|efficient-cutting|usability)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+    { name: 'usability-firefox', testMatch: /(?:editor-responsive|agent-projects|timeline-section|unified-workspace|project-safety|window-preview|efficient-cutting|usability)\.spec\.ts/, use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 900 } } },
+    { name: 'usability-webkit', testMatch: /(?:editor-responsive|agent-projects|timeline-section|unified-workspace|project-safety|window-preview|efficient-cutting|usability)\.spec\.ts/, use: { ...devices['Desktop Safari'], ...webkitLaunch, viewport: { width: 1440, height: 900 } } },
   ],
 })

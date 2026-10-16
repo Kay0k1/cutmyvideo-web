@@ -44,7 +44,6 @@ import { SourceLibrary } from './SourceLibrary';
 import { JobLibrary } from './JobLibrary';
 import { WorkspaceDialog } from './WorkspaceDialog';
 import './Workspace.css';
-import { useWorkspaceViewport } from './useWorkspaceViewport';
 import { RetentionNotice } from './RetentionNotice';
 import { useWorkflowHistory } from './workflowHistory';
 import { boundaryAudition, recoverCuttingDraft, restoredTimeText } from './cuttingDraft';
@@ -128,8 +127,6 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
   const [sourceTracks, setSourceTracks] = useState<{ sourceID: string; tracks: MediaTrack[] | null; loading: boolean; error: string }>({ sourceID: '', tracks: null, loading: false, error: '' });
   const [cropOpen, setCropOpen] = useState(false);
   const [cropContainer, setCropContainer] = useState<HTMLElement | null>(null);
-  const momentControls = useRef<HTMLDivElement>(null);
-  const [controlsOverflow, setControlsOverflow] = useState(false);
   const [displayGeometry, setDisplayGeometry] = useState<{ id: string; width: number; height: number } | null>(null);
   const [trackRevision, setTrackRevision] = useState(0);
   const [job, setJob] = useState<Job | null>(null);
@@ -186,7 +183,6 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
   const busy = activeJob(job) || submitting || deletingSource;
   const duration = source?.duration_ms ?? 0;
   const workspaceVisible = !!source && step !== 1;
-  useWorkspaceViewport(workspaceVisible || step === 1);
   const view = timelineView(simpleView, viewCenter, span);
   const zoomOptions = [duration, 300000, 60000, 10000, view[1] - view[0]].filter((value, index, all) => value > 0 && value <= duration && all.indexOf(value) === index);
   const totalDuration = exportRanges.reduce((sum, range) => sum + range.end_ms - range.start_ms, 0);
@@ -675,24 +671,6 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
     if ((previousStep.current === 1) !== (step === 1)) { stageHeading.current?.focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'instant' }); }
     previousStep.current = step;
   }, [step]);
-
-  useEffect(() => {
-    const node = momentControls.current;
-    if (!node) { setControlsOverflow(false); return; }
-    const measure = () => setControlsOverflow(node.scrollHeight > node.clientHeight + 1);
-    let frame: number | undefined;
-    const schedule = () => { if (frame !== undefined) cancelAnimationFrame(frame); frame = requestAnimationFrame(measure); };
-    const observer = new ResizeObserver(schedule);
-    observer.observe(node);
-    const observeContent = () => {
-      for (const child of node.children) observer.observe(child);
-      schedule();
-    };
-    const mutations = new MutationObserver(observeContent);
-    mutations.observe(node, { childList: true });
-    observeContent();
-    return () => { observer.disconnect(); mutations.disconnect(); if (frame !== undefined) cancelAnimationFrame(frame); };
-  }, [source?.id, selected?.id, workspaceVisible]);
 
   function goToStep(next: WorkbenchStep) {
     if (!sessionReady || submitting || mutationPending.current) return;
@@ -1250,6 +1228,7 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
             <button type="button" className="text-button" onClick={() => { rememberHistory(); setOutput(previous => ({ ...previous, crop: undefined })); }}>{t('Сбросить кадр')}</button></div>}
           {videoCopy && <p className="copy-boundary-warning" role="note">{t('Копирование сохраняет исходное качество. Начало может сдвинуться к ключевому кадру; фактические границы будут указаны у готового файла.')}</p>}
     {exportLimitError && <p className="error-message" role="alert">{exportLimitError}</p>}
+    <dl className="export-settings-summary"><div><dt>{t(output.format === 'mp3' ? 'Формат файла' : 'Качество видео')}</dt><dd>{output.format === 'mp3' ? 'MP3' : t(preserveLocalQuality ? 'Исходное качество' : output.quality === 'best' ? 'Лучшее доступное' : output.quality === '720p' ? 'До 720p' : 'До 1080p')}</dd></div><div><dt>{t('Результат нарезки')}</dt><dd>{t(output.output_mode === 'joined' ? 'Один объединённый файл' : 'Отдельные файлы')}</dd></div></dl>
 <div className="export-summary"><span>{source ? countLabel(exportRanges.length, 'clip', locale) : t("Фрагменты не выбраны")}</span>{source && <strong>{durationLabel(totalDuration, locale)}</strong>}</div>
           <button className="button primary export-submit" type="submit" disabled={!sessionReady || !source || !exportRanges.length || busy || sourceBusy || invalidDraft || !!exportLimitError || invalidAudio || incompatibleOutput}>{submitting ? <><span className="spinner" />{t("Создаём задание…")}</> : activeJob(job) ? <><span className="spinner" />{t("Идёт обработка…")}</> : <><Icon name="cut" size={18} />{repeatExport ? t('Повторить экспорт') : exportRanges.length > 1 ? t("Вырезать фрагменты") : t("Вырезать фрагмент")}</>}</button>
     <p className="export-empty-hint">{output.output_mode === 'joined' || exportRanges.length === 1 ? t('один файл') : t('отдельные файлы')} {output.format.toUpperCase()}{output.no_audio ? ` · ${t('Без звука')}` : ''}{output.crop ? ` · ${t('Кадрирование')}` : ''}</p>
@@ -1261,11 +1240,11 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
     <a className="skip-link" href="#editor">{t('К выбору фрагмента')}</a>
     <header className="site-header"><div className="header-inner">
       <a className="brand" href="/" aria-label={t('cutmyvideo — главная')}><span className="brand-symbol"><Icon name="cut" size={20} /></span><span>cutmy<span className="brand-suffix">video</span></span></a>
-      <WorkspaceNav panel={panel} onOpen={setPanel} onClose={navigation.closePanel} preferences={preferences} onSave={applyPreferences} busy={!sessionReady || sourceBusy || busy} onExample={value => { setUrl(value); setStep(1); void openSource(undefined, value); }} />
-      <div className="header-actions">{onCollectionOpen && <button type="button" className="text-button" disabled={sourceBusy || submitting || cancelling} onClick={() => { draftWriter.current?.flush(); void persistCurrentProject().then(saved => { if (saved) onCollectionOpen(); }); }}>{t('Коллекции')}</button>}<LanguageSwitch /><ThemeToggle /></div>
+      <WorkspaceNav panel={panel} onOpen={setPanel} onClose={navigation.closePanel} collectionDisabled={sourceBusy || submitting || cancelling} onCollectionOpen={onCollectionOpen ? () => { draftWriter.current?.flush(); void persistCurrentProject().then(saved => { if (saved) onCollectionOpen(); }); } : undefined} preferences={preferences} onSave={applyPreferences} busy={!sessionReady || sourceBusy || busy} onExample={value => { setUrl(value); setStep(1); void openSource(undefined, value); }} />
+      <div className="header-actions"><LanguageSwitch /><ThemeToggle /></div>
     </div></header>
     <main id="editor" data-bootstrap-state={sessionLoading ? 'loading' : sessionReady ? 'ready' : 'error'} aria-busy={sessionLoading} className={`stage-page stage-${step}${workspaceVisible ? ' workspace-page' : ''}`}>
-      <div className="page-heading"><div><h1 ref={stageHeading} tabIndex={-1}>{t(workspaceVisible ? 'Нарежьте видео' : step === 4 ? 'Сохраните фрагменты' : 'Откройте видео')}</h1>{!workspaceVisible && <p>{t('Ссылка на запись или видеофайл с вашего устройства.')}</p>}</div>
+      <div className="page-heading"><div><h1 ref={stageHeading} tabIndex={-1}>{t(workspaceVisible ? 'Нарежьте видео' : step === 4 ? 'Сохраните фрагменты' : 'Откройте видео')}</h1><p>{t(workspaceVisible ? 'Выберите нужный момент и сохраните его отдельным файлом.' : 'Ссылка на запись или видеофайл с вашего устройства.')}</p></div>
         {workspaceVisible ? <div className="workspace-heading-actions"><div className="edit-history-actions" role="group" aria-label={t('История изменений')}><button type="button" className="icon-button" aria-label={t('Отменить изменение')} title={t('Отменить изменение')} disabled={!currentHistory().past.length || busy || sourceBusy} onClick={() => historyAction('undo')}><Icon name="undo" size={19} /></button><button type="button" className="icon-button" aria-label={t('Повторить изменение')} title={t('Повторить изменение')} disabled={!currentHistory().future.length || busy || sourceBusy} onClick={() => historyAction('redo')}><Icon name="redo" size={19} /></button></div><button className="text-button change-source" type="button" disabled={!sessionReady || submitting} onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button></div>
           : source ? <button className="button secondary return-to-editor" type="button" disabled={!sessionReady} onClick={() => goToStep(selected ? 2 : 3)}>{t('Вернуться к редактированию')}</button> : (job || retryOutput) && <button className="button secondary return-to-results" type="button" disabled={!sessionReady} onClick={() => goToStep(4)}>{t('Вернуться к скачиванию')}</button>}
       </div>
@@ -1282,7 +1261,8 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
           <div className="moment-layout">
           <Player ref={player} source={source} initialPosition={position.getSnapshot()} audioTrack={previewAudioTrack} noAudio={output.no_audio} forceWindow={(cropOpen || !!output.crop) && !source.preview_url} onGeometry={mediaGeometry} active={workspaceVisible} onAvailable={playerAvailability} onTime={playbackPosition} onSourceUnavailable={sourceUnavailable} />
           {output.crop && !cropOpen && cropContainer && <CropPreview crop={output.crop} container={cropContainer} />}
-          {selected && <div ref={momentControls} className={`moment-controls${controlsOverflow ? ' controls-overflow' : ''}`}>
+          {selected && <div className="moment-controls">
+            <div className="trim-heading"><div><h2>{t('Обрезка фрагмента')}</h2><p>{selected.label || t('Фрагмент {index}', { index: ranges.findIndex(range => range.id === selected.id) + 1 })}</p></div><span className="trim-instruction">{t('Потяните за края выделения или задайте время.')}</span></div>
             <div className="moment-boundaries"><div><label htmlFor="range-start">{t('Начало')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время начала: {time}', { time: displayTimecode(selected.start_ms) })} onClick={() => editTime('start')}>{displayTimecode(selected.start_ms)}<Icon name="edit" size={14} /></button><input ref={startField} id="range-start" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span><span className="marker-text">{t('Начало здесь')}</span><kbd>I</kbd></button></div><div><label htmlFor="range-end">{t('Конец')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время конца: {time}', { time: displayTimecode(selected.end_ms) })} onClick={() => editTime('end')}>{displayTimecode(selected.end_ms)}<Icon name="edit" size={14} /></button><input ref={endField} id="range-end" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={endText} onChange={event => { setEndText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span><span className="marker-text">{t('Конец здесь')}</span><kbd>O</kbd></button></div><div className="moment-duration"><span>{t('Длительность')}</span><strong>{durationLabel(selected.end_ms - selected.start_ms, locale)}</strong></div></div>
             <Timeline compact duration={duration} position={position} ranges={ranges} selected={selected} section={simpleView} view={view} maximumRange={limits.max_range_ms} showOverview={precisionOpen} onSection={changeTimelineSection} onView={changeTimelineView} onSeek={seek} onRange={changeBounds} onReveal={ms => { revealBoundary(ms); seek(ms); }} onBeginChange={beginHistory} onEndChange={finishBoundaryChange} audioTrack={previewAudioTrack} noAudio={output.no_audio} sourceID={source.id} active={workspaceVisible} />
             <div className="workspace-toolstrip"><div className="moment-preview"><button className="button secondary" type="button" disabled={!playerAvailable} aria-label={t(previewing ? 'Остановить просмотр' : 'Посмотреть фрагмент')} title={t(previewing ? 'Остановить просмотр' : 'Посмотреть фрагмент')} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} /><span className="preview-button-label">{previewing ? t('Остановить просмотр') : t('Посмотреть фрагмент')}</span></button><button className="text-button precision-toggle" type="button" aria-expanded={precisionOpen} aria-controls="range-start range-end precision-controls" onClick={() => { if (precisionOpen && invalidDraft) { validateFields(true); return; } setPrecisionOpen(!precisionOpen); }}>{t('Точное время и шкала')}<Icon name="chevron" size={15} style={{ transform: precisionOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button></div>

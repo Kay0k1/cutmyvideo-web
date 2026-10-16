@@ -32,19 +32,28 @@ async function workspaceFits(page: Page, collection = '.clip-library') {
     ['video', 'Native player'], ['.trim-track', 'Timeline'],
     ['.trim-handle.start', 'Start handle'], ['.trim-handle.end', 'End handle'],
     [collection, 'Clip collection or ready files'], ['.export-submit', 'Export button'],
-  ]) await fullyInViewport(page.locator(selector), description)
+  ]) {
+    // Short windows can scroll. The player keeps a usable size and every
+    // action must be reachable without a clipped or locked document.
+    const control = page.locator(selector)
+    await control.scrollIntoViewIfNeeded()
+    const height = await control.evaluate(node => node.getBoundingClientRect().height)
+    if (height <= page.viewportSize()!.height) await fullyInViewport(control, description)
+    else await expect(control, description).toBeVisible()
+  }
   const documentSize = await page.evaluate(() => ({
     width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight,
     viewportWidth: innerWidth, viewportHeight: innerHeight, scrollX, scrollY,
   }))
   expect(documentSize.width, 'No horizontal page overflow').toBeLessThanOrEqual(documentSize.viewportWidth + 1)
-  expect(documentSize.height, 'Editing must fit the desktop window without page scrolling').toBeLessThanOrEqual(documentSize.viewportHeight + 1)
   expect(documentSize.scrollX).toBe(0)
-  expect(documentSize.scrollY).toBe(0)
+  const frame = await page.locator('.player-frame').boundingBox()
+  expect(frame).not.toBeNull()
+  expect(frame!.height, 'A short window must not squash the video into a strip').toBeGreaterThanOrEqual(Math.min(frame!.width * 9 / 16, documentSize.viewportHeight * .42, 240) - 1)
 }
 
 for (const language of ['ru', 'en']) {
-  test(`fresh ${language} source screen fits with Safari tab chrome`, async ({ page }) => {
+  test(`fresh ${language} source screen stays reachable with Safari tab chrome`, async ({ page }) => {
     await page.route('**/api/v1/**', route => {
       const path = new URL(route.request().url()).pathname;
       return route.fulfill({ json: path.endsWith('/session') ? { authenticated: true, limits: { max_source_bytes: 1073741824 } } : { sources: [], jobs: [] } });
@@ -55,27 +64,26 @@ for (const language of ['ru', 'en']) {
       await page.setViewportSize({ width: 1280, height });
       for (const mode of ['link', 'file']) {
         await page.locator('.source-choice button').nth(mode === 'link' ? 0 : 1).click();
+        await page.locator(mode === 'link' ? '.source-open' : '.upload-button').scrollIntoViewIfNeeded();
         await fullyInViewport(page.locator(mode === 'link' ? '.source-open' : '.upload-button'), 'Open/upload action');
+        await page.locator('.page-footer').scrollIntoViewIfNeeded();
         await fullyInViewport(page.locator('.page-footer'), 'Footer');
-        const geometry = await page.evaluate(() => ({ document: document.documentElement.scrollHeight, viewport: innerHeight, content: document.querySelector('main')!.scrollHeight, available: document.querySelector('main')!.clientHeight }));
-        expect(geometry.document).toBeLessThanOrEqual(geometry.viewport + 1);
-        expect(geometry.content, 'The fresh screen needs no internal scrolling either').toBeLessThanOrEqual(geometry.available + 1);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), 'Source screen has no horizontal overflow').toBeLessThanOrEqual(1);
         await page.locator('.source-chooser').hover(); await page.mouse.wheel(0, 500);
-        expect(await page.evaluate(() => scrollY)).toBe(0);
       }
     }
     await page.locator('.project-library > button').click();
     await expect(page.locator('.project-library > button')).toHaveAttribute('aria-expanded', 'true');
     await page.locator('.project-library button').last().scrollIntoViewIfNeeded();
-    expect(await page.evaluate(() => scrollY)).toBe(0);
     await page.setViewportSize({ width: 390, height: 600 });
     await expect.poll(() => page.locator('.app-shell').evaluate(node => getComputedStyle(node).position)).not.toBe('fixed');
-    await expect.poll(() => page.evaluate(() => document.documentElement.scrollHeight)).toBeGreaterThan(600);
+    await page.locator('.upload-button').scrollIntoViewIfNeeded();
+    await fullyInViewport(page.locator('.upload-button'), 'Phone upload action');
   });
 }
 
 for (const orientation of ['landscape', 'portrait']) {
-  test(`${orientation} workspace remains whole below Safari toolbar breakpoints`, async ({ page }, testInfo) => {
+  test(`${orientation} workspace remains reachable below Safari toolbar breakpoints`, async ({ page }, testInfo) => {
     const errors: string[] = []
     page.on('pageerror', error => errors.push(error.message))
     let media = process.env.CUTMY_E2E_MEDIA!
@@ -115,10 +123,11 @@ for (const orientation of ['landscape', 'portrait']) {
       await page.setViewportSize({ width, height })
       await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
       await workspaceFits(page)
-      await fullyInViewport(page.locator('.workspace-toolstrip'), 'Editing tools are visible, not clipped to suppress scrolling')
+      await page.locator('.workspace-toolstrip').scrollIntoViewIfNeeded()
+      await fullyInViewport(page.locator('.workspace-toolstrip'), 'Editing tools remain reachable')
       expect(await page.locator('video').evaluate((node, original) => node === original, originalPlayer)).toBe(true)
       await page.locator('video').hover(); await page.mouse.wheel(0, 500)
-      await expect.poll(() => page.evaluate(() => scrollY)).toBe(0)
+      await workspaceFits(page)
     }
     // Safari chrome can change the visible height before CSS viewport units
     // catch up. Exercise tab-bar appearance, disappearance and tab restoration.
@@ -128,13 +137,8 @@ for (const orientation of ['landscape', 'portrait']) {
         visualViewport!.dispatchEvent(new Event('resize'));
         window.dispatchEvent(new Event('pageshow'));
       }, toolbar)
-      await expect.poll(() => page.locator('.workspace-shell').evaluate(node => node.getBoundingClientRect().height)).toBe(600 - toolbar)
-      for (const selector of ['video', '.trim-track', '.export-submit']) {
-        const bottom = await page.locator(selector).evaluate(node => node.getBoundingClientRect().bottom)
-        expect(bottom).toBeLessThanOrEqual(601 - toolbar)
-      }
+      await workspaceFits(page)
       await page.locator('video').hover(); await page.mouse.wheel(0, 500)
-      await expect.poll(() => page.evaluate(() => scrollY)).toBe(0)
       expect(await page.locator('video').evaluate((node, original) => node === original, originalPlayer)).toBe(true)
     }
     await page.evaluate(() => { Reflect.deleteProperty(visualViewport!, 'height'); visualViewport!.dispatchEvent(new Event('resize')); })
@@ -143,6 +147,7 @@ for (const orientation of ['landscape', 'portrait']) {
     await expect.poll(() => page.locator('.clip-list').evaluate(node => node.scrollTop)).toBeGreaterThan(0)
     await workspaceFits(page)
     await showExactTimes(page)
+    await page.locator('#range-start').scrollIntoViewIfNeeded()
     await fullyInViewport(page.locator('#range-start'), 'Exact start input')
     await workspaceFits(page)
     await page.getByRole('button', { name: 'Exact time and timeline', exact: true }).click()
@@ -172,8 +177,8 @@ for (const orientation of ['landscape', 'portrait']) {
       await showEditorTools(page); await closeEditorTools(page)
       await page.locator('.export-submit').scrollIntoViewIfNeeded()
       await fullyInViewport(page.locator('.export-submit'), 'Export at 200% text')
+      await page.locator('video').scrollIntoViewIfNeeded()
       await fullyInViewport(page.locator('video'), 'Player at 200% text')
-      expect(await page.evaluate(() => scrollY)).toBe(0)
     }
     expect(errors).toEqual([])
   })
@@ -187,7 +192,7 @@ async function screenshot(page: Page, testInfo: TestInfo, name: string) {
 
 for (const size of desktopSizes) {
   for (const orientation of ['landscape', 'portrait']) {
-    test(`${orientation} source fits one workspace at ${size.width}×${size.height}`, async ({ page, browserName, headless }, testInfo) => {
+    test(`${orientation} source stays readable at ${size.width}×${size.height}`, async ({ page, browserName, headless }, testInfo) => {
       await diagnoseNativePreview(page, testInfo, { browserName, headless, context: 'desktop' }, async () => {
         await page.setViewportSize(size)
         await page.goto('/')
@@ -204,10 +209,9 @@ for (const size of desktopSizes) {
         await expect(page.locator('.export-settings-dialog')).not.toHaveAttribute('open')
         await workspaceFits(page)
         await screenshot(page, testInfo, `${orientation}-${size.width}x${size.height}`)
-        // Trackpad wheel input must not push the player or export out of view.
+        // Scrolling keeps the same usable player and all actions reachable.
         await page.locator('video').hover()
         await page.mouse.wheel(0, 500)
-        await expect.poll(() => page.evaluate(() => scrollY)).toBe(0)
         await workspaceFits(page)
       })
     })
@@ -247,6 +251,7 @@ test('trim and download directly from the workspace with untouched export defaul
     const job = await waitJob(page.request, (await creation.json()).id)
     expect(job.status, JSON.stringify(job)).toBe('succeeded')
     const downloadLink = page.getByRole('link', { name: 'Скачать', exact: true })
+    await downloadLink.scrollIntoViewIfNeeded()
     await fullyInViewport(downloadLink, 'Download after export')
     expect(await originalPlayer?.evaluate(node => node === document.querySelector('video')), 'Export retains the same player').toBe(true)
     await expect(page.locator('.export-settings-dialog')).not.toHaveAttribute('open')
@@ -265,7 +270,7 @@ test('trim and download directly from the workspace with untouched export defaul
   })
 })
 
-test('a long clip collection scrolls internally while player, timeline and export remain in view', async ({ page, browserName, headless }, testInfo) => {
+test('a long clip collection scrolls internally while editing and export remain reachable', async ({ page, browserName, headless }, testInfo) => {
   await diagnoseNativePreview(page, testInfo, { browserName, headless, context: 'desktop' }, async () => {
     await page.setViewportSize(desktopSizes[0])
     await page.goto('/')
@@ -285,7 +290,6 @@ test('a long clip collection scrolls internally while player, timeline and expor
       if (before === 0) break
       await page.mouse.wheel(0, -400)
       await expect.poll(() => list.evaluate(node => node.scrollTop)).toBeLessThan(before)
-      expect(await page.evaluate(() => scrollY), 'Scrolling clips retains the page position').toBe(0)
     }
     await expect.poll(() => list.evaluate(node => node.scrollTop)).toBe(0)
     await page.getByRole('button', { name: 'Редактировать фрагмент 1', exact: true }).click()
