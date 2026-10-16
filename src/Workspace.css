@@ -161,8 +161,6 @@
   .workspace-shell:not(.collection-shell) .moment-controls { flex: 1; min-height: 150px; overflow: auto; overscroll-behavior: contain; padding: 12px 16px; }
   .workspace-shell:not(.collection-shell) .trim-heading { margin-bottom: 8px; }
   .workspace-shell:not(.collection-shell) .moment-boundaries { margin-bottom: 10px; }
-  .workspace-shell:not(.collection-shell) .workspace-toolstrip { position: sticky; bottom: -12px; z-index: 3; margin-inline: -16px; padding: 8px 16px; background: var(--surface); }
-  .workspace-shell:not(.collection-shell) .workspace-toolstrip:has(.crop-editor[open]) { position: static; }
   .workspace-shell:not(.collection-shell) .workspace-sidebar { position: static; display: flex; flex-direction: column; min-height: 0; gap: 12px; overflow: auto; overscroll-behavior: contain; }
   .workspace-shell:not(.collection-shell) .workspace-collection-tabs { flex: none; }
   .workspace-shell:not(.collection-shell) .workspace-clips { display: flex; flex: 1; min-height: 150px; overflow: auto; }
