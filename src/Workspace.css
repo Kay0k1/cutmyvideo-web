@@ -22,7 +22,9 @@
 .workspace-page .moment-layout { display: flex; flex-direction: column; }
 .workspace-page .moment-layout > .player-frame { position: relative; top: auto; align-self: stretch; width: 100%; min-height: 0; aspect-ratio: 16 / 9; max-height: min(54dvh, 640px); display: grid; place-items: center; overflow: hidden; background: #080c11; }
 .workspace-page .moment-layout .player-frame > video { position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; aspect-ratio: auto; object-fit: contain; }
-.workspace-page .moment-layout .youtube-player { width: 100%; max-width: min(100%, calc(min(54dvh, 640px) * 16 / 9)); height: 100%; max-height: 100%; aspect-ratio: 16 / 9; }
+/* Absolute sizing avoids WebKit's grid/aspect-ratio percentage-height cycle
+   on narrow screens. The containing frame defines both used dimensions. */
+.workspace-page .moment-layout .youtube-player { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 100%; max-width: calc(min(54dvh, 640px) * 16 / 9); height: 100%; max-height: 100%; aspect-ratio: 16 / 9; }
 .workspace-page .moment-layout .youtube-player iframe { width: 100%; height: 100%; }
 /* Buffered previews have navigation below the picture. Its text can grow
    without consuming the video's own height. */
