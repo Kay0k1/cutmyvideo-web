@@ -4,6 +4,19 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+## 0.6.1 — 2026-10-16
+
+Integrates core 1.4.1 while retaining the existing collection workspace and
+schema 008. Publication and activation require the exact-pin, tagged-artifact
+and production checks recorded in [QA](docs/QA.md).
+
+### Changed
+- Collection preflight reuses source inspection and bounded tool-capability checks within a request for prepared local media, while validating every pending clip before admission.
+- Linux native-media allocation and low-budget joined-video decoding are bounded without changing encoding quality or configured worker concurrency.
+- Spare SQL-pool connections default to a shorter idle lifetime; explicit DSN settings remain authoritative, and acquired connections and the worker notification listener retain their existing lifetimes.
+- Completed draft MP4 downloads on Linux can release kernel file-cache pages while preserving the durable file; repeated readers can require disk I/O. Final media and ranged continuation retain their existing behavior.
+- A controlled 24-run comparison of a ready interview collection measured 72.2–74.2% shorter time to the first verified draft, 18.8–20.0% shorter complete draft/final cycles and 6.4–6.7% lower aggregate kernel peak memory. These are matched-pair median improvements in two process strata, not public-network or per-request guarantees; the [core benchmark report](https://github.com/Kay0k1/cutmyvideo-core/blob/v1.4.1/benchmarks/2026-10-16-first-draft/README.md) retains all rows, quality qualifications and earlier rejected candidates.
+
 ## 0.6.0 — 2026-10-16
 
 ### Added

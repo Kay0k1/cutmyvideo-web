@@ -149,6 +149,48 @@ core and product commits. Set `CUTMY_SSH_TARGET`, `CUTMY_SSH_KEY`, and optionall
 `CUTMY_CORE_DIR`; it does not need GitHub credentials on the server.
 The core checkout must match `core.version`, the revision verified by product CI.
 
+### Core 1.4.1 resource lifecycle — 2026-10-16
+
+The 0.6.1 update uses request-scoped source inspection and bounded tool
+checks for local, ready collection sources. Every pending clip is checked
+before new work is admitted; source and tool identity guards, cancellation and
+remote deferred checks retain their existing scope.
+
+On Linux, the trusted native-media process environment bounds allocator arenas
+from the effective CPU budget (between 2 and 32 arenas). Accurate joined
+multi-range video exports use one input video-decoder thread when
+`FFMPEG_THREADS` is one or two. Encoder and filter thread budgets, encoding
+quality, single-range exports, audio-only decoding and explicitly larger thread
+budgets retain their existing behavior. No new Compose allocator setting is
+needed, and service memory limits and worker concurrency remain unchanged.
+
+When absent from the connection string, `pool_max_conn_idle_time` defaults to
+`5s` and `pool_health_check_period` to `1s`. Each explicit DSN duration overrides
+only its corresponding default. Pool maximums, minimums and minimum idle counts
+are preserved. Health checks retire released idle resources; they do not close
+acquired connections or transactions. The worker's dedicated notification
+listener is outside that pool.
+
+After a successful ordinary full draft MP4 attachment GET on Linux, including
+an error-checked response flush, the API can advise the kernel to release pages
+from that same open file. This confirms server-side transfer completion, not
+durable receipt by the client. The file remains available; repeated or concurrent
+downloads can require disk reads, and the kernel need not reclaim every page.
+Ranged transfers, HEAD requests, non-200 responses, cancellation, final artifacts,
+source media, ZIP downloads and other platforms keep their existing transfer
+behavior. No global cache flushing, extra file sync or extra setting is used.
+
+The update retains ordered schema 008. Before activation, bind `core.version`
+and Compose `VERSION`, `VCS_REF` and `BUILD_TIME` to the actual final core release
+source and genuine UTC build metadata. Require the final website tag's complete
+12-job Product checks, including all eight browser projects and the actual
+007 → 008 → 007 restore drill, plus the signed core release and all five native
+consumers. After activation, require the newly signed wheel's real HTTPS
+collection workflow and record actual bindings in the companion `v0.6.1`
+release's `production-verification.json`; see [current release QA](QA.md).
+Benchmark acceptance does not replace these operational checks. The coordinated
+snapshot and public-write boundary below still apply.
+
 ### Current activation: coordinated schema and media recovery
 
 Core 1.4 adds ordered migration 008. A 1.3 binary refuses a database containing
