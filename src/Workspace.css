@@ -1,5 +1,5 @@
-/* The media has its own geometry. Short windows scroll instead of taking
-   height away from the preview, the timeline, or their controls. */
+/* Small and touch screens use the document; desktop editing panels have
+   their own scroll areas within the measured browser viewport. */
 .app-shell { min-height: 100dvh; }
 .site-header { background: var(--surface); }
 .header-inner { max-width: 1600px; min-height: 72px; padding-inline: 28px; gap: 8px 20px; }
@@ -131,6 +131,50 @@
 .source-shell .stage-1 { max-width: 860px; padding-top: clamp(24px, 6dvh, 64px); }
 .source-shell .page-heading { margin-bottom: 28px; }
 .source-shell .project-library, .source-shell .source-library, .source-shell .job-library { margin-top: 18px; }
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .workspace-shell {
+    --workspace-preview-height: clamp(240px, calc(var(--workspace-height, 100dvh) * .42), 480px);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: var(--workspace-height, 100dvh);
+    min-height: 0;
+    overflow: clip;
+  }
+  .workspace-shell .site-header { flex: none; }
+  .workspace-shell .header-inner { min-height: 56px; padding-block: 4px; }
+  .workspace-shell .workspace-page { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0 auto; padding: 12px 20px; }
+  .workspace-shell .page-heading { flex: none; min-height: 44px; margin-bottom: 12px; }
+  .workspace-shell .page-heading h1 { font-size: 1.25rem; }
+  .workspace-shell .page-heading h1 + p { display: none; }
+  .workspace-shell .editor-workspace { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) 304px; align-items: stretch; gap: 20px; }
+  .workspace-shell .moments-stage { display: flex; min-height: 0; }
+  .workspace-shell .editing-panel { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+  .workspace-shell .media-heading { flex: none; min-height: 44px; padding: 8px 16px; }
+  .workspace-shell .moment-layout { flex: 1; min-height: calc(var(--workspace-preview-height) + 150px); }
+  .workspace-shell .moment-layout > .player-frame { flex: none; height: var(--workspace-preview-height); max-height: none; aspect-ratio: auto; }
+  .workspace-shell .moment-layout .youtube-player { max-width: calc(var(--workspace-preview-height) * 16 / 9); }
+  /* Window navigation retains its natural height, including enlarged text. */
+  .workspace-shell .moment-layout > .player-frame:has(> .window-player) { height: auto; }
+  .workspace-shell .moment-controls { flex: 1; min-height: 150px; overflow: auto; overscroll-behavior: contain; padding: 12px 16px; }
+  .workspace-shell .trim-heading { margin-bottom: 8px; }
+  .workspace-shell .moment-boundaries { margin-bottom: 10px; }
+  .workspace-shell .workspace-toolstrip { position: sticky; bottom: -12px; z-index: 3; margin-inline: -16px; padding: 8px 16px; background: var(--surface); }
+  .workspace-shell .workspace-toolstrip:has(.crop-editor[open]) { position: static; }
+  .workspace-shell .workspace-sidebar { position: static; display: flex; flex-direction: column; min-height: 0; gap: 12px; overflow: auto; overscroll-behavior: contain; }
+  .workspace-shell .workspace-collection-tabs { flex: none; }
+  .workspace-shell .workspace-clips { display: flex; flex: 1; min-height: 150px; overflow: auto; }
+  .workspace-shell .clip-library.compact { flex: 1; min-width: 0; min-height: 150px; }
+  .workspace-shell .clip-library.compact .clip-list { flex: 1; min-height: 0; max-height: none; }
+  .workspace-shell .workspace-results { flex: 1; min-height: 150px; max-height: none; }
+  .workspace-shell .export-panel { flex: none; padding: 14px; }
+  .workspace-shell .export-heading { margin-bottom: 8px; }
+  .workspace-shell .format-picker button { min-height: 44px; }
+  .workspace-shell .export-settings-summary { gap: 6px; margin-top: 12px; }
+  .workspace-shell .export-summary { margin-top: 10px; padding-top: 10px; }
+  .workspace-shell .export-submit { margin-top: 10px; }
+  .workspace-shell .page-footer { display: none; }
+}
 @media (min-width: 1100px) and (min-height: 850px) {
   .workspace-sidebar { position: sticky; top: 20px; }
 }

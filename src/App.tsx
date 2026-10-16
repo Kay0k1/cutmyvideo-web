@@ -43,6 +43,7 @@ import { defaultLimits, maxClientRanges, readPublicLimits } from './limits';
 import { SourceLibrary } from './SourceLibrary';
 import { JobLibrary } from './JobLibrary';
 import { WorkspaceDialog } from './WorkspaceDialog';
+import { useWorkspaceViewport } from './useWorkspaceViewport';
 import './Workspace.css';
 import { RetentionNotice } from './RetentionNotice';
 import { useWorkflowHistory } from './workflowHistory';
@@ -183,6 +184,7 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
   const busy = activeJob(job) || submitting || deletingSource;
   const duration = source?.duration_ms ?? 0;
   const workspaceVisible = !!source && step !== 1;
+  useWorkspaceViewport(workspaceVisible);
   const view = timelineView(simpleView, viewCenter, span);
   const zoomOptions = [duration, 300000, 60000, 10000, view[1] - view[0]].filter((value, index, all) => value > 0 && value <= duration && all.indexOf(value) === index);
   const totalDuration = exportRanges.reduce((sum, range) => sum + range.end_ms - range.start_ms, 0);
