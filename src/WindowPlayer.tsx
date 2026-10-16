@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { useLanguage } from './Language';
 import { formatTimecode } from './timecode';
 import { foregroundPreviewRetryDelay, PREVIEW_WINDOW_MAX_BYTES, PREVIEW_WINDOW_MS, QUICK_PREVIEW_WINDOW_MS, PreviewWindowCache } from './previewWindowCache';
+import { useSourceBase } from './SourceAccess';
 import type { PreviewWindow } from './previewWindowCache';
 import type { Source } from './types';
 import type { PlayerControls } from './Player';
@@ -25,6 +26,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
   onSourceUnavailable(id: string, verify?: boolean): void;
 }>(({ source, active, poster, initialPosition, audioTrack, noAudio, onGeometry, onTime, onAvailable, onSourceUnavailable }, ref) => {
   const { t } = useLanguage();
+  const sourceBase = useSourceBase(source.id);
   const video = useRef<HTMLVideoElement>(null);
   const callbacks = useRef({ onTime, onAvailable });
   callbacks.current = { onTime, onAvailable };
@@ -92,7 +94,7 @@ export const WindowPlayer = forwardRef<PlayerControls, {
       let response: Response | undefined;
       for (let attempt = 0; attempt < 30; attempt++) {
         if (request.background && backgroundHolds.current) throw new PreparationHeld();
-        response = await fetch(`/api/v1/sources/${encodeURIComponent(source.id)}/preview?start_ms=${start}${windowMS !== PREVIEW_WINDOW_MS ? `&window_ms=${windowMS}` : ''}${audioTrack !== undefined ? `&audio_track=${audioTrack}` : ''}${noAudio ? '&no_audio=true' : ''}${request.background ? '&priority=background' : ''}`, { credentials: 'same-origin', signal: controller.signal });
+        response = await fetch(`${sourceBase}/preview?start_ms=${start}${windowMS !== PREVIEW_WINDOW_MS ? `&window_ms=${windowMS}` : ''}${audioTrack !== undefined ? `&audio_track=${audioTrack}` : ''}${noAudio ? '&no_audio=true' : ''}${request.background ? '&priority=background' : ''}`, { credentials: 'same-origin', signal: controller.signal });
         if (response.ok) break;
         const body = await response.json().catch(() => null);
         if (body?.error?.code === 'not_found') throw new Error('source_not_found');

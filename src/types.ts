@@ -1,3 +1,6 @@
+export type SourceFingerprint = { kind: 'content'; sha256: string; size_bytes: number }
+  | { kind: 'provider'; provider: string; provider_id: string; canonical_url_sha256: string };
+
 export interface Source {
   id: string;
   title: string;
@@ -16,6 +19,7 @@ export interface Source {
   retention_blocked?: boolean;
   media_removed?: boolean;
   media_removed_at?: string | null;
+  fingerprint?: SourceFingerprint;
 }
 
 export interface ClipRange {

@@ -5,6 +5,7 @@ import { Icon } from './Icons';
 import './Player.css';
 import { WindowPlayer } from './WindowPlayer';
 import { usePlaybackClock } from './usePlaybackClock';
+import { useSourceBase } from './SourceAccess';
 
 export interface PlayerControls { seek(ms: number): void; play(): void; pause(): void; toggle(): void; holdBackgroundPreparation?(): Promise<() => void>; }
 interface YTPlayer {
@@ -91,6 +92,7 @@ export const Player = memo(forwardRef<PlayerControls, {
   onSourceUnavailable(id: string, verify?: boolean): void;
 }>(({ source, active, initialPosition = 0, audioTrack, noAudio, forceWindow, onGeometry, onTime, onAvailable, onSourceUnavailable }, ref) => {
   const { t } = useLanguage();
+  const sourceBase = useSourceBase(source?.id ?? '');
   const video = useRef<HTMLVideoElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const youtube = useRef<YoutubeInstance | null>(null);
@@ -106,7 +108,7 @@ export const Player = memo(forwardRef<PlayerControls, {
   const [serverPreview, setServerPreview] = useState(false);
   const windowPlayer = useRef<PlayerControls>(null);
   const useWindow = forceWindow || audioTrack !== undefined || noAudio === true || serverPreview || (!!source && !source.preview_url && !embedId(source.embed_url));
-  const poster = source && source.thumbnail_url === `/api/v1/sources/${encodeURIComponent(source.id)}/thumbnail` ? source.thumbnail_url : undefined;
+  const poster = source && source.thumbnail_url === sourceBase + '/thumbnail' ? source.thumbnail_url : undefined;
   usePlaybackClock(video, active && !useWindow && !!source?.preview_url, () => nativeTime(video.current), source?.id);
 
   function nativeTime(node: HTMLVideoElement | null) {

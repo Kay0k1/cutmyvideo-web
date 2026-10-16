@@ -149,6 +149,67 @@ core and product commits. Set `CUTMY_SSH_TARGET`, `CUTMY_SSH_KEY`, and optionall
 `CUTMY_CORE_DIR`; it does not need GitHub credentials on the server.
 The core checkout must match `core.version`, the revision verified by product CI.
 
+### Current activation: coordinated schema and media recovery
+
+Core 1.4 adds ordered migration 008. A 1.3 binary refuses a database containing
+that migration, so selecting its image alone cannot recover a failed upgrade.
+Activation now builds the new images while the old service is running, then
+holds `deployment.lock` and stops the edge, API and worker before capturing a
+coordinated database/media snapshot. The database container stays available for
+the logical dump. The private packet also records the previous environment,
+release, schema ledger, file hashes and ownership, and persistent volume
+identities. It never removes or recreates those volumes.
+
+Expect a maintenance window while media is copied, migration runs and the new
+services pass their checks. The snapshot needs free space for all retained media
+plus the SQL dump and a safety reserve; capture refuses an incomplete packet.
+The helper starts PostgreSQL, API, worker and web explicitly without the public
+edge, hardens database roles, checks health and commits the release pointers.
+It opens the edge only as the last step.
+
+If a pre-opening step fails, activation first stops the new writers and verifies
+the complete snapshot. It restores the original schema and media into the same
+persistent volumes before starting the previous image. A failed verification or
+restoration leaves writers stopped and retains private recovery material; it
+does not start an old binary against unverified data.
+
+Attempting to start the edge is the public-write boundary: requests may arrive
+before its health check returns. After that boundary, activation never rewinds
+database or media to the earlier snapshot. An edge startup failure stops the
+edge, API and worker, retaining the new release pointers, data and private packet
+for operator inspection. A completed activation has no later automatic data
+rewind. A deliberate schema downgrade requires a planned offline restoration
+that accounts for any writes accepted since the snapshot.
+
+The coordinated packet is retained under the private shared directory after
+success or recovery, separately from hourly database-only backup retention.
+Keep it until production verification is complete, then remove it deliberately.
+It includes private configuration and media: never upload it as CI or public QA
+evidence. Hourly backups remain database-only and cannot substitute for this
+packet after source cleanup.
+
+Run `npm run test:deploy` for activation fault checks. Linux product CI also runs
+the deployment restore drill against a disposable PostgreSQL instance with
+synthetic source and output files. It loads the actual immutable 001–007 SQL and
+checksummed ledger, applies the actual 008 migration, then restores the complete
+application rows and media. The real 1.3 recovery binary must refuse 008 without
+mutation and accept restored 007. Invoke it with a checkout of the new core and
+statically built old/new binaries, for example:
+
+```sh
+sudo python3 deploy/deployment_restore_drill.py \
+  --core-dir /path/to/core \
+  --old-binary /path/to/schema007-cutmy --new-binary /path/to/schema008-cutmy
+```
+
+That required drill also verifies application ownership, exact media bytes and
+unchanged volume identities; a corrupt packet must fail before changing live data. The
+drill uses only its own labelled containers and volumes, and never pulls an image
+implicitly. The activation checks separately cover stopped writers, the order of
+snapshot and migration, and the public-write boundary.
+
+### Earlier migrations
+
 The final core 1.2.0 release also includes ordered migration 007 for persisted
 metadata-resolution leases. A binary supporting only 006 refuses the upgraded
 database. For a 006-to-007 rollout, follow the compatibility-release procedure
@@ -194,13 +255,12 @@ intentional source removal.
 Build and test both repositories before updating the active release. Upload
 source archives, not local credentials or `.git` directories. Record both commit
 SHAs in the release record. `deploy/activate.sh` builds before changing the running
-stack, keeps a private snapshot of the previous environment, then waits for all
-configured service health checks. Only after those checks pass does it commit the
-active environment and release symlink. If activation partially fails, it restores
-the previous environment, symlink, image tag, containers and backup schedule. A
-failed rollback keeps the private recovery snapshot and reports the need for an
-operator to inspect the stack. The helper also accepts a first installation with
-no previous release; that case has no older stack to restore.
+stack and commits the environment and release symlink only after internal checks
+pass. Failures before opening the edge use the coordinated recovery described
+above, including the previous environment, image and backup schedule. Failures
+after attempting to open the edge retain the new data and require inspection.
+The helper also accepts a first installation with no previous release; that case
+has no older stack or pre-upgrade data snapshot to restore.
 
 The activation fault checks use synthetic files and a Docker stub. They cover
 successful activation, failed build, unhealthy rollout, failure after the
@@ -224,9 +284,11 @@ bash /opt/cutmy/current/web/deploy/activate.sh \
 Container changes are not an atomic, zero-downtime operation. Run external HTTPS,
 real export and download checks before announcing a deployment. Reverting an
 image does not undo database migrations or restore deleted/expired media. The
-current additions to source metadata are additive, but the ordered schema guard
-requires a 006-compatible core after this release. Future schema changes still
-need an explicit compatibility review.
+ordered schema guard requires an 008-compatible core after a successful 1.4
+upgrade. The image-only rollback command above applies only when the selected
+binary supports the current database ledger; an earlier schema needs coordinated
+offline restoration instead. Future schema changes still need an explicit
+compatibility review.
 
 ## Backups
 

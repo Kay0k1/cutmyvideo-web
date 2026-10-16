@@ -50,6 +50,8 @@ import { useWorkflowHistory } from './workflowHistory';
 import { boundaryAudition, recoverCuttingDraft, restoredTimeText } from './cuttingDraft';
 import type { RecoverableSource } from './cuttingDraft';
 import type { WorkbenchPanel, WorkflowRoute } from './workflowHistory';
+import { collectionDocumentLimit, isCollectionDocument, readCollectionDocument } from './collectionProject';
+import type { CollectionProjectDocument } from './collectionProject';
 
 const activeJob = (job: Job | null) => job?.status === 'queued' || job?.status === 'running' || job?.status === 'waiting_storage';
 const stageNames: Record<string, string> = {
@@ -83,7 +85,7 @@ function simpleRangeView(duration: number, range: ClipRange): [number, number] {
 
 interface EditorSnapshot { ranges: ClipRange[]; selectedId: string; selectedRangeIds: string[]; output: OutputSettings; simpleView: [number, number]; span: number; viewCenter: number; }
 
-export default function App() {
+export default function App({ onCollectionOpen }: { onCollectionOpen?(document?: CollectionProjectDocument, source?: Source): void } = {}) {
   const { locale, t } = useLanguage();
   const [limits, setLimits] = useState<PublicLimits>(defaultLimits);
   const [preferences, setPreferences] = useState<Preferences>(readPreferences);
@@ -579,9 +581,18 @@ export default function App() {
   }
 
   async function loadPlan(file: File) {
-    if (file.size > 256 * 1024) { setProjectError('План слишком большой.'); return; }
+    if (file.size > collectionDocumentLimit) { setProjectError('План слишком большой.'); return; }
     try {
       const raw = await file.text();
+      const parsed: unknown = JSON.parse(raw);
+      if (onCollectionOpen && isCollectionDocument(parsed)) {
+        const document = readCollectionDocument(parsed);
+        draftWriter.current?.flush(); if (!await persistCurrentProject()) return;
+        // Imported source IDs are hints only. A portable plan must explicitly
+        // bind its media or arrive through the backend's narrow project grant.
+        onCollectionOpen(document); return;
+      }
+      if (file.size > 256 * 1024) { setProjectError('План слишком большой.'); return; }
       const result = importCuttingPlan(raw, source?.duration_ms ?? 366 * 24 * 60 * 60 * 1000, () => crypto.randomUUID());
       if (source && !window.confirm(t('Заменить фрагменты текущего проекта импортированным планом? Проверьте, что открыта нужная запись.'))) return;
       if (source) rememberHistory();
@@ -605,7 +616,7 @@ export default function App() {
   }
 
   function draftSnapshot() {
-    return { workflow_version: 2, plan_imported: !source && recoveringDraft?.plan_imported === true, source_width: source?.width ?? recoveringDraft?.source_width, source_height: source?.height ?? recoveringDraft?.source_height, source_provider_video_id: source?.provider_video_id ?? recoveringDraft?.source_provider_video_id, media_unavailable: !source, timeline_span: span, view_center: viewCenter, simple_view: simpleView, source_id: source?.id ?? recoverableSource?.id, source_title: source?.title ?? recoverableSource?.title, source_duration_ms: source?.duration_ms ?? recoverableSource?.duration_ms, start_text: startText, end_text: endText, ranges, selected_id: selectedId, selected_range_ids: selectedRangeIds, output, job_id: job?.id, job_output_mode: joinedJob ? 'joined' : 'separate', job_range_numbers: jobRangeNumbers, job_ranges: jobCuts, prior_job_ids: priorJobReferences.current.map(value => value.id), prior_job_range_numbers: Object.fromEntries(priorJobReferences.current.map(value => [value.id, value.numbers])), step, current_ms: position.getSnapshot(), precision_open: precisionOpen, export_attempt: exportAttempt.current, export_attempt_range_numbers: exportAttempt.current ? exportAttemptNumbers.current : [] };
+    return { workflow_version: 2, plan_imported: !source && recoveringDraft?.plan_imported === true, source_fingerprint: source?.fingerprint ?? recoveringDraft?.source_fingerprint, source_width: source?.width ?? recoveringDraft?.source_width, source_height: source?.height ?? recoveringDraft?.source_height, source_provider_video_id: source?.provider_video_id ?? recoveringDraft?.source_provider_video_id, media_unavailable: !source, timeline_span: span, view_center: viewCenter, simple_view: simpleView, source_id: source?.id ?? recoverableSource?.id, source_title: source?.title ?? recoverableSource?.title, source_duration_ms: source?.duration_ms ?? recoverableSource?.duration_ms, start_text: startText, end_text: endText, ranges, selected_id: selectedId, selected_range_ids: selectedRangeIds, output, job_id: job?.id, job_output_mode: joinedJob ? 'joined' : 'separate', job_range_numbers: jobRangeNumbers, job_ranges: jobCuts, prior_job_ids: priorJobReferences.current.map(value => value.id), prior_job_range_numbers: Object.fromEntries(priorJobReferences.current.map(value => [value.id, value.numbers])), step, current_ms: position.getSnapshot(), precision_open: precisionOpen, export_attempt: exportAttempt.current, export_attempt_range_numbers: exportAttempt.current ? exportAttemptNumbers.current : [] };
   }
 
   const saveDraft = useEffectEvent(() => {
@@ -1251,7 +1262,7 @@ export default function App() {
     <header className="site-header"><div className="header-inner">
       <a className="brand" href="/" aria-label={t('cutmyvideo — главная')}><span className="brand-symbol"><Icon name="cut" size={20} /></span><span>cutmy<span className="brand-suffix">video</span></span></a>
       <WorkspaceNav panel={panel} onOpen={setPanel} onClose={navigation.closePanel} preferences={preferences} onSave={applyPreferences} busy={!sessionReady || sourceBusy || busy} onExample={value => { setUrl(value); setStep(1); void openSource(undefined, value); }} />
-      <div className="header-actions"><LanguageSwitch /><ThemeToggle /></div>
+      <div className="header-actions">{onCollectionOpen && <button type="button" className="text-button" disabled={sourceBusy || submitting || cancelling} onClick={() => { draftWriter.current?.flush(); void persistCurrentProject().then(saved => { if (saved) onCollectionOpen(); }); }}>{t('Коллекции')}</button>}<LanguageSwitch /><ThemeToggle /></div>
     </div></header>
     <main id="editor" data-bootstrap-state={sessionLoading ? 'loading' : sessionReady ? 'ready' : 'error'} aria-busy={sessionLoading} className={`stage-page stage-${step}${workspaceVisible ? ' workspace-page' : ''}`}>
       <div className="page-heading"><div><h1 ref={stageHeading} tabIndex={-1}>{t(workspaceVisible ? 'Нарежьте видео' : step === 4 ? 'Сохраните фрагменты' : 'Откройте видео')}</h1>{!workspaceVisible && <p>{t('Ссылка на запись или видеофайл с вашего устройства.')}</p>}</div>

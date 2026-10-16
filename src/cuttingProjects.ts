@@ -5,6 +5,7 @@ import { restoreRanges } from './clipCollection';
 import { readOutputSettings } from './preferences';
 import { maxClientRanges } from './limits';
 import type { ClipRange, OutputSettings, Source } from './types';
+import { compareCollectionSource, readSourceFingerprint } from './collectionProject';
 
 export const projectsStorageKey = 'cutmy.projects.v1';
 export const maxProjectCharacters = 4 * 1024 * 1024;
@@ -49,12 +50,14 @@ export function upsertProject(store: ProjectStore, id: string, draft: Record<str
   return next;
 }
 
-/** Compare metadata before attaching saved intervals to newly opened media. */
+/** Metadata alone cannot prove that saved intervals belong to these bytes. */
 export function sourceMismatch(draft: Record<string, unknown>, source: Source): boolean {
+  const fingerprint = readSourceFingerprint(draft.source_fingerprint);
+  if (fingerprint) return compareCollectionSource({ fingerprint }, source) !== 'content_match';
   if (draft.source_provider_video_id && draft.source_provider_video_id !== source.provider_video_id) return true;
   if (typeof draft.source_duration_ms === 'number' && Math.abs(draft.source_duration_ms - source.duration_ms) > 1000) return true;
   if (draft.source_width && source.width && draft.source_width !== source.width || draft.source_height && source.height && draft.source_height !== source.height) return true;
-  return typeof draft.source_title === 'string' && draft.source_title !== '' && draft.source_title !== source.title;
+  return true;
 }
 
 export interface CuttingPlan { version: 1; input: string; ranges: { label: string; start_ms: number; end_ms: number }[]; options: Omit<OutputSettings, 'output_mode' | 'cleanup_source'>; output_mode?: 'separate' | 'joined'; }

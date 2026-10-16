@@ -15,7 +15,7 @@ function retryAfterSeconds(header: string | null): number | undefined {
   return seconds <= 86400 ? seconds : undefined;
 }
 
-async function request<T>(path: string, options: RequestInit = {}, timeoutMS = 30000): Promise<T> {
+export async function request<T>(path: string, options: RequestInit = {}, timeoutMS = 30000): Promise<T> {
   const controller = new AbortController();
   const upstream = options.signal;
   const abort = () => controller.abort(upstream?.reason);

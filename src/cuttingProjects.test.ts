@@ -49,7 +49,10 @@ describe('per-video cutting projects', () => {
   });
   it('warns before saved cuts are applied to mismatched media', () => {
     const source = { id: 'new', title: 'talk.mp4', duration_ms: 12000, width: 640, height: 360 } as Source;
-    expect(sourceMismatch(draft, source)).toBe(false);
+    expect(sourceMismatch(draft, source)).toBe(true); // Legacy metadata needs confirmation.
+    const fingerprint = { kind: 'content' as const, sha256: 'a'.repeat(64), size_bytes: 1200 };
+    expect(sourceMismatch({ ...draft, source_fingerprint: fingerprint }, { ...source, title: 'renamed.mp4', fingerprint })).toBe(false);
+    expect(sourceMismatch({ ...draft, source_fingerprint: fingerprint }, { ...source, fingerprint: { ...fingerprint, sha256: 'b'.repeat(64) } })).toBe(true);
     expect(sourceMismatch(draft, { ...source, duration_ms: 30000 })).toBe(true);
     expect(sourceMismatch({ ...draft, source_provider_video_id: 'abc' }, { ...source, provider_video_id: 'def' })).toBe(true);
   });

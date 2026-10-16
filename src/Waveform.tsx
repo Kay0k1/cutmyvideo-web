@@ -4,6 +4,7 @@ import { useLanguage } from './Language';
 import { parseWaveform, waveformPath } from './waveformData';
 import type { WaveformWindow } from './waveformData';
 import './Waveform.css';
+import { useSourceBase } from './SourceAccess';
 
 /** Only settled, visible source windows are decoded; the overview fills gradually. */
 export function Waveform({ sourceID, duration, current, view, active, audioTrack, noAudio, onSeek }: {
@@ -11,8 +12,9 @@ export function Waveform({ sourceID, duration, current, view, active, audioTrack
   audioTrack?: number; noAudio?: boolean; onSeek(ms: number): void;
 }) {
   const { locale } = useLanguage();
+  const sourceBase = useSourceBase(sourceID);
   const text = (ru: string, en: string) => locale === 'en' ? en : ru;
-  const key = `${sourceID}:${audioTrack ?? 'default'}`;
+  const key = `${sourceBase}:${audioTrack ?? 'default'}`;
   const cache = useRef<{ key: string; windows: Map<number, WaveformWindow> }>({ key, windows: new Map() });
   const [snapshot, setSnapshot] = useState<{ key: string; windows: WaveformWindow[] }>({ key, windows: [] });
   const [state, setState] = useState<{ key: string; start: number; status: 'loading' | 'ready' | 'unavailable' }>({ key, start: 0, status: 'loading' });
@@ -39,7 +41,7 @@ export function Waveform({ sourceID, duration, current, view, active, audioTrack
     const fail = () => { if (!disposed) setState({ key, start, status: 'unavailable' }); };
     async function load(attempt = 0): Promise<void> {
       try {
-        const response = await fetch(`/api/v1/sources/${encodeURIComponent(sourceID)}/waveform?start_ms=${start}${audioTrack !== undefined ? `&audio_track=${audioTrack}` : ''}&priority=background`, { credentials: 'same-origin', signal: controller.signal });
+        const response = await fetch(`${sourceBase}/waveform?start_ms=${start}${audioTrack !== undefined ? `&audio_track=${audioTrack}` : ''}&priority=background`, { credentials: 'same-origin', signal: controller.signal });
         if (!response.ok) {
           if ([429, 503].includes(response.status) && attempt < 8 && !controller.signal.aborted) timer = window.setTimeout(() => void load(attempt + 1), 1500);
           else fail();
@@ -61,7 +63,7 @@ export function Waveform({ sourceID, duration, current, view, active, audioTrack
     timer = window.setTimeout(() => void load(), 1000);
     const deadline = window.setTimeout(() => { fail(); controller.abort(); }, 25000);
     return () => { disposed = true; controller.abort(); window.clearTimeout(timer); window.clearTimeout(deadline); };
-  }, [key, sourceID, duration, start, active, visible, audioTrack, noAudio, saveData]);
+  }, [key, sourceID, sourceBase, duration, start, active, visible, audioTrack, noAudio, saveData]);
 
   const windows = snapshot.key === key ? snapshot.windows : [];
   const currentWindow = windows.find(window => window.start_ms === start);

@@ -7,7 +7,7 @@
 
 The [cutmy.video](https://cutmy.video) product browser interface for selecting moments from video and exporting MP4/MP3 and MKV in copy mode. Accepts uploaded files and accessible public links. The interface source is open under the MIT license. Media processing, the HTTP API and persistent job queue live in the open-source MIT [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
 
-[Usage](#usage) · [Local development](#local-development) · [Checks](#checks) · [Deployment](#deployment) · [Contributing](#contributing-and-license)
+[Usage](#usage) · [Collections](#collections-and-agent-review) · [Local development](#local-development) · [Checks](#checks) · [Deployment](#deployment) · [Contributing](#contributing-and-license)
 
 ## Usage
 
@@ -26,6 +26,14 @@ Light, dark and system appearance, complete Russian/English copy, keyboard contr
 
 The timeline shows frames from the current 30-second area; select a frame to jump to it. Six 160×90 thumbnails prepare after seeking settles, yield to playback and share the server cache resource limits. The browser keeps up to eight strips / 8 MiB and releases them when the source changes. Check start/end plays 1.5 seconds on both sides of the boundary and stops, shortened at the recording edges. Exact controls include ±0.1 s buttons. Arrow keys outside fields seek by 0.1 s, or 1 s with Shift; I/O mark boundaries and Space toggles playback. Unfinished exact time entry survives reload. If a source expires, named clips and exact boundaries remain in the draft: reopen the same recording and explicitly enable clip restoration. A shorter replacement cannot discard saved boundaries.
 
+## Collections and agent review
+
+Version 0.6.0 adds a separate Collections workspace. Each clip has a stable ID, output settings and crop; multiple source ranges join in the chosen order. Edits support undo/redo. Import native core plans/requests or download a portable project without secrets or server access rights.
+
+An agent invitation opens one server project, its source and results under the browser's ordinary session. The token lasts 10 minutes and recipient access lasts 24 hours. Within the same project, exporting two edited clips reuses the other accepted jobs. Failed, cancelled or expired clips require explicit retry, with the attempt key saved before submission. Importing JSON alone does not transfer the agent's key or jobs.
+
+Supplied UTF-8 SRT/VTT can be retimed through the ready clip's actual segment map and downloaded as a sidecar. The source subtitle file stays in browser storage and is excluded from invitations and portable JSON. A project does not extend media retention or override the existing original-cleanup setting. See the [collection guide](docs/COLLECTIONS.md) for the full workflow, source fingerprint checks and limitations.
+
 ## Sources and limits
 
 Recognizes YouTube, Twitch, Rutube, TikTok, Instagram, Vimeo, Dailymotion, VK Video, Facebook, X/Twitter, Reddit, Odnoklassniki, Bilibili, Streamable and Rumble, plus public HTTPS files/pages supported by the core. The server resolves short links.
@@ -42,13 +50,13 @@ A lost export acknowledgement can be recovered by retrying the saved request eve
 
 ## Frame and waveform
 
-**Frame** starts collapsed. Expand it for original proportions or 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4 and 21:9 presets. Custom aspect ratio accepts positive width and height. Move and resize the area on the video, with buttons or the keyboard; the image keeps its proportions. One frame setting applies to every clip in the project. Cropping requires accurate MP4; incompatible export settings explain the conflict and offer an explicit mode choice or frame reset.
+**Frame** starts collapsed. Expand it for original proportions or 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 4:5, 5:4 and 21:9 presets. Custom aspect ratio accepts positive width and height. Move and resize the area on the video, with buttons or the keyboard; the image keeps its proportions. The ordinary editor applies one frame setting to every clip; collections support a separate crop per clip. Cropping requires accurate MP4; incompatible export settings explain the conflict and offer an explicit mode choice or frame reset.
 
 The waveform follows the selected audio track and original source time. The detail view helps find speech and pauses; the overview gradually fills with sections you explore. Each request covers at most 30 seconds of source time, waits for seeking to settle and yields to playback. The browser keeps at most 256 windows for the current audio track; the server has its own resource budgets, caching and cleanup. Data-saving mode skips waveform requests. Missing audio or an unavailable waveform leaves manual cutting usable.
 
 ## Projects and edit history
 
-Open **My projects** on the open-video screen to resume a previous edit. Projects are saved in this browser without registration. Removing original server media preserves clip boundaries, names and settings. Reopen the same recording and explicitly enable restoration to continue; mismatched title, duration, geometry or recording ID requires confirmation. Server media always requires the current owner's session.
+Open **My projects** on the open-video screen to resume a previous edit. Projects are saved in this browser without registration. Removing original server media preserves clip boundaries, names and settings. Reopen the same recording and explicitly enable restoration to continue. SHA-256 and byte size confirm matching content; a title or duration alone does not. Missing content verification or a different fingerprint requires confirmation before rebinding. Server media always requires the current owner's session.
 
 **Download plan** saves selected clips in list order using the core's strict plan v1 schema, with no server resource IDs or authenticated URLs. For the local CLI, set `input` to the media path. The browser can import the same JSON and then open the corresponding recording. Importing into an open project asks before replacing its cuts and supports undo.
 
@@ -108,7 +116,7 @@ The core revision is pinned in [core.version](core.version). The production imag
 
 ## Deployment
 
-[DEPLOYMENT.md](docs/DEPLOYMENT.md) covers HTTPS, internal networking, limits, backups, monitoring, updates and rollback. Production Compose differs from the local example. The Dockerfile builds static assets; an external reverse proxy routes `/api` to the core. The release helper requires clean repositories and a matching `core.version`, builds from Git archives, verifies service health and rolls back unsuccessful activation while retaining persistent volumes. Running that helper updates its configured server.
+[DEPLOYMENT.md](docs/DEPLOYMENT.md) covers HTTPS, internal networking, limits, backups, monitoring, updates and rollback. Production Compose differs from the local example. The Dockerfile builds static assets; an external reverse proxy routes `/api` to the core. The release helper requires clean repositories and a matching `core.version`, builds from Git archives and checks service health. Before migration, it stops access and writers and saves a coordinated database/media snapshot. A failure before opening access restores verified data before starting the old image. After opening is attempted, new data is retained and writers stop for inspection. Persistent volumes are not recreated. Running the helper updates its configured server; a source version change alone does not mean publication or successful deployment.
 
 ## Structure
 
