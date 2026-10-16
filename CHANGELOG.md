@@ -4,9 +4,21 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+## 0.6.0 — 2026-10-16
+
+### Added
+- A collection workspace with stable clip IDs, ordered multi-range clips and native/portable plan import/export. Revising two clips can reuse the other accepted jobs in the same server project.
+- Per-clip crop and output settings with undo/redo and preserved import/export values; the existing editor remains available.
+- Short-lived agent-to-browser invitations restricted to one project and its media, plus explicit failed/cancelled/expired clip retry with a saved attempt key and recoverable lost acknowledgements.
+- Source content-fingerprint checks and explicit confirmation for an unverified replacement; imported resource IDs never grant media access.
+- Supplied UTF-8 SRT/VTT sidecar downloads retimed through actual output segment maps, without speech recognition or burned captions.
+
 ### Changed
+- Schema-changing activation captures a private coordinated database/media snapshot while writers are stopped. Failures before opening the public edge restore verified data before the old image; after opening is attempted, failures retain new data and stop writers for inspection. Persistent volumes and the existing original-cleanup policy remain in place.
 - Run all eight browser projects in isolated parallel Linux/macOS jobs while preserving one worker, existing cases, timeouts, real media and database fault checks. Require collected-versus-executed coverage across every project before acceptance.
 - Cancel superseded PR/main runs while protecting tag and manual verification from automatic cancellation.
+
+## 0.5.0
 
 ### Added
 - Save and add the next clip, previous/next clip navigation and input-safe shortcuts beside the player; compact controls remain accessible on phones.

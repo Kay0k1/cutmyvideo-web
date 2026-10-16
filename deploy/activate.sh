@@ -52,35 +52,59 @@ rollout_started=false
 finished=false
 keep_snapshot=false
 egress_changed=false
+data_snapshot=""
+snapshot_ready=false
+traffic_opening=false
+snapshot_action() {
+  RELEASE_TAG="$previous_release" CUTMY_SHARED_DIR="$install_dir/shared" CUTMY_ENV_FILE="$env_snapshot" CUTMY_DEPLOY_DIR="$previous_dir/web/deploy" \
+    python3 "$release_dir/web/deploy/deployment_snapshot.py" "$1" "$data_snapshot" >/dev/null
+}
 cleanup() {
   local status=$?
   trap - EXIT
   set +e
-  if [[ "$status" != 0 && "$rollout_started" == true && "$finished" != true ]]; then
+  if [[ "$status" != 0 && "$traffic_opening" == true ]]; then
+    # The edge may already have accepted a write before its health check fails.
+    # Never rewind acknowledged data to the pre-migration point after this line.
+    docker compose --env-file "$env_file" -f "$release_dir/web/deploy/compose.yaml" stop edge api worker
+    keep_snapshot=true
+    printf 'Traffic activation failed after release commit; writers stopped. New database/media retained; inspect the active release before reopening traffic.\n' >&2
+  elif [[ "$status" != 0 && "$rollout_started" == true && "$finished" != true ]]; then
     if [[ -n "$previous_release" ]]; then
       printf 'Release failed; restoring %s.\n' "$previous_release" >&2
-      local restore_file
-      restore_file="$(mktemp "$install_dir/shared/production.env.restore.XXXXXX")"
-      cp "$env_snapshot" "$restore_file" && chmod 600 "$restore_file" && mv "$restore_file" "$env_file"
-      local env_status=$?
-      ln -sfn "$previous_dir" "$current_link.next" && mv -Tf "$current_link.next" "$current_link"
-      local link_status=$?
-      RELEASE_TAG="$previous_release" docker compose --env-file "$env_snapshot" -f "$previous_dir/web/deploy/compose.yaml" up -d --wait --wait-timeout 120
-      local stack_status=$?
-      if [[ "$cron_existed" == true ]]; then
-        install -m 0644 "$cron_snapshot" "$cron_file"
-      else
-        rm -f "$cron_file"
+      local data_status=0
+      docker compose --env-file "$env_snapshot" -f "$release_dir/web/deploy/compose.yaml" stop edge api worker || data_status=$?
+      if [[ "$data_status" == 0 && "$snapshot_ready" == true ]]; then
+        snapshot_action restore || data_status=$?
       fi
-      local cron_status=$?
-      if [[ "$monitor_existed" == true ]]; then install -m 0644 "$monitor_snapshot" "$monitor_cron_file"; else rm -f "$monitor_cron_file"; fi
-      local monitor_status=$?
-      if (( env_status == 0 && link_status == 0 && stack_status == 0 && cron_status == 0 && monitor_status == 0 )); then
-        printf 'Previous release restored and healthy.\n' >&2
-      else
+      if [[ "$data_status" != 0 ]]; then
         keep_snapshot=true
-        printf 'Automatic rollback did not finish; inspect the previous release and container health.\n' >&2
-        printf 'Private environment snapshot retained at %s.\n' "$env_snapshot" >&2
+        printf 'Coordinated rollback failed; keep writers stopped. No previous image was started against unverified data.\n' >&2
+      else
+        local restore_file
+        restore_file="$(mktemp "$install_dir/shared/production.env.restore.XXXXXX")"
+        cp "$env_snapshot" "$restore_file" && chmod 600 "$restore_file" && mv "$restore_file" "$env_file"
+        local env_status=$?
+        ln -sfn "$previous_dir" "$current_link.next" && mv -Tf "$current_link.next" "$current_link"
+        local link_status=$?
+        RELEASE_TAG="$previous_release" docker compose --env-file "$env_snapshot" -f "$previous_dir/web/deploy/compose.yaml" up -d --wait --wait-timeout 120
+        local stack_status=$?
+        if [[ "$cron_existed" == true ]]; then
+          install -m 0644 "$cron_snapshot" "$cron_file"
+        else
+          rm -f "$cron_file"
+        fi
+        local cron_status=$?
+        if [[ "$monitor_existed" == true ]]; then install -m 0644 "$monitor_snapshot" "$monitor_cron_file"; else rm -f "$monitor_cron_file"; fi
+        local monitor_status=$?
+        if (( env_status == 0 && link_status == 0 && stack_status == 0 && cron_status == 0 && monitor_status == 0 )); then
+          printf 'Previous release restored and healthy.\n' >&2
+        else
+          RELEASE_TAG="$previous_release" docker compose --env-file "$env_snapshot" -f "$previous_dir/web/deploy/compose.yaml" stop edge api worker
+          keep_snapshot=true
+          printf 'Automatic rollback did not finish; inspect the previous release and container health.\n' >&2
+          printf 'Private environment snapshot retained at %s.\n' "$env_snapshot" >&2
+        fi
       fi
     else
       # A failed first installation must not leave new workers consuming jobs.
@@ -104,10 +128,12 @@ cleanup() {
       bash "$release_dir/web/deploy/egress.sh" remove || keep_snapshot=true
     fi
   fi
-  if [[ "$status" != 0 && "$services_changed" == true ]]; then
+  if [[ "$status" != 0 && "$services_changed" == true && "$traffic_opening" != true ]]; then
     python3 "$release_dir/web/deploy/service-control.py" restore "$service_snapshot" || keep_snapshot=true
   fi
   if [[ "$keep_snapshot" != true ]]; then rm -f "$env_snapshot" "$cron_snapshot" "$monitor_snapshot"; rm -rf "$service_snapshot"; fi
+  if [[ -n "$data_snapshot" && "$snapshot_ready" != true && "$keep_snapshot" != true ]]; then rm -rf "$data_snapshot"; fi
+  if [[ -n "$data_snapshot" && -d "$data_snapshot" ]]; then printf 'Private coordinated snapshot retained at %s.\n' "$data_snapshot" >&2; fi
   [[ -z "$env_next" ]] || rm -f "$env_next"
   rm -f "$current_link.next"
   rm -f "$install_dir/previous.next"
@@ -138,7 +164,16 @@ python3 web/deploy/service-control.py snapshot "$service_snapshot"
 egress_changed=true
 bash web/deploy/egress.sh apply
 rollout_started=true
-docker compose --env-file "$env_next" -f web/deploy/compose.yaml up -d --wait --wait-timeout 120
+if [[ -n "$previous_dir" ]]; then
+  # No API, worker or public request can change the coordinated point. Building
+  # above keeps this maintenance window limited to copying, migration and checks.
+  RELEASE_TAG="$previous_release" docker compose --env-file "$env_snapshot" -f "$previous_dir/web/deploy/compose.yaml" stop edge api worker
+  data_snapshot="$(mktemp -d "$install_dir/shared/deployment.rollback.XXXXXX")"
+  snapshot_action capture
+  snapshot_ready=true
+fi
+# Keep the public edge closed through migration, role hardening and commit.
+docker compose --env-file "$env_next" -f web/deploy/compose.yaml up -d --wait --wait-timeout 120 postgres api worker web
 # Keep database administration separate from the application's bearer role.
 # The helper uses private persistent operator credentials and SQL on stdin.
 database_result="$(CUTMY_SHARED_DIR="$install_dir/shared" CUTMY_ENV_FILE="$env_next" CUTMY_DEPLOY_DIR="$release_dir/web/deploy" python3 web/deploy/database_access.py)"
@@ -147,7 +182,7 @@ if [[ "$restart_required" == true ]]; then
   docker compose --env-file "$env_next" -f web/deploy/compose.yaml restart api worker
 fi
 # Re-check fresh role connections after bootstrap sessions were terminated.
-docker compose --env-file "$env_next" -f web/deploy/compose.yaml up -d --wait --wait-timeout 120
+docker compose --env-file "$env_next" -f web/deploy/compose.yaml up -d --wait --wait-timeout 120 postgres api worker web
 docker compose --env-file "$env_next" -f web/deploy/compose.yaml exec -T api /usr/local/bin/cutmy healthcheck
 install -m 0644 "${CUTMY_BACKUP_CRON_SOURCE:-web/deploy/backup.cron}" "$cron_file"
 install -m 0644 web/deploy/monitor.cron "$monitor_cron_file"
@@ -161,6 +196,8 @@ if [[ -n "$previous_dir" && "$previous_dir" != "$release_dir" ]]; then
   ln -sfn "$previous_dir" "$install_dir/previous.next"
   mv -Tf "$install_dir/previous.next" "$install_dir/previous"
 fi
+traffic_opening=true
+docker compose --env-file "$env_file" -f web/deploy/compose.yaml up -d --wait --wait-timeout 120 --no-deps edge
 # Units are enabled but never started while deployment.lock is held. Docker
 # restarts start the stack after egress; the operator can start units after this
 # helper exits to register the already running healthy stack with systemd.

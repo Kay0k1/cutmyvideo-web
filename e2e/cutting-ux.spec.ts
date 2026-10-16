@@ -8,6 +8,15 @@ const source = { id: 'src_cutting_controls', title: 'Recorded interview', kind: 
   preview_kind: 'native', preview_url: `${api}/sources/src_cutting_controls/file`, embed_url: null, thumbnail_url: null };
 const ranges = [{ id: 'range_opening', label: 'Opening', start_ms: 1000, end_ms: 3000 }, { id: 'range_ending', label: 'Ending', start_ms: 10000, end_ms: 12000 }];
 
+async function confirmUnverifiedReconnection(page: Page) {
+  const confirmed = page.waitForEvent('dialog').then(async dialog => {
+    expect(dialog.type()).toBe('confirm');
+    expect(dialog.message()).toBe('The recording differs from the saved project. Apply the intervals? Check boundaries before exporting.');
+    await dialog.accept();
+  });
+  await Promise.all([confirmed, page.getByRole('button', { name: 'Open video', exact: true }).click()]);
+}
+
 async function prepare(page: Page, saved: Record<string, unknown> = {}, expired = false, reopenedDuration = source.duration_ms, busyStoryboards = 0, storyboardReady?: Promise<void>) {
   const media = await readFile(process.env.CUTMY_E2E_MEDIA!);
   let storyboardRequests = 0;
@@ -112,7 +121,7 @@ test('expired sources retain names and exact cuts across reload and reconnect', 
   await expect(page.getByRole('heading', { name: 'Clips saved', exact: true })).toBeVisible();
   await page.getByRole('checkbox', { name: 'Restore saved clips in the video you open', exact: true }).check();
   await page.getByLabel('Video link', { exact: true }).fill('https://video.example/recording.mp4');
-  await page.getByRole('button', { name: 'Open video', exact: true }).click();
+  await confirmUnverifiedReconnection(page);
   await expect(page.locator('.editor-workspace')).toBeVisible();
   await goToClips(page);
   await expect(page.getByLabel('Clip 1 name', { exact: true })).toHaveValue('Opening');
@@ -169,7 +178,7 @@ test('a source expiring during export offers recovery immediately without losing
   await expect(page.locator('.draft-recovery')).toContainText('00:00:01.125 — 00:00:03.875');
   await page.getByRole('checkbox', { name: 'Restore saved clips in the video you open', exact: true }).check();
   await page.getByLabel('Video link', { exact: true }).fill('https://video.example/recording.mp4');
-  await page.getByRole('button', { name: 'Open video', exact: true }).click();
+  await confirmUnverifiedReconnection(page);
   await expect(page.locator('#range-start')).toHaveValue('00:00:01.125');
   await expect(page.locator('#range-end')).toHaveValue('00:00:03.875');
   await goToClips(page);

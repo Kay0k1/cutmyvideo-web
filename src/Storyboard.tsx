@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLanguage } from './Language';
 import { formatTimecode } from './timecode';
+import { useSourceBase } from './SourceAccess';
 
 type Strip = { sourceID: string; url: string; start: number; end: number; step: number; frames: number; bytes: number };
 const windowMS = 30000;
@@ -8,6 +9,7 @@ const windowMS = 30000;
 /** Six real frames from the current area, prepared only after seeking settles. */
 export function Storyboard({ sourceID, duration, current, active, onSeek }: { sourceID: string; duration: number; current: number; active: boolean; onSeek(ms: number): void }) {
   const { t } = useLanguage();
+  const sourceBase = useSourceBase(sourceID);
   const [strip, setStrip] = useState<Strip | null>(null);
   const [unavailable, setUnavailable] = useState<{ sourceID: string; start: number } | null>(null);
   const [visible, setVisible] = useState(!document.hidden);
@@ -28,7 +30,7 @@ export function Storyboard({ sourceID, duration, current, active, onSeek }: { so
     setStrip(null);
     setUnavailable(null);
     return () => { for (const entry of entries.values()) URL.revokeObjectURL(entry.url); entries.clear(); };
-  }, [sourceID]);
+  }, [sourceID, sourceBase]);
 
   useEffect(() => {
     if (!active || !visible) return;
@@ -44,7 +46,7 @@ export function Storyboard({ sourceID, duration, current, active, onSeek }: { so
     const failed = () => { window.clearTimeout(timeout); if (!disposed) setUnavailable({ sourceID, start }); };
     async function prepare(attempt = 0) {
       try {
-        const response = await fetch(`/api/v1/sources/${encodeURIComponent(sourceID)}/storyboard?start_ms=${start}&priority=background`, { credentials: 'same-origin', signal: controller.signal });
+        const response = await fetch(`${sourceBase}/storyboard?start_ms=${start}&priority=background`, { credentials: 'same-origin', signal: controller.signal });
         if (!response.ok) {
           if ([429, 503].includes(response.status) && attempt < 9 && !controller.signal.aborted) retry = window.setTimeout(() => { void prepare(attempt + 1); }, 1500);
           else failed();
@@ -74,7 +76,7 @@ export function Storyboard({ sourceID, duration, current, active, onSeek }: { so
     const hidden = () => { if (document.hidden) controller.abort(); };
     document.addEventListener('visibilitychange', hidden);
     return () => { disposed = true; controller.abort(); window.clearTimeout(timer); window.clearTimeout(timeout); window.clearTimeout(retry); document.removeEventListener('visibilitychange', hidden); };
-  }, [sourceID, duration, start, active, visible, saveData]);
+  }, [sourceID, sourceBase, duration, start, active, visible, saveData]);
 
   if (saveData || frameCount < 1) return null;
   const ready = strip?.sourceID === sourceID && strip.start === start ? strip : null;
