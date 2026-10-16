@@ -36,10 +36,21 @@ async function workspaceFits(page: Page, collection = '.clip-library') {
     // Short windows can scroll. The player keeps a usable size and every
     // action must be reachable without a clipped or locked document.
     const control = page.locator(selector)
-    await control.scrollIntoViewIfNeeded()
-    const height = await control.evaluate(node => node.getBoundingClientRect().height)
-    if (height <= page.viewportSize()!.height) await fullyInViewport(control, description)
-    else await expect(control, description).toBeVisible()
+    await expect(async () => {
+      // Wheel events complete asynchronously. Recheck after ordinary scrolling
+      // settles, rather than racing the previous wheel with a new reveal.
+      await control.scrollIntoViewIfNeeded()
+      const height = await control.evaluate(node => node.getBoundingClientRect().height)
+      if (selector !== collection && height <= page.viewportSize()!.height) await fullyInViewport(control, description)
+      else await expect(control, description).toBeVisible()
+    }).toPass({ timeout: 3000, intervals: [100, 200] })
+  }
+  const actions = collection === '.clip-library' ? page.locator('.clip-list .clip-edit') : page.locator('.workspace-results .download-button')
+  for (const action of [actions.first(), actions.last()]) {
+    if (await action.count()) {
+      await action.scrollIntoViewIfNeeded()
+      await fullyInViewport(action, 'Collection action')
+    }
   }
   const documentSize = await page.evaluate(() => ({
     width: document.documentElement.scrollWidth, height: document.documentElement.scrollHeight,
@@ -170,8 +181,8 @@ for (const orientation of ['landscape', 'portrait']) {
         const sizes = nodes.map(node => parseFloat(getComputedStyle(node).fontSize))
         nodes.forEach((node, index) => { node.style.fontSize = `${sizes[index] * 2}px` })
       })
-      // Large text may need a panel to scroll. Its controls must remain
-      // reachable while the page, player and export stay in place.
+      // Large text can grow the document. Tools, export and the picture
+      // remain reachable without reducing their size.
       await page.locator('.editor-tools-toggle').scrollIntoViewIfNeeded()
       await fullyInViewport(page.locator('.editor-tools-toggle'), 'Tools at 200% text')
       await showEditorTools(page); await closeEditorTools(page)

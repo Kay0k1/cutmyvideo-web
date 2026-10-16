@@ -58,7 +58,8 @@ async function reachableByScrolling(locator: Locator, description: string) {
   expect(bounds.top, `${description}: reachable by ordinary scrolling`).toBeLessThan(bounds.viewport)
   // Bounded collections can be taller than short viewports; individual actions
   // must fit when brought into view, rather than reducing font sizes to fit all.
-  if (bounds.height <= bounds.viewport) {
+  const collectionPanel = await locator.evaluate(element => element.matches('.clip-library,.clip-list,.workspace-results'))
+  if (!collectionPanel && bounds.height <= bounds.viewport) {
     expect(bounds.top, `${description}: scroll reveals the complete control`).toBeGreaterThanOrEqual(-1)
     expect(bounds.bottom, `${description}: scroll reveals the complete control`).toBeLessThanOrEqual(bounds.viewport + 1)
   }
