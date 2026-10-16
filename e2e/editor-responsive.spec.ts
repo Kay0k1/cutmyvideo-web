@@ -171,12 +171,65 @@ async function workspace(page: Page, youtube = false, touch = false) {
 async function capture(page: Page, testInfo: TestInfo, name: string) {
   await page.evaluate(() => {
     document.querySelector('.clip-list')?.scrollTo(0, 0)
+    for (const node of document.querySelectorAll('.moment-controls,.editing-panel,.workspace-sidebar,.workspace-clips,.export-panel,.export-scroll')) node.scrollTo(0, 0)
     scrollTo(0, 0)
   })
   const path = testInfo.outputPath(`${name}.png`)
   await page.screenshot({ path, fullPage: true })
   await testInfo.attach(name, { path, contentType: 'image/png' })
 }
+
+test('desktop panels track tab-bar height changes and restored Safari viewports without scrolling the document', async ({ page }, testInfo) => {
+  for (const youtube of [false, true]) {
+    await fixture(page, testInfo, { youtube })
+    const player = await page.locator(youtube ? '.youtube-player iframe' : '.player-frame video').elementHandle()
+    for (const height of [900, 734, 706, 678, 600, 500, 900]) {
+      await page.setViewportSize({ width: 1440, height })
+      await settle(page)
+      await expect.poll(() => page.locator('.workspace-shell').evaluate(node => node.getBoundingClientRect().height)).toBe(height)
+      expect(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), `No page scroll at 1440×${height}`).toBeLessThanOrEqual(1)
+      await readablePlayer(page, youtube)
+      await reachable(page.locator('.trim-handle.start'), 'Start boundary inside the panel')
+      await reachable(page.locator('.trim-handle.end'), 'End boundary inside the panel')
+      await reachable(page.locator('.clip-list > li').last().locator('.clip-edit'), 'Last clip inside its list')
+      await page.locator('.clip-list > li').last().locator('.clip-edit').click({ trial: true })
+      const list = (await page.locator('.clip-list').boundingBox())!
+      const firstRow = (await page.locator('.clip-list > li').first().boundingBox())!
+      expect(list.height, 'The clip list must retain enough room for a complete clip').toBeGreaterThanOrEqual(firstRow.height)
+      await reachable(page.locator('.export-submit'), 'Export inside the sidebar')
+      await page.locator('.format-picker button').first().click({ trial: true })
+      await page.locator('.export-submit').click({ trial: true })
+      expect(await page.evaluate(() => scrollY), 'Reaching panel controls must not scroll the page').toBe(0)
+      expect(await page.locator(youtube ? '.youtube-player iframe' : '.player-frame video').evaluate((node, old) => node === old, player), 'Tab-bar changes preserve the player').toBe(true)
+    }
+    // Safari can update its visual viewport before the layout viewport. Also
+    // cover pageshow: restoring a background tab need not deliver window.resize.
+    await page.evaluate(() => {
+      Object.defineProperty(visualViewport!, 'height', { configurable: true, value: 664 })
+      visualViewport!.dispatchEvent(new Event('resize'))
+    })
+    await expect.poll(() => page.locator('.workspace-shell').evaluate(node => node.getBoundingClientRect().height)).toBe(664)
+    await page.evaluate(() => {
+      Object.defineProperty(visualViewport!, 'height', { configurable: true, value: 628 })
+      dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+    })
+    await expect.poll(() => page.locator('.workspace-shell').evaluate(node => node.getBoundingClientRect().height)).toBe(628)
+    const anotherTab = await page.context().newPage()
+    await anotherTab.goto('about:blank')
+    await anotherTab.bringToFront()
+    await page.bringToFront()
+    await anotherTab.close()
+    await reachable(page.locator('.export-submit'), 'Export after returning from another tab')
+    expect(await page.evaluate(() => scrollY)).toBe(0)
+    await page.evaluate(() => { Reflect.deleteProperty(visualViewport!, 'height') })
+    await page.setViewportSize({ width: 1440, height: 678 })
+    await settle(page)
+    await capture(page, testInfo, `desktop-tabs-${youtube ? 'youtube' : 'native'}-1440x678`)
+    await page.setViewportSize({ width: 390, height: 844 })
+    await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--workspace-height'))).toBe('')
+    expect(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), 'Phone reflow retains ordinary document scrolling').toBeGreaterThan(0)
+  }
+})
 
 test('native preview and editing stay readable across desktop, laptop and tablet sizes', async ({ page }, testInfo) => {
   const errors: string[] = []
