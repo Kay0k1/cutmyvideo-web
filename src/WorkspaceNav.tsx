@@ -26,7 +26,7 @@ export function LanguageSwitch() {
   </div>;
 }
 
-export function WorkspaceNav({ panel, onOpen, onClose, preferences, onSave, onExample, busy }: {
+export function WorkspaceNav({ panel, onOpen, onClose, preferences, onSave, onExample, onCollectionOpen, collectionDisabled, busy }: {
   panel: WorkbenchPanel;
   onOpen(value: Panel): void;
   onClose(): Promise<boolean>;
@@ -34,6 +34,8 @@ export function WorkspaceNav({ panel, onOpen, onClose, preferences, onSave, onEx
   onSave(value: Preferences): void;
   onExample(url: string): void;
   busy: boolean;
+  onCollectionOpen?(): void;
+  collectionDisabled?: boolean;
 }) {
   const { t } = useLanguage();
   const { preference: themePreference, setPreference: setThemePreference } = useTheme();
@@ -115,6 +117,7 @@ export function WorkspaceNav({ panel, onOpen, onClose, preferences, onSave, onEx
       <button type="button" aria-haspopup="dialog" aria-controls="workspace-dialog" aria-expanded={panel === 'examples'} onClick={event => open('examples', event.currentTarget)}>{t('Примеры')}</button>
       <button type="button" aria-haspopup="dialog" aria-controls="workspace-dialog" aria-expanded={panel === 'settings'} onClick={event => open('settings', event.currentTarget)}>{t('Настройки')}</button>
       <button type="button" aria-haspopup="dialog" aria-controls="workspace-dialog" aria-expanded={panel === 'support'} onClick={event => open('support', event.currentTarget)}>{t('Поддержать')}</button>
+      {onCollectionOpen && <button type="button" disabled={collectionDisabled} onClick={onCollectionOpen}>{t('Коллекции')}</button>}
     </nav>
     <dialog ref={dialog} id="workspace-dialog" className="workspace-dialog" aria-labelledby="dialog-title" onKeyDown={trapFocus} onCancel={event => { event.preventDefault(); close(); }} onClick={event => { if (event.target === dialog.current) { const rect = dialog.current.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close(); } }}>
       <div className="dialog-header"><h2 id="dialog-title">{t(title)}</h2><button type="button" className="icon-button" aria-label={t('Закрыть')} onClick={close}><Icon name="close" size={22} /></button></div>

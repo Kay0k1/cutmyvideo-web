@@ -13,6 +13,7 @@
     "test": "vitest run src",
     "test:deploy": "python3 -m unittest discover -s deploy -p '*_test.py'",
     "test:e2e": "playwright test --config=e2e/playwright.config.ts",
+    "test:responsive": "playwright test --config=e2e/responsive.config.ts",
     "test:e2e-contract-types": "tsc -p tsconfig.e2e-contract.json",
     "preview": "vite preview --host 0.0.0.0"
   },

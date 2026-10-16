@@ -154,3 +154,34 @@ test('paused editing does not prefetch and playing prepares only six seconds', a
   expect(background[0].searchParams.get('window_ms')).toBe('6000');
   expect(background[0].searchParams.get('start_ms')).toBe('6000');
 });
+
+test('buffered preview keeps the picture above navigation at narrow widths and 200% text', async ({ page }) => {
+  await windowSource(page, false);
+  const original = await page.locator('.window-player video').elementHandle();
+  for (const scale of [1, 2]) {
+    if (scale === 2) await page.evaluate(() => {
+      const nodes = [...document.querySelectorAll<HTMLElement>('.window-player-navigation, .window-player-navigation *')];
+      const sizes = nodes.map(node => parseFloat(getComputedStyle(node).fontSize));
+      nodes.forEach((node, index) => { node.style.fontSize = `${sizes[index] * 2}px`; });
+    });
+    for (const [width, height] of [[320, 720], [390, 844], [640, 360], [768, 1024], [1280, 600]]) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+        await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      });
+      const picture = (await page.locator('.window-player-screen').boundingBox())!;
+      const navigation = (await page.locator('.window-player-navigation').boundingBox())!;
+      expect(picture.height, `Picture at ${width}px / ${scale * 100}% text`).toBeGreaterThanOrEqual(Math.min(picture.width * 9 / 16, height * .54, 640) - 1);
+      expect(navigation.y, 'Navigation flows beneath the picture').toBeGreaterThanOrEqual(picture.y + picture.height - 1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+      await expect(page.locator('.window-player video')).toHaveCSS('object-fit', 'contain');
+      expect(await page.locator('.window-player video').evaluate((node, old) => node === old, original)).toBe(true);
+      const slider = page.locator('.window-player-navigation input');
+      await slider.scrollIntoViewIfNeeded();
+      const box = (await slider.boundingBox())!;
+      expect(box.y).toBeGreaterThanOrEqual(-1);
+      expect(box.y + box.height).toBeLessThanOrEqual(height + 1);
+    }
+  }
+});

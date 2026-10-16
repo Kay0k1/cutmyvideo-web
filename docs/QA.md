@@ -1,5 +1,25 @@
 # Acceptance and UX review
 
+## Responsive editor redesign — 16 October 2026
+
+The editor uses a scrolling document, a media preview with a bounded 16:9
+viewport, and a separate trimming surface. Short windows must keep a readable
+picture; fitting every control into the first viewport is no longer an
+acceptance requirement. Buffered previews keep their navigation beneath the
+picture. Below 1100px the sidebar follows the editor, with clips and export next
+to each other on tablets and stacked below 700px.
+
+Run `npm run test:responsive` for the isolated Chromium, Firefox and WebKit
+matrix; it starts its own frontend and intercepts all API/media requests.
+These cases also run in the three regular usability projects in CI. Coverage
+includes 320–2560px widths, the reported 1280×600 window, landscape phones,
+breakpoint transitions, native landscape/portrait video, YouTube iframe
+geometry, both themes, Russian/English, 200% text, exact-time editing and the
+export/download UI. It checks readable preview height, horizontal reflow,
+44px touch targets, text contrast, reachable controls and player preservation
+when resizing. The export fixture checks the submitted ranges and resulting
+link; backend encoding remains covered by the existing real-media suites.
+
 ## Web 0.6.1 / Core 1.4.1 — 2026-10-16
 
 This release retains the collection workspace and schema 008. Core changes share

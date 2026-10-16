@@ -35,7 +35,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.dataset.theme = effective;
     document.documentElement.style.colorScheme = effective;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', effective === 'dark' ? '#18201f' : '#f4f6f5');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', effective === 'dark' ? '#14191f' : '#f2f4f7');
   }, [effective]);
   return <context.Provider value={{ preference, effective, setPreference }}>{children}</context.Provider>;
 }

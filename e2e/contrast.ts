@@ -7,6 +7,11 @@ export async function textContrast(page: Page) {
     type Color = [number, number, number, number]
     const parse = (value: string): Color => {
       const channels = value.match(/[\d.]+/g)?.map(Number) ?? []
+      // Computed color-mix() backgrounds can serialize as color(srgb ...),
+      // whose channels use 0–1 rather than rgb()'s 0–255 values.
+      if (value.startsWith('color(srgb ')) {
+        return [(channels[0] ?? 0) * 255, (channels[1] ?? 0) * 255, (channels[2] ?? 0) * 255, channels[3] ?? 1]
+      }
       return [channels[0] ?? 0, channels[1] ?? 0, channels[2] ?? 0, channels[3] ?? 1]
     }
     const over = (front: Color, back: Color): Color => {

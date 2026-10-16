@@ -2,18 +2,18 @@
   font-family: 'Geologica Variable', 'Geologica', sans-serif;
   font-synthesis: none; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased;
   color-scheme: light;
-  --page: #f4f6f5; --surface: #ffffff; --soft: #edf2ef; --input: #ffffff;
-  --ink: #203431; --muted: #5c7067; --line: #d9e2dc; --strong-line: #7d9387;
-  --accent: #35645b; --on-accent: #ffffff; --accent-hover: #284f47; --selection: #e3efe8;
-  --trim: #eac389; --trim-ink: #623e10; --trim-line: #a67635;
-  --error: #a53836; --error-bg: #fff1ef; --success: #346c4b; --focus: #35645b;
+  --page: #f2f4f7; --surface: #ffffff; --soft: #eaf0f3; --input: #ffffff;
+  --ink: #202832; --muted: #5d6977; --line: #dce2e8; --strong-line: #8895a3;
+  --accent: #08736c; --on-accent: #ffffff; --accent-hover: #066861; --selection: #e0f3f0;
+  --trim: #f3cc78; --trim-ink: #543a08; --trim-line: #9a6c1e;
+  --error: #a53836; --error-bg: #fff1ef; --success: #346c4b; --focus: #08736c;
   color: var(--ink); background: var(--page);
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --page: #18201f; --surface: #222c29; --soft: #2b3731; --input: #1d2723;
-  --ink: #e7eeea; --muted: #a4b7ac; --line: #3d4d43; --strong-line: #758b7e;
-  --accent: #a8cbb9; --on-accent: #183128; --accent-hover: #c2ddcd; --selection: #344d40;
+  --page: #14191f; --surface: #1e252e; --soft: #29343f; --input: #181f27;
+  --ink: #edf2f7; --muted: #aab8c6; --line: #35414e; --strong-line: #798b9e;
+  --accent: #78d6cb; --on-accent: #102d2b; --accent-hover: #9ce8df; --selection: #243f40;
   --trim: #dab47a; --trim-ink: #35220a; --trim-line: #e5c997;
   --error: #ffb3aa; --error-bg: #432c2a; --success: #acd1b5; --focus: #b7d9c3;
 }
