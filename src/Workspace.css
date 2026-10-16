@@ -167,10 +167,11 @@
   .workspace-shell .clip-library.compact { flex: 1; min-width: 0; min-height: 300px; }
   .workspace-shell .clip-library.compact .clip-list { flex: 1; min-height: 120px; max-height: none; }
   .workspace-shell .workspace-results { flex: 1; min-height: 150px; max-height: none; }
+  /* In-flow actions let enlarged text scroll without covering the settings. */
   .workspace-shell .export-panel { flex: none; height: clamp(280px, calc(var(--workspace-height, 100dvh) * .4), 360px); padding: 14px; overflow: auto; overscroll-behavior: contain; }
   .workspace-shell .export-panel form { display: flex; flex-direction: column; height: 100%; min-height: 0; }
   .workspace-shell .export-scroll { flex: 1; min-height: 100px; overflow: auto; overscroll-behavior: contain; }
-  .workspace-shell .export-actions { position: sticky; bottom: -14px; flex: none; background: var(--surface); }
+  .workspace-shell .export-actions { flex: none; background: var(--surface); }
   .workspace-shell .export-heading { margin-bottom: 8px; }
   .workspace-shell .format-picker button { min-height: 44px; }
   .workspace-shell .export-settings-summary { gap: 6px; margin-top: 12px; }
