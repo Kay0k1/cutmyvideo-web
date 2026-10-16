@@ -149,13 +149,15 @@
   .workspace-shell .page-heading h1 + p { display: none; }
   .workspace-shell .editor-workspace { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) 304px; align-items: stretch; gap: 20px; }
   .workspace-shell .moments-stage { display: flex; min-height: 0; }
-  .workspace-shell .editing-panel { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+  .workspace-shell .editing-panel { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; container-type: size; }
   .workspace-shell .media-heading { flex: none; min-height: 44px; padding: 8px 16px; }
   .workspace-shell .moment-layout { flex: 1; min-height: calc(var(--workspace-preview-height) + 150px); }
   .workspace-shell .moment-layout > .player-frame { flex: none; height: var(--workspace-preview-height); max-height: none; aspect-ratio: auto; }
   .workspace-shell .moment-layout .youtube-player { max-width: calc(var(--workspace-preview-height) * 16 / 9); }
   /* Window navigation retains its natural height, including enlarged text. */
   .workspace-shell .moment-layout > .player-frame:has(> .window-player) { height: auto; }
+  .workspace-shell .moment-layout .window-player { max-height: 100cqh; overflow: auto; overscroll-behavior: contain; }
+  .workspace-shell .window-player-screen { flex: 0 1 auto; min-height: 240px; }
   .workspace-shell .moment-controls { flex: 1; min-height: 150px; overflow: auto; overscroll-behavior: contain; padding: 12px 16px; }
   .workspace-shell .trim-heading { margin-bottom: 8px; }
   .workspace-shell .moment-boundaries { margin-bottom: 10px; }
