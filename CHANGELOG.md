@@ -4,13 +4,7 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
-### Changed
-- Run all eight browser projects in isolated parallel Linux/macOS jobs while preserving one worker, existing cases, timeouts, real media and database fault checks. Require collected-versus-executed coverage across every project before acceptance.
-- Cancel superseded PR/main runs while protecting tag and manual verification from automatic cancellation.
-
-## 0.6.0 — release candidate
-
-This entry describes the prepared source release; publication and production verification are separate steps.
+## 0.6.0 — 2026-10-16
 
 ### Added
 - A collection workspace with stable clip IDs, ordered multi-range clips and native/portable plan import/export. Revising two clips can reuse the other accepted jobs in the same server project.
@@ -21,6 +15,8 @@ This entry describes the prepared source release; publication and production ver
 
 ### Changed
 - Schema-changing activation captures a private coordinated database/media snapshot while writers are stopped. Failures before opening the public edge restore verified data before the old image; after opening is attempted, failures retain new data and stop writers for inspection. Persistent volumes and the existing original-cleanup policy remain in place.
+- Run all eight browser projects in isolated parallel Linux/macOS jobs while preserving one worker, existing cases, timeouts, real media and database fault checks. Require collected-versus-executed coverage across every project before acceptance.
+- Cancel superseded PR/main runs while protecting tag and manual verification from automatic cancellation.
 
 ## 0.5.0
 
