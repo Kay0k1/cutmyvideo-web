@@ -171,6 +171,7 @@ async function workspace(page: Page, youtube = false, touch = false) {
 async function capture(page: Page, testInfo: TestInfo, name: string) {
   await page.evaluate(() => {
     document.querySelector('.clip-list')?.scrollTo(0, 0)
+    for (const node of document.querySelectorAll('.moment-controls,.editing-panel,.workspace-sidebar,.workspace-clips,.export-panel,.export-scroll')) node.scrollTo(0, 0)
     scrollTo(0, 0)
   })
   const path = testInfo.outputPath(`${name}.png`)
@@ -191,7 +192,13 @@ test('desktop panels track tab-bar height changes and restored Safari viewports 
       await reachable(page.locator('.trim-handle.start'), 'Start boundary inside the panel')
       await reachable(page.locator('.trim-handle.end'), 'End boundary inside the panel')
       await reachable(page.locator('.clip-list > li').last().locator('.clip-edit'), 'Last clip inside its list')
+      await page.locator('.clip-list > li').last().locator('.clip-edit').click({ trial: true })
+      const list = (await page.locator('.clip-list').boundingBox())!
+      const firstRow = (await page.locator('.clip-list > li').first().boundingBox())!
+      expect(list.height, 'The clip list must retain enough room for a complete clip').toBeGreaterThanOrEqual(firstRow.height)
       await reachable(page.locator('.export-submit'), 'Export inside the sidebar')
+      await page.locator('.format-picker button').first().click({ trial: true })
+      await page.locator('.export-submit').click({ trial: true })
       expect(await page.evaluate(() => scrollY), 'Reaching panel controls must not scroll the page').toBe(0)
       expect(await page.locator(youtube ? '.youtube-player iframe' : '.player-frame video').evaluate((node, old) => node === old, player), 'Tab-bar changes preserve the player').toBe(true)
     }
