@@ -1,5 +1,71 @@
 # Acceptance and UX review
 
+## Web 0.6.1 / Core 1.4.1 — 2026-10-16
+
+This release retains the collection workspace and schema 008. Core changes share
+local preflight inspection within one request, bound native allocation and
+low-budget joined-video decoding, retire released spare database connections,
+and advise cache reclamation after successful full draft downloads on Linux.
+Encoding quality, worker concurrency, explicit database settings, original-media
+cleanup and coordinated activation retain their existing policies.
+
+### Accepted controlled benchmark
+
+The [core benchmark report for 1.4.1](https://github.com/Kay0k1/cutmyvideo-core/blob/v1.4.1/benchmarks/2026-10-16-first-draft/README.md)
+records one complete 24-run M7 cohort: six alternating matched pairs in each of
+the fresh and primed process strata, using the same released 1.4.0 SDK on both
+sides. Every run requests all 15 drafts followed by all 15 finals. Matched-pair
+medians show 72.2–74.2% shorter time to the first downloaded, independently
+SHA-verified draft, 18.8–20.0% shorter complete 30-output cycles and 6.4–6.7% lower
+actual common-parent kernel peak memory. All registered acceptance gates passed;
+individual adverse pairs and all five role diagnostics remain in the report.
+
+This measures an already prepared 720p interview and controlled local downloads.
+Upload, transcription, moment selection and public-network latency are outside
+the primary clocks. Quality verification freshly hashes all 720 outputs and
+checks their current request, segment and track scope. It reuses 720 prior
+native qualifications of identical bytes, with zero new complete-output decodes;
+all 180 paired final files have identical encoded SHA256 hashes. These results
+do not establish production latency or signed-release readiness. Repeated full
+draft downloads may incur additional disk reads; the separate synthetic download
+observation is retained with the benchmark evidence.
+
+### Required release evidence
+
+Publication and activation require fresh evidence tied to the actual merged
+core pin, its genuine release build metadata and the final website commit.
+The following are requirements, not results inferred from the benchmark:
+
+- All 12 Product jobs must succeed for the final website's genuine annotated
+  `v0.6.1` tag: scope, frontend, database access, all eight browser projects and
+  the complete-browser-coverage gate. The database job must execute the actual
+  immutable 007 → 008 → 007 database/media restore drill, including the old
+  binary's refusal of 008 and acceptance of restored 007. Collected browser
+  cases must all execute; skipped prerequisite jobs do not satisfy this gate.
+- Core `v1.4.1` must verify its exact source, complete 18-asset inventory,
+  provenance and genuine signatures for the declared subjects. All five signed
+  native-consumer targets and their aggregate gate must pass, including
+  installation of the released SDK packages.
+  Earlier version or candidate checks cannot substitute for these results.
+- After coordinated activation, HTTPS health/readiness, both installed binary
+  identities, service health and persistent volume identities must match the
+  final release. The real HTTPS smoke must install the newly signed released
+  Python wheel, produce all 15 initial clips, grant a second session only its
+  project, edit two clips, and recover the current 15 outputs through the SDK:
+  17 jobs total, 13 earlier jobs/files reused, and 15 supplied SRT sidecars retimed
+  through actual output maps. Use the bounded production plan of 15 × 2 seconds
+  (30 seconds initially), with no injected worker failures. This API workflow
+  does not claim browser-UI testing in production; real browser review remains
+  separate isolated acceptance. Cleanup must affect only the smoke's own source
+  and project after success.
+
+The companion `v0.6.1` website release must publish a sanitized
+`production-verification.json` asset containing the actual post-tag and
+post-deployment bindings and outcomes. That asset, rather than this source
+document, records completion of those checks; no future run IDs, source hashes
+or successful production result are assumed here. The sections below preserve
+historical verification for their stated versions and original scope.
+
 ## Core v1.3.0 release integration
 
 The website pins core commit
