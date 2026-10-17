@@ -162,9 +162,11 @@ test('an expired draft with no export selection survives rejecting a shorter rep
 
 test('copy mode explains shifted boundaries before opening optional export controls', async ({ page }) => {
   await prepare(page, { step: 4, output: { format: 'mp4', quality: 'best', cut_mode: 'copy' } });
+  await goToExport(page);
   await expect(page.locator('.export-settings-dialog')).not.toHaveAttribute('open', '');
   await expect(page.getByRole('note')).toHaveText('Copying preserves original quality. The start may shift to a keyframe; actual boundaries will be shown with the finished file.');
   await page.getByRole('button', { name: 'Русский', exact: true }).click();
+  await goToExport(page);
   await expect(page.getByRole('note')).toContainText('фактические границы будут указаны');
 });
 

@@ -357,6 +357,7 @@ test('resource policy: shorter range and total duration limits preserve drafts a
   let posts = 0
   await page.route(`**${api}/jobs`, route => { posts++; return route.fulfill({ json: job }) })
   await page.reload(); await expect(page.locator('.clip-list > li')).toHaveCount(2)
+  await goToExport(page)
   await expect(page.getByRole('alert')).toContainText('Один фрагмент может длиться до 2 с.')
   await expect(page.getByRole('button', { name: 'Вырезать фрагменты', exact: true })).toBeDisabled()
   await goToClips(page)
@@ -384,6 +385,7 @@ test('resource policy: lowered count limits keep all saved clips and existing do
   } }] } }))
   await page.reload()
   await expect(page.locator('.clip-list > li')).toHaveCount(3)
+  await goToExport(page)
   await expect(page.getByRole('alert')).toContainText('Можно экспортировать не больше 2 фрагментов')
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
   await goToClips(page); await expect(page.locator('.clip-list > li')).toHaveCount(3)

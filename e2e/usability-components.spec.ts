@@ -248,9 +248,11 @@ for (const editing of [false, true]) test(`an active export locks options and un
         expires_at: '2099-10-05T12:00:00Z' } }],
   } : job }))
   await page.reload()
+  await goToExport(page)
   const format = page.getByRole('group', { name: 'File format', exact: true })
   await expect(format.getByRole('button', { name: 'MP4 Video', exact: true })).toBeDisabled()
   await expect(format.getByRole('button', { name: 'MP3 Audio', exact: true })).toBeDisabled()
+  await goToMoment(page)
   // Boundary editing creates real undo history while the existing export runs.
   const start = page.getByLabel('Start', { exact: true })
   await start.fill('2.000')
@@ -268,6 +270,7 @@ for (const editing of [false, true]) test(`an active export locks options and un
   await expect(page.locator('#cut-mode')).toBeDisabled()
 
   await closeExportSettings(page)
+  await goToMoment(page)
   if (editing) {
     await start.focus()
     await start.fill('2.125')
@@ -292,7 +295,9 @@ for (const editing of [false, true]) test(`an active export locks options and un
     await page.keyboard.press('Tab')
     await expect(download).toBeFocused()
   }
+  await goToExport(page)
   await expect(format.getByRole('button', { name: 'MP3 Audio', exact: true })).toBeEnabled()
+  await goToMoment(page)
   // The same history becomes usable after completion; a disabled shortcut above
   // cannot pass simply because the history stack was empty.
   await expect(undo).toBeEnabled()
@@ -312,6 +317,7 @@ test('optional export settings retain quality and cut mode after switching forma
   await expect(dialog).toBeVisible()
   await expect(dialog.locator('.mode-hint')).toContainText('No re-encoding')
   await closeExportSettings(page)
+  await goToExport(page)
   const format = page.getByRole('group', { name: 'File format', exact: true })
   await format.getByRole('button', { name: 'MP3 Audio', exact: true }).click()
   await showExportSettings(page)
