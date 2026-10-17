@@ -219,6 +219,11 @@ test('desktop panels track tab-bar height changes and restored Safari viewports 
       dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
     })
     await expect.poll(() => page.locator('.workspace-shell').evaluate(node => node.getBoundingClientRect().height)).toBe(628)
+    await goToExport(page)
+    const review = (await page.locator('.workspace-export-dialog').boundingBox())!
+    expect(review.y, 'Export review fits the visible Safari viewport').toBeGreaterThanOrEqual(0)
+    expect(review.y + review.height).toBeLessThanOrEqual(628)
+    await goToMoment(page)
     const anotherTab = await page.context().newPage()
     await anotherTab.goto('about:blank')
     await anotherTab.bringToFront()
@@ -256,6 +261,15 @@ test('the desktop editing canvas exposes its primary controls without scrolling 
         })
         expect(hit, `${width}×${height}: ${selector} is immediately usable`).toBe(true)
       }
+    }
+    for (const [trigger, panel] of [['.timeline-media-disclosure > summary', '.timeline-media-content'], ['.crop-editor > summary', '.crop-controls']]) {
+      await page.locator(trigger).click()
+      const box = (await page.locator(panel).boundingBox())!
+      expect(box.y, `${panel} opens above the trim dock`).toBeGreaterThanOrEqual(0)
+      expect(box.y + box.height).toBeLessThanOrEqual(height)
+      expect(box.x).toBeGreaterThanOrEqual(0)
+      expect(box.x + box.width).toBeLessThanOrEqual(width)
+      await page.locator(trigger).click()
     }
     await page.locator('.player-frame').hover()
     await page.mouse.wheel(0, 600)

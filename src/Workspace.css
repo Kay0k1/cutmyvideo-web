@@ -117,7 +117,7 @@
 .workspace-results .file-description > span { font-size: .75rem; }
 .workspace-results .download-button { min-height: 44px; padding: 8px 10px; font-size: .8125rem; }
 .workspace-empty-editor { padding: 20px; color: var(--muted); }
-.editor-dialog { width: min(640px, calc(100% - 32px)); }
+.editor-dialog { width: min(640px, calc(100% - 32px)); max-height: min(880px, calc(var(--workspace-height, 100dvh) - 32px)); }
 .editor-dialog-content { min-width: 0; padding: 20px 24px; }
 .editor-dialog-content > .button:last-child { margin-top: 20px; }
 .editor-dialog fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
@@ -226,7 +226,7 @@
   .editor-docked:not(.workspace-reflow) .moment-layout .youtube-player { width: min(100cqw, calc(100cqh * 16 / 9)); height: min(100cqh, calc(100cqw * 9 / 16)); max-width: none; }
   .editor-docked:not(.workspace-reflow) .moment-layout .window-player { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; }
   .editor-docked:not(.workspace-reflow) .window-player-screen { justify-self: center; align-self: center; width: auto; height: 100%; min-height: 0; max-width: 100%; max-height: calc(100cqw * 9 / 16); aspect-ratio: 16 / 9; }
-  .editor-docked:not(.workspace-reflow) .moment-controls { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(400px, .8fr); align-items: center; gap: 0 24px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  .editor-docked:not(.workspace-reflow) .moment-controls { position: relative; grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(400px, .8fr); align-items: center; gap: 0 24px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
   .editor-docked:not(.workspace-reflow) .trim-heading { display: none; }
   .editor-docked:not(.workspace-reflow) .moment-boundaries { grid-column: 2; grid-row: 1; margin: 0; gap: 8px; }
   .editor-docked:not(.workspace-reflow) .moment-boundaries > div:not(.moment-duration) { padding: 4px 8px; }
@@ -239,9 +239,9 @@
   .editor-docked:not(.workspace-reflow) .timeline .trim-handle { height: 44px; }
   .editor-docked:not(.workspace-reflow) .tick-labels { grid-column: 2; grid-row: 2; margin: 0; font-size: .6875rem; line-height: 1.2; }
   .editor-docked:not(.workspace-reflow) .workspace-toolstrip { grid-column: 1 / -1; grid-row: 2; gap: 4px 12px; margin: 4px 0 0; padding-top: 4px; flex-wrap: nowrap; }
-  .editor-docked:not(.workspace-reflow) .timeline-media-disclosure { grid-column: 1 / -1; grid-row: 4; position: relative; margin: 0; border: 0; inset: auto; order: 2; }
+  .editor-docked:not(.workspace-reflow) .timeline-media-disclosure { grid-column: 1 / -1; grid-row: 4; position: static; margin: 0; border: 0; inset: auto; order: 2; }
   .editor-docked:not(.workspace-reflow) .timeline-media-disclosure > summary { min-width: 112px; gap: 8px; }
-  .editor-docked:not(.workspace-reflow) :is(.timeline-media-content, .crop-controls) { position: fixed; z-index: 20; inset: auto auto 80px 24px; width: min(600px, calc(100vw - 48px)); max-height: min(65dvh, 600px); overflow: auto; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 40px #0003; }
+  .editor-docked:not(.workspace-reflow) :is(.timeline-media-content, .crop-controls) { position: absolute; z-index: 20; inset: auto auto calc(100% + 12px) 12px; width: min(600px, calc(100vw - 48px)); max-height: min(calc(var(--workspace-height, 100dvh) * .65), 600px); overflow: auto; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 40px #0003; }
   .editor-docked:not(.workspace-reflow) .workspace-toolstrip .crop-editor[open] { flex-basis: auto; order: 0; }
   .editor-docked:not(.workspace-reflow) .workspace-sidebar { grid-column: 2; grid-row: 1; position: static; display: flex; flex-direction: column; min-height: 0; gap: 0; }
   .editor-docked:not(.workspace-reflow) .workspace-collection-tabs { flex: none; margin-bottom: 8px; }
@@ -277,5 +277,10 @@
   .editor-docked:not(.workspace-reflow) .sequence-preview > span { position: fixed; top: 124px; left: 24px; max-width: 40ch; padding: 6px 10px; border-radius: 6px; background: var(--surface); z-index: 5; }
 
   .editor-docked .page-heading h1 > span { overflow: hidden; text-overflow: ellipsis; }
+
+  .editor-docked .editor-dialog { position: fixed; inset: calc(var(--workspace-height, 100dvh) / 2) auto auto 50%; margin: 0; transform: translate(-50%, -50%); }
+
+  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .crop-editor { position: static; }
+  .editor-docked:not(.workspace-reflow) .crop-controls { left: auto; right: 12px; width: min(320px, calc(100vw - 48px)); }
 
 }
