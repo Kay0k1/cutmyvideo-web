@@ -66,7 +66,7 @@ Browser storage supports up to 100 projects, with a 4,194,304-character JSON cap
 
 ## Local development
 
-Requires Node.js 22 (minimum 20.19), Docker with Compose, and Git. Keep both repositories beside one another. These commands run isolated local PostgreSQL, API and worker services, then the website at `http://localhost:5173`.
+Requires Node.js 22.12 or later, Docker with Compose, and Git. Keep both repositories beside one another. These commands run isolated local PostgreSQL, API and worker services, then the website at `http://localhost:5173`.
 
 ```sh
 git clone https://github.com/Kay0k1/cutmyvideo-core.git core

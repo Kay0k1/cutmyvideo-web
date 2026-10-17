@@ -43,7 +43,9 @@ test('scoped handoff preserves fifteen IDs, ordered joins and independent crop t
   await expect(page.locator('.collection-part-tabs button').nth(1)).toContainText('00:00:01');
   await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.videoWidth)).toBe(640);
   await page.locator('.collection-clip-settings > summary').click();
+  await expect(page.getByRole('combobox', { name: 'Пропорции кадра', exact: true })).toHaveCount(0);
   await page.locator('.crop-editor > summary').click();
+  await expect(page.getByRole('combobox', { name: 'Пропорции кадра', exact: true })).toBeVisible();
   await page.getByRole('combobox', { name: 'Пропорции кадра', exact: true }).selectOption('9:16');
   const crop = await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.collection.current.v1')!).document.plan.clips[0].options.crop);
   expect(crop.width).toBeLessThan(.4); expect(crop.height).toBe(1);
@@ -51,6 +53,11 @@ test('scoped handoff preserves fifteen IDs, ordered joins and independent crop t
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.collection.current.v1')!).document.plan.clips[0].options?.crop)).toBeUndefined();
   await page.getByRole('button', { name: 'Повторить правку', exact: true }).click();
   await page.locator('[data-clip-id="1"] .collection-clip-name').click();
+  await expect(page.getByRole('combobox', { name: 'Пропорции кадра', exact: true })).toHaveCount(0);
+  await page.locator('.crop-editor > summary').click();
+  await expect(page.getByRole('combobox', { name: 'Пропорции кадра', exact: true })).toHaveValue('original');
+  await page.locator('.crop-editor > summary').click();
+  await expect(page.getByRole('combobox', { name: 'Пропорции кадра', exact: true })).toHaveCount(0);
   await page.locator('.crop-editor > summary').click();
   await expect(page.getByRole('combobox', { name: 'Пропорции кадра', exact: true })).toHaveValue('original');
   await page.getByLabel('Конец', { exact: true }).fill('00:00:02.500');

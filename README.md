@@ -66,7 +66,7 @@
 
 ## Локальный запуск
 
-Нужны Node.js 22 (минимум 20.19), Docker с Compose и Git. Репозитории должны находиться рядом. Команды ниже запускают отдельные локальные PostgreSQL, API и worker, затем интерфейс на `http://localhost:5173`.
+Нужны Node.js 22.12 или новее, Docker с Compose и Git. Репозитории должны находиться рядом. Команды ниже запускают отдельные локальные PostgreSQL, API и worker, затем интерфейс на `http://localhost:5173`.
 
 ```sh
 git clone https://github.com/Kay0k1/cutmyvideo-core.git core
