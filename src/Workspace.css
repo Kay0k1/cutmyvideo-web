@@ -131,6 +131,11 @@
 .source-shell .stage-1 { max-width: 860px; padding-top: clamp(24px, 6dvh, 64px); }
 .source-shell .page-heading { margin-bottom: 28px; }
 .source-shell .project-library, .source-shell .source-library, .source-shell .job-library { margin-top: 18px; }
+/* Lock the document itself while the editing canvas owns the viewport.
+   Reflow, source selection and collection pages release this automatically. */
+html:has(.editor-docked:not(.workspace-reflow)),
+body:has(.editor-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-behavior: none; }
+
 /* The desktop editor is a grid of tools, not a scrolling document. The
    preview receives the remaining space after the intrinsic toolbar heights. */
 
