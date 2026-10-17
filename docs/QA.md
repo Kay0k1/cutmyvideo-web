@@ -1,5 +1,24 @@
 # Acceptance and UX review
 
+## Desktop editing canvas — 17 October 2026
+
+Desktop single-video editing (a fine pointer at widths of at least 900px) now
+fills the visible browser window. A CSS grid gives the preview the space left
+by the intrinsic toolbar and trim dock; the page, trim controls and sidebar
+have no independent scroll areas. Only long clip/file lists scroll. Export is
+an outside-dismissible native inspector opened from the top toolbar, with
+advanced settings in a modal dialog. Export errors reopen the inspector.
+Media/frame tools open above the canvas instead of increasing its height.
+
+The responsive matrix also checks all primary hit targets before scrolling,
+zero scroll extent in the editing panels, Safari visual viewport changes,
+pageshow and tab restoration down to 900×500. The same player survives these
+changes. Buffered preview navigation remains below a contained picture;
+large text and phones reflow normally. Existing real-media, database-timeout,
+request-replay, crop and project-safety checks remain required in CI.
+
+The dated sections below retain the evidence for earlier layouts.
+
 ## Responsive editor redesign — 16 October 2026
 
 The editor uses a scrolling document, a media preview with a bounded 16:9
