@@ -31,6 +31,8 @@ export function WorkspaceDialog({ open, onClose, title, children, className = ''
       if (event.target instanceof Node && !dialog.current?.contains(event.target)) onClose();
     };
     const escape = (event: KeyboardEvent) => {
+      const owner = event.target instanceof Element ? event.target.closest('dialog') : null;
+      if (event.defaultPrevented || owner && owner !== dialog.current) return;
       if (event.key === 'Escape' && document.querySelectorAll('dialog[open]').length === 1) { event.preventDefault(); onClose(); }
     };
     document.addEventListener('pointerdown', outside);
@@ -38,7 +40,7 @@ export function WorkspaceDialog({ open, onClose, title, children, className = ''
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
   }, [open, modal, onClose]);
   return <dialog ref={dialog} className={`workspace-dialog editor-dialog ${className}`} aria-label={title}
-    onCancel={event => { event.preventDefault(); onClose(); }} onClose={() => { if (open) onClose(); }}
+    onCancel={event => { if (event.target === event.currentTarget) { event.preventDefault(); onClose(); } }} onClose={event => { if (event.target === event.currentTarget && open) onClose(); }}
     onClick={event => { if (event.target === event.currentTarget) { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onClose(); } }}>
     <div className="dialog-header"><h2>{title}</h2><button type="button" className="icon-button" aria-label={t('Закрыть')} onClick={onClose}><Icon name="close" size={20} /></button></div>
     <div className="editor-dialog-content">{children}</div>

@@ -243,6 +243,12 @@ test('desktop panels track tab-bar height changes and restored Safari viewports 
 
 test('the desktop editing canvas exposes its primary controls without scrolling any editing panel', async ({ page }, testInfo) => {
   await fixture(page, testInfo)
+  await showExactTimes(page)
+  await page.locator('#range-start').fill('00:00:01.125')
+  await page.locator('#range-start').press('Tab')
+  await page.locator('#range-end').fill('00:00:04.750')
+  await page.locator('#range-end').press('Tab')
+  await page.locator('.precision-toggle').click()
   for (const [width, height] of [[900, 500], [1280, 600], [1440, 706], [1920, 1080]]) {
     await page.setViewportSize({ width, height })
     await settle(page)
@@ -260,6 +266,13 @@ test('the desktop editing canvas exposes its primary controls without scrolling 
           return r.top >= 0 && r.bottom <= innerHeight && node.contains(document.elementFromPoint(x, y))
         })
         expect(hit, `${width}×${height}: ${selector} is immediately usable`).toBe(true)
+        if (selector === '.time-value') {
+          const fits = await control.evaluate(node => {
+            const text = document.createRange(); text.selectNodeContents(node.firstChild!)
+            return text.getBoundingClientRect().right <= node.getBoundingClientRect().right + 1
+          })
+          expect(fits, 'Fractional timecodes must remain readable beside the marker').toBe(true)
+        }
       }
     }
     for (const [trigger, panel] of [['.timeline-media-disclosure > summary', '.timeline-media-content'], ['.crop-editor > summary', '.crop-controls']]) {
@@ -275,6 +288,14 @@ test('the desktop editing canvas exposes its primary controls without scrolling 
     await page.mouse.wheel(0, 600)
     expect(await page.evaluate(() => scrollY)).toBe(0)
   }
+  await goToExport(page)
+  const settings = page.locator('.export-options-toggle')
+  await settings.focus(); await page.keyboard.press('Enter')
+  await expect(page.locator('.export-settings-dialog')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.export-settings-dialog')).not.toBeVisible()
+  await expect(page.locator('.workspace-export-dialog')).toBeVisible()
+  await expect(settings).toBeFocused()
 })
 
 test('short desktop windows expose trim values without toolbar overlap on first open', async ({ page }, testInfo) => {

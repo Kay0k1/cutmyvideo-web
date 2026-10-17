@@ -226,10 +226,10 @@
   .editor-docked:not(.workspace-reflow) .moment-layout .youtube-player { width: min(100cqw, calc(100cqh * 16 / 9)); height: min(100cqh, calc(100cqw * 9 / 16)); max-width: none; }
   .editor-docked:not(.workspace-reflow) .moment-layout .window-player { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; }
   .editor-docked:not(.workspace-reflow) .window-player-screen { justify-self: center; align-self: center; width: auto; height: 100%; min-height: 0; max-width: 100%; max-height: calc(100cqw * 9 / 16); aspect-ratio: 16 / 9; }
-  .editor-docked:not(.workspace-reflow) .moment-controls { position: relative; grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) minmax(400px, .8fr); align-items: center; gap: 0 24px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  .editor-docked:not(.workspace-reflow) .moment-controls { position: relative; grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 24px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
   .editor-docked:not(.workspace-reflow) .trim-heading { display: none; }
-  .editor-docked:not(.workspace-reflow) .moment-boundaries { grid-column: 2; grid-row: 1; margin: 0; gap: 8px; }
-  .editor-docked:not(.workspace-reflow) .moment-boundaries > div:not(.moment-duration) { padding: 4px 8px; }
+  .editor-docked:not(.workspace-reflow) .moment-boundaries { grid-column: 2; grid-row: 1; grid-template-columns: max-content max-content auto; margin: 0; gap: 8px; }
+  .editor-docked:not(.workspace-reflow) .moment-boundaries > div:not(.moment-duration) { grid-template-columns: max-content auto; padding: 4px 8px; }
   .editor-docked:not(.workspace-reflow) .moment-duration { padding: 0; }
   .editor-docked:not(.workspace-reflow) .timeline { grid-column: 1; grid-row: 1; display: grid; grid-template-columns: minmax(80px, .4fr) minmax(0, 1fr); align-items: center; gap: 0 20px; min-width: 0; position: relative; }
   .editor-docked:not(.workspace-reflow) .timeline-section { grid-column: 1; grid-row: 1; margin: 0; padding: 0; border: 0; background: none; }
@@ -282,5 +282,7 @@
 
   .editor-docked:not(.workspace-reflow) .workspace-toolstrip .crop-editor { position: static; }
   .editor-docked:not(.workspace-reflow) .crop-controls { left: auto; right: 12px; width: min(320px, calc(100vw - 48px)); }
+
+  .editor-docked:not(.workspace-reflow) .time-input { width: 13ch; min-width: 13ch; }
 
 }
