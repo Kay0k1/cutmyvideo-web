@@ -1,5 +1,17 @@
 # Acceptance and UX review
 
+## Start screen viewport — 17 October 2026
+
+At desktop widths of at least 900px with a fine pointer, the start screen uses
+one viewport with a source form beside an independently scrolling history.
+Opening projects, retained videos or exports cannot move the form or footer.
+The default link/file forms fit without internal scrolling down to 900×500;
+provider help, recovery details and errors remain reachable within the form
+region. Narrow screens, touch devices and enlarged text use document flow.
+The responsive suite checks both languages in all three browser engines,
+reduced visual viewport height, tab restoration, long retained-video lists,
+form position and initially visible primary actions. WebKit CI runs on macOS.
+
 ## Desktop editing canvas — 17 October 2026
 
 Desktop single-video editing (a fine pointer at widths of at least 900px) now

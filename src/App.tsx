@@ -45,6 +45,7 @@ import { JobLibrary } from './JobLibrary';
 import { WorkspaceDialog } from './WorkspaceDialog';
 import { useDesktopWorkspace, useWorkspaceViewport } from './useWorkspaceViewport';
 import './Workspace.css';
+import './SourceScreen.css';
 import { RetentionNotice } from './RetentionNotice';
 import { useWorkflowHistory } from './workflowHistory';
 import { boundaryAudition, recoverCuttingDraft, restoredTimeText } from './cuttingDraft';
@@ -187,7 +188,7 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
   const busy = activeJob(job) || submitting || deletingSource;
   const duration = source?.duration_ms ?? 0;
   const workspaceVisible = !!source && step !== 1;
-  useWorkspaceViewport(workspaceVisible);
+  useWorkspaceViewport(workspaceVisible || step === 1, workspaceVisible ? 'editor' : 'source');
   const view = timelineView(simpleView, viewCenter, span);
   const zoomOptions = [duration, 300000, 60000, 10000, view[1] - view[0]].filter((value, index, all) => value > 0 && value <= duration && all.indexOf(value) === index);
   const totalDuration = exportRanges.reduce((sum, range) => sum + range.end_ms - range.start_ms, 0);
@@ -1244,7 +1245,9 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
     {jobError && <p className="error-message" role="alert">{t(jobError)}</p>}
   </div></form></section>;
 
-  return <div className={`app-shell${workspaceVisible ? ` workspace-shell${desktopWorkspace ? ' editor-docked' : ''}` : step === 1 ? ' source-shell' : ''}`}>
+  const projectStorageMessage = projectError && <div className="project-storage-message"><p className="error-message" role="alert">{t(projectError)}</p>{projectConflict && <div className="project-conflict-actions"><button type="button" className="button secondary" disabled={sourceBusy || submitting} onClick={() => void saveProjectCopy()}>{t('Сохранить мои изменения как копию')}</button>{!projectConflict.deleted && <button type="button" className="text-button" disabled={sourceBusy || submitting} onClick={() => void reloadProjectVersion()}>{t('Открыть сохранённую версию')}</button>}</div>}</div>;
+
+  return <div className={`app-shell${workspaceVisible ? ` workspace-shell${desktopWorkspace ? ' editor-docked' : ''}` : step === 1 ? ` source-shell${desktopWorkspace ? ' source-docked' : ''}` : ''}`}>
     <a className="skip-link" href="#editor">{t('К выбору фрагмента')}</a>
     <header className="site-header"><div className="header-inner">
       <a className="brand" href="/" aria-label={t('cutmyvideo — главная')}><span className="brand-symbol"><Icon name="cut" size={20} /></span><span>cutmy<span className="brand-suffix">video</span></span></a>
@@ -1256,13 +1259,21 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
         {workspaceVisible ? <div className="workspace-heading-actions"><button type="button" className="button primary workspace-export-toggle" onClick={() => setExportOpen(true)} aria-haspopup="dialog"><Icon name="download" size={17} />{t('Экспорт')}</button><div className="edit-history-actions" role="group" aria-label={t('История изменений')}><button type="button" className="icon-button" aria-label={t('Отменить изменение')} title={t('Отменить изменение')} disabled={!currentHistory().past.length || busy || sourceBusy} onClick={() => historyAction('undo')}><Icon name="undo" size={19} /></button><button type="button" className="icon-button" aria-label={t('Повторить изменение')} title={t('Повторить изменение')} disabled={!currentHistory().future.length || busy || sourceBusy} onClick={() => historyAction('redo')}><Icon name="redo" size={19} /></button></div><button className="text-button change-source" type="button" disabled={!sessionReady || submitting} onClick={() => goToStep(1)}><Icon name="link" size={17} />{t('Другое видео')}</button></div>
           : source ? <button className="button secondary return-to-editor" type="button" disabled={!sessionReady} onClick={() => goToStep(selected ? 2 : 3)}>{t('Вернуться к редактированию')}</button> : (job || retryOutput) && <button className="button secondary return-to-results" type="button" disabled={!sessionReady} onClick={() => goToStep(4)}>{t('Вернуться к скачиванию')}</button>}
       </div>
-      {recoverableSource && step === 1 && <section className="draft-recovery" aria-labelledby="draft-recovery-heading"><h2 id="draft-recovery-heading">{t('Фрагменты сохранены')}</h2>{recoverableSource.title && <p>{recoverableSource.title}</p>}<p>{t('Загрузите ту же запись или откройте её ссылку. Границы, названия и настройки экспорта восстановятся.')}</p><ol>{ranges.map(range => <li key={range.id}><strong>{range.label || t('Фрагмент')}</strong><span>{formatTimecode(range.start_ms, true)} — {formatTimecode(range.end_ms, true)}</span></li>)}</ol><label><input type="checkbox" checked={keepRecoveredCuts} onChange={event => setKeepRecoveredCuts(event.target.checked)} />{t('Восстановить фрагменты в открываемом видео')}</label></section>}
-      {step === 1 && <SourceChooser url={url} onUrl={value => { setUrl(value); setSourceError(''); }} onOpen={() => void openSource()} onFile={file => void openSource(file)} busy={sourceBusy} progress={uploadProgress} maximumBytes={limits.max_source_bytes} blocked={deletingSource} processing={submitting || cancelling} ready={sessionReady} error={sourceError} onCancel={() => { sourceController.current?.abort(); sourceController.current = null; setSourceBusy(false); setUploadProgress(null); }} onReconnect={() => { setSourceError(''); setSessionAttempt(n => n + 1); }} />}
-      {step === 1 && sessionReady && <ProjectLibrary projects={projectStore.current.projects} activeID={activeProjectID.current} disabled={sourceBusy || submitting || cancelling || deletingSource} canExport={exportRanges.length > 0} onOpen={value => void openProject(value)} onDelete={id => void deleteProject(id)} onExport={downloadPlan} onImport={file => void loadPlan(file)} />}
-      {projectError && <div className="project-storage-message"><p className="error-message" role="alert">{t(projectError)}</p>{projectConflict && <div className="project-conflict-actions"><button type="button" className="button secondary" disabled={sourceBusy || submitting} onClick={() => void saveProjectCopy()}>{t('Сохранить мои изменения как копию')}</button>{!projectConflict.deleted && <button type="button" className="text-button" disabled={sourceBusy || submitting} onClick={() => void reloadProjectVersion()}>{t('Открыть сохранённую версию')}</button>}</div>}</div>}
-      {step === 1 && sessionReady && <SourceLibrary currentID={source?.id} disabled={sourceBusy || submitting || cancelling || deletingSource} currentBusy={busy} onBusy={setDeletingSource} onOpen={value => void reopenSource(value)} onDeleted={id => { if (id === currentSourceID.current) clearDeletedSource(); else setNotice('Видео и связанные файлы удалены.'); }} />}
-      {sessionReady && (step === 1 || step === 4 && !source) && <JobLibrary refreshKey={job?.id + ":" + job?.status} initiallyOpen={step === 1 && activeJob(job)} />}
-      {source && step === 1 && <section className="source-retention" aria-label={t('Хранение видео')}><RetentionNotice expiresAt={source.expires_at} blocked={source.retention_blocked} kind="source" /><button type="button" className="text-button danger-button" disabled={busy || sourceBusy} onClick={() => void deleteSource()}>{deletingSource ? t('Удаляем…') : t('Удалить видео и файлы')}</button></section>}
+      {step === 1 && <div className="source-workspace">
+        <div className="source-entry" role="region" aria-label={t('Открыть источник')} tabIndex={desktopWorkspace ? 0 : undefined}>
+          {recoverableSource && <section className="draft-recovery" aria-labelledby="draft-recovery-heading"><h2 id="draft-recovery-heading">{t('Фрагменты сохранены')}</h2>{recoverableSource.title && <p>{recoverableSource.title}</p>}<p>{t('Загрузите ту же запись или откройте её ссылку. Границы, названия и настройки экспорта восстановятся.')}</p><ol>{ranges.map(range => <li key={range.id}><strong>{range.label || t('Фрагмент')}</strong><span>{formatTimecode(range.start_ms, true)} — {formatTimecode(range.end_ms, true)}</span></li>)}</ol><label><input type="checkbox" checked={keepRecoveredCuts} onChange={event => setKeepRecoveredCuts(event.target.checked)} />{t('Восстановить фрагменты в открываемом видео')}</label></section>}
+          <SourceChooser url={url} onUrl={value => { setUrl(value); setSourceError(''); }} onOpen={() => void openSource()} onFile={file => void openSource(file)} busy={sourceBusy} progress={uploadProgress} maximumBytes={limits.max_source_bytes} blocked={deletingSource} processing={submitting || cancelling} ready={sessionReady} error={sourceError} onCancel={() => { sourceController.current?.abort(); sourceController.current = null; setSourceBusy(false); setUploadProgress(null); }} onReconnect={() => { setSourceError(''); setSessionAttempt(n => n + 1); }} />
+        </div>
+        <aside className="source-history" aria-label={t('Проекты и файлы')} tabIndex={desktopWorkspace ? 0 : undefined}>
+          {sessionReady && <ProjectLibrary projects={projectStore.current.projects} activeID={activeProjectID.current} disabled={sourceBusy || submitting || cancelling || deletingSource} canExport={exportRanges.length > 0} onOpen={value => void openProject(value)} onDelete={id => void deleteProject(id)} onExport={downloadPlan} onImport={file => void loadPlan(file)} />}
+          {projectStorageMessage}
+          {sessionReady && <SourceLibrary currentID={source?.id} disabled={sourceBusy || submitting || cancelling || deletingSource} currentBusy={busy} onBusy={setDeletingSource} onOpen={value => void reopenSource(value)} onDeleted={id => { if (id === currentSourceID.current) clearDeletedSource(); else setNotice('Видео и связанные файлы удалены.'); }} />}
+          {sessionReady && <JobLibrary refreshKey={job?.id + ":" + job?.status} initiallyOpen={activeJob(job)} />}
+          {source && <section className="source-retention" aria-label={t('Хранение видео')}><RetentionNotice expiresAt={source.expires_at} blocked={source.retention_blocked} kind="source" /><button type="button" className="text-button danger-button" disabled={busy || sourceBusy} onClick={() => void deleteSource()}>{deletingSource ? t('Удаляем…') : t('Удалить видео и файлы')}</button></section>}
+        </aside>
+      </div>}
+      {step !== 1 && projectStorageMessage}
+      {sessionReady && step === 4 && !source && <JobLibrary refreshKey={job?.id + ":" + job?.status} />}
       {source && <div className="editor-workspace" hidden={!workspaceVisible}><section className="moments-stage" aria-label={t('Выбор одного момента')}>
         <div className="editing-panel">
           {!desktopWorkspace && <div className="media-heading"><div className="source-title"><Icon name="file" size={18} /><span title={source.title}>{source.title}</span>{sourceProvider && <span className="source-provider">{t(sourceProvider)}</span>}</div><span className="source-meta">{qualityLabel && <>{qualityLabel}<span className="meta-separator"> / </span></>}{formatTimecode(duration)}</span></div>}
