@@ -103,7 +103,7 @@ async function checkLayout(page: Page, state: LayoutState, touch: boolean, descr
   expect(result.controls.filter(control => control.clippedHorizontally), `${description}: horizontally clipped controls`).toEqual([])
   expect(result.controls.filter(control => control.smallTouchTarget), `${description}: targets smaller than 44 CSS px`).toEqual([])
   if (state === 'workspace' || state === 'files') {
-    const primary = ['video', '.trim-handle.start', '.trim-handle.end', '.export-submit', ...(state === 'workspace' ? ['.clip-library', '.clip-list'] : ['.workspace-results'])]
+    const primary = ['video', '.trim-handle.start', '.trim-handle.end', await page.locator('.workspace-export-toggle').isVisible() ? '.workspace-export-toggle' : '.export-submit', ...(state === 'workspace' ? ['.clip-library', '.clip-list'] : ['.workspace-results'])]
     for (const selector of primary) {
       await reachableByScrolling(page.locator(selector), `${description}: ${selector}`)
     }
@@ -121,11 +121,11 @@ async function checkLayout(page: Page, state: LayoutState, touch: boolean, descr
       await reachableByScrolling(page.locator(selector), `${description}: ${selector}`)
     }
   } else if (state === 'workspace' || state === 'files') {
-    const primary = [page.locator('.format-picker'), page.locator('.export-submit'),
+    const primary = [...(await page.locator('.workspace-export-toggle').isVisible() ? [page.locator('.workspace-export-toggle')] : [page.locator('.format-picker'), page.locator('.export-submit')]),
       ...(state === 'workspace' ? [page.getByRole('button', { name: labels.add })] : await page.getByRole('link', { name: labels.download }).all())]
     for (const control of primary) await reachableByScrolling(control, `${description}: workspace action`)
   } else {
-    const dialog = page.getByRole('dialog')
+    const dialog = page.getByRole('dialog').last()
     await withinFirstViewport(dialog.locator('.dialog-header .icon-button'), `${description}: dialog close`)
     const controls = await dialog.locator('button,input:not([type=file]),[role=combobox]').all()
     for (const control of controls) if (await control.isVisible() && await control.isEnabled()) {

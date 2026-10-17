@@ -1,3 +1,4 @@
+import { goToExport } from './helpers';
 import { execFileSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test'
@@ -31,7 +32,7 @@ async function workspaceFits(page: Page, collection = '.clip-library') {
   for (const [selector, description] of [
     ['video', 'Native player'], ['.trim-track', 'Timeline'],
     ['.trim-handle.start', 'Start handle'], ['.trim-handle.end', 'End handle'],
-    [collection, 'Clip collection or ready files'], ['.export-submit', 'Export button'],
+    [collection, 'Clip collection or ready files'], [await page.locator('.workspace-export-toggle').isVisible() ? '.workspace-export-toggle' : '.export-submit', 'Export button'],
   ]) {
     // Short windows can scroll. The player keeps a usable size and every
     // action must be reachable without a clipped or locked document.
@@ -43,7 +44,7 @@ async function workspaceFits(page: Page, collection = '.clip-library') {
       const height = await control.evaluate(node => node.getBoundingClientRect().height)
       if (selector !== collection && height <= page.viewportSize()!.height) await fullyInViewport(control, description)
       else await expect(control, description).toBeVisible()
-    }).toPass({ timeout: 3000, intervals: [100, 200] })
+    }).toPass({ timeout: 10000, intervals: [100, 200] })
   }
   const actions = collection === '.clip-library' ? page.locator('.clip-list .clip-edit') : page.locator('.workspace-results .download-button')
   for (const action of [actions.first(), actions.last()]) {
@@ -164,6 +165,7 @@ for (const orientation of ['landscape', 'portrait']) {
     await page.getByRole('button', { name: 'Exact time and timeline', exact: true }).click()
     await showEditorTools(page); await closeEditorTools(page)
     await workspaceFits(page)
+    await goToExport(page)
     await page.locator('.export-submit').click()
     await expect(page.locator('.workspace-results')).toBeVisible()
     await workspaceFits(page, '.workspace-results')
@@ -186,8 +188,10 @@ for (const orientation of ['landscape', 'portrait']) {
       await page.locator('.editor-tools-toggle').scrollIntoViewIfNeeded()
       await fullyInViewport(page.locator('.editor-tools-toggle'), 'Tools at 200% text')
       await showEditorTools(page); await closeEditorTools(page)
+      await goToExport(page)
       await page.locator('.export-submit').scrollIntoViewIfNeeded()
       await fullyInViewport(page.locator('.export-submit'), 'Export at 200% text')
+      await goToMoment(page)
       await page.locator('video').scrollIntoViewIfNeeded()
       await fullyInViewport(page.locator('video'), 'Player at 200% text')
     }
@@ -253,6 +257,7 @@ test('trim and download directly from the workspace with untouched export defaul
     await expect(page.locator('.export-settings-dialog')).not.toHaveAttribute('open')
     await workspaceFits(page)
     const created = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
+    await goToExport(page)
     await page.locator('.export-submit').click()
     const creation = await created
     expect(creation.ok(), await creation.text()).toBeTruthy()

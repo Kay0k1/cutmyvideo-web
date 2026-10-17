@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test'
-import { closeExportSettings, goToMoment, goToSource, showExactTimes, showExportSettings } from './helpers'
+import { goToExport, closeExportSettings, goToMoment, goToSource, showExactTimes, showExportSettings } from './helpers'
 import { textContrast } from './contrast'
 
 const desktopSizes = [
@@ -160,10 +160,12 @@ async function workspace(page: Page, youtube = false, touch = false) {
   await settle(page)
   await noHorizontalClipping(page, touch)
   await readablePlayer(page, youtube)
-  for (const selector of ['.trim-handle.start', '.trim-handle.end', '.precision-toggle', '.editor-tools-toggle', '.format-picker', '.export-submit']) {
+  for (const selector of ['.trim-handle.start', '.trim-handle.end', '.precision-toggle', '.editor-tools-toggle']) {
     await reachable(page.locator(selector), selector)
   }
   await reachable(page.locator('.clip-library').getByRole('button', { name: /^(Добавить фрагмент|Add a clip)$/ }), 'Add a clip')
+  const exportControl = await page.locator('.workspace-export-toggle').isVisible() ? '.workspace-export-toggle' : '.export-submit'
+  await reachable(page.locator(exportControl), 'Open export')
   // A long collection must leave the final clip reachable as well.
   await reachable(page.locator('.clip-list > li').last().locator('.clip-edit'), 'Last clip')
 }
@@ -196,9 +198,12 @@ test('desktop panels track tab-bar height changes and restored Safari viewports 
       const list = (await page.locator('.clip-list').boundingBox())!
       const firstRow = (await page.locator('.clip-list > li').first().boundingBox())!
       expect(list.height, 'The clip list must retain enough room for a complete clip').toBeGreaterThanOrEqual(firstRow.height)
-      await reachable(page.locator('.export-submit'), 'Export inside the sidebar')
+      await goToExport(page)
+      await reachable(page.locator('.export-submit'), 'Export in the review dialog')
       await page.locator('.format-picker button').first().click({ trial: true })
+      await goToExport(page)
       await page.locator('.export-submit').click({ trial: true })
+      await goToMoment(page)
       expect(await page.evaluate(() => scrollY), 'Reaching panel controls must not scroll the page').toBe(0)
       expect(await page.locator(youtube ? '.youtube-player iframe' : '.player-frame video').evaluate((node, old) => node === old, player), 'Tab-bar changes preserve the player').toBe(true)
     }
@@ -219,7 +224,7 @@ test('desktop panels track tab-bar height changes and restored Safari viewports 
     await anotherTab.bringToFront()
     await page.bringToFront()
     await anotherTab.close()
-    await reachable(page.locator('.export-submit'), 'Export after returning from another tab')
+    await reachable(page.locator('.workspace-export-toggle'), 'Export after returning from another tab')
     expect(await page.evaluate(() => scrollY)).toBe(0)
     await page.evaluate(() => { Reflect.deleteProperty(visualViewport!, 'height') })
     await page.setViewportSize({ width: 1440, height: 678 })
@@ -228,6 +233,33 @@ test('desktop panels track tab-bar height changes and restored Safari viewports 
     await page.setViewportSize({ width: 390, height: 844 })
     await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--workspace-height'))).toBe('')
     expect(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight), 'Phone reflow retains ordinary document scrolling').toBeGreaterThan(0)
+  }
+})
+
+test('the desktop editing canvas exposes its primary controls without scrolling any editing panel', async ({ page }, testInfo) => {
+  await fixture(page, testInfo)
+  for (const [width, height] of [[900, 500], [1280, 600], [1440, 706], [1920, 1080]]) {
+    await page.setViewportSize({ width, height })
+    await settle(page)
+    const panels = await page.locator('.workspace-page,.editor-workspace,.moment-controls,.workspace-sidebar').evaluateAll(nodes => nodes.map(node => ({
+      name: node.className, overflow: node.scrollHeight - node.clientHeight, top: node.scrollTop,
+    })))
+    for (const panel of panels) {
+      expect(panel.overflow, `${width}×${height}: ${panel.name} needs no scrolling`).toBeLessThanOrEqual(1)
+      expect(panel.top).toBe(0)
+    }
+    for (const selector of ['.trim-handle.start', '.trim-handle.end', '.time-value', '.precision-toggle', '.moment-preview > .button', '.timeline-media-disclosure > summary', '.editor-tools-toggle', '.workspace-export-toggle']) {
+      for (const control of await page.locator(selector).all()) {
+        const hit = await control.evaluate(node => {
+          const r = node.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2
+          return r.top >= 0 && r.bottom <= innerHeight && node.contains(document.elementFromPoint(x, y))
+        })
+        expect(hit, `${width}×${height}: ${selector} is immediately usable`).toBe(true)
+      }
+    }
+    await page.locator('.player-frame').hover()
+    await page.mouse.wheel(0, 600)
+    expect(await page.evaluate(() => scrollY)).toBe(0)
   }
 })
 
@@ -316,7 +348,7 @@ test('source, exact editing, export settings and download remain reachable at 20
     nodes.forEach((node, index) => { node.style.fontSize = `${sizes[index] * 2}px` })
   })
   await showExactTimes(page)
-  for (const selector of ['#range-start', '#range-end', '.export-submit']) await reachable(page.locator(selector), `200% text ${selector}`)
+  for (const selector of ['#range-start', '#range-end']) await reachable(page.locator(selector), `200% text ${selector}`)
   await page.locator('#range-start').fill('00:00:01.000')
   await page.locator('#range-start').press('Tab')
   await page.locator('#range-end').fill('00:00:04.000')
@@ -330,8 +362,10 @@ test('source, exact editing, export settings and download remain reachable at 20
     if (await control.isVisible() && await control.isEnabled()) await reachable(control, 'Export setting at 200% text')
   }
   await closeExportSettings(page)
+  await goToExport(page)
   await page.locator('.export-submit').click()
   await expect.poll(() => state.submitted()?.ranges).toEqual([expect.objectContaining({ start_ms: 1000, end_ms: 4000 })])
+  await goToMoment(page)
   const download = page.getByRole('link', { name: 'Скачать', exact: true })
   await reachable(download, 'Exported clip download')
   await expect(download).toHaveAttribute('href', '/responsive-result.mp4')

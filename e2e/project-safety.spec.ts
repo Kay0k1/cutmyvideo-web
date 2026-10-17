@@ -26,6 +26,7 @@ async function closeExportSettings(page: Page) {
 }
 async function submitClip(page: Page) {
   await closeExportSettings(page);
+  await goToExport(page);
   await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
 }
 async function openProjects(page: Page) { await closeExportSettings(page); await goToSource(page); await page.getByRole('button', { name: 'My projects', exact: true }).click(); }

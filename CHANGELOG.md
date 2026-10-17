@@ -4,6 +4,9 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+### Changed
+- Desktop editing uses a window-sized canvas with a flexible video area and a shared trim dock. Export opens from the top toolbar; secondary media and crop controls no longer expand the editing canvas. Safari tab restoration retains the visible viewport, while phones and enlarged text keep normal reflow. Saved drafts, both languages and the pinned core are compatible.
+
 ## 0.6.1 — 2026-10-16
 
 Integrates core 1.4.1 while retaining the existing collection workspace and

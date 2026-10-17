@@ -160,7 +160,7 @@ for (const width of [320, 390, 1280]) {
     await goToExport(page)
     await measure('export')
     await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled()
-    await expect(page.getByRole('textbox', { name: 'Clip 1 name', exact: true })).toHaveValue('Birthday 🎂 — family memories')
+    await expect(page.locator('.clip-row-name').first()).toHaveValue('Birthday 🎂 — family memories')
     await testInfo.attach('text-resize-measurements', { body: JSON.stringify(measurements, null, 2), contentType: 'application/json' })
   })
 }
@@ -182,7 +182,7 @@ test('long Unicode source and clip names keep actions reachable on a narrow phon
   await assertReflow(page, 'Long editable clip name')
   await goToExport(page)
   await assertReflow(page, 'Long export clip name')
-  await expect(page.getByRole('textbox', { name: 'Clip 1 name', exact: true })).toHaveValue(clipName)
+  await expect(page.locator('.clip-row-name').first()).toHaveValue(clipName)
   await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled()
   await testInfo.attach('narrow-phone-long-names', { body: await page.screenshot({ fullPage: true }), contentType: 'image/png' })
 })
