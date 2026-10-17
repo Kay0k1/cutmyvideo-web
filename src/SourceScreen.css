@@ -1,0 +1,48 @@
+/* The start screen owns the viewport; expanding history never moves the form.
+   Narrow screens and enlarged text keep the ordinary document flow. */
+html:has(.source-docked:not(.workspace-reflow)),
+body:has(.source-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-behavior: none; }
+.source-entry, .source-history { min-width: 0; }
+
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .source-docked:not(.workspace-reflow) {
+    position: fixed; inset: 0; height: var(--workspace-height, 100dvh); min-height: 0;
+    display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: clip;
+  }
+  .source-docked:not(.workspace-reflow) .header-inner { min-height: 56px; padding-block: 4px; flex-wrap: nowrap; gap: 8px 12px; }
+  .source-docked:not(.workspace-reflow) .workspace-nav { order: 0; width: auto; margin-left: auto; flex-wrap: nowrap; }
+  .source-docked:not(.workspace-reflow) .workspace-nav button { padding-inline: 8px; flex: none; }
+  .source-docked:not(.workspace-reflow) .header-actions { margin-left: 0; }
+  .source-docked:not(.workspace-reflow) .stage-1 {
+    display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px;
+    width: 100%; max-width: 1160px; min-height: 0; margin: 0 auto; padding: 12px 24px 0;
+  }
+  .source-docked:not(.workspace-reflow) .page-heading { margin: 0; }
+  .source-docked:not(.workspace-reflow) .source-workspace {
+    display: grid; grid-template-columns: minmax(0, 1fr) 300px; min-height: 0; gap: 20px;
+  }
+  .source-docked:not(.workspace-reflow) :is(.source-entry, .source-history) {
+    min-height: 0; overflow: auto; overscroll-behavior: contain;
+    scrollbar-gutter: stable; padding: 3px;
+  }
+  .source-docked:not(.workspace-reflow) .source-history {
+    padding: 4px 16px; border-left: 1px solid var(--line);
+  }
+  .source-docked:not(.workspace-reflow) .source-history :is(.project-library, .source-library, .job-library) {
+    margin: 0; padding: 8px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none;
+  }
+  .source-docked:not(.workspace-reflow) .source-history > section > button { width: 100%; justify-content: space-between; }
+  .source-docked:not(.workspace-reflow) .source-history :is(.project-plan-actions, .project-library li, .source-library li, .job-library-heading) { flex-wrap: wrap; }
+  .source-docked:not(.workspace-reflow) .source-history :is(.project-library ul, .source-library ul, .job-library-list) { max-height: none; overflow: visible; }
+  .source-docked:not(.workspace-reflow) .page-footer { padding: 0 0 4px; }
+  .source-docked:not(.workspace-reflow) .source-chooser { padding: 16px; }
+  .source-docked:not(.workspace-reflow) .source-choice { margin-bottom: 16px; }
+  .source-docked:not(.workspace-reflow) .file-dropzone {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px;
+    min-height: 0; padding: 20px; text-align: left; justify-items: start;
+  }
+  .source-docked:not(.workspace-reflow) .upload-symbol { grid-column: 1; grid-row: 1 / 3; align-self: start; margin: 0; }
+  .source-docked:not(.workspace-reflow) .file-dropzone :is(.drop-label, .field-hint, .upload-button) { grid-column: 2; }
+  .source-docked:not(.workspace-reflow) .file-dropzone .field-hint { margin: 0; }
+  .source-docked:not(.workspace-reflow) .upload-button { margin-top: 4px; }
+}

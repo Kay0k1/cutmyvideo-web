@@ -12,7 +12,7 @@ export function useDesktopWorkspace() {
 
 // Browser chrome can resize the visible area independently of CSS viewport
 // units. Measure on tab restoration too; background tabs may miss resize events.
-export function useWorkspaceViewport(active: boolean) {
+export function useWorkspaceViewport(active: boolean, layout: 'editor' | 'source' = 'editor') {
   useLayoutEffect(() => {
     if (!active) return;
     const desktop = matchMedia(desktopQuery);
@@ -22,7 +22,7 @@ export function useWorkspaceViewport(active: boolean) {
     const measure = () => {
       if (!desktop.matches) { style.removeProperty('--workspace-height'); return; }
       if (document.hidden || (viewport && Math.abs(viewport.scale - 1) > 0.01)) return;
-      const shell = document.querySelector<HTMLElement>('.workspace-shell:not(.collection-shell)');
+      const shell = document.querySelector<HTMLElement>('.workspace-shell:not(.collection-shell), .source-shell');
       // Large text must reflow rather than clip controls in a fixed canvas.
       const navigation = document.querySelector<HTMLElement>('.window-player-position');
       shell?.classList.toggle('workspace-reflow', parseFloat(getComputedStyle(shell).fontSize) >= 24
@@ -55,5 +55,5 @@ export function useWorkspaceViewport(active: boolean) {
       desktop.removeEventListener('change', schedule);
       style.removeProperty('--workspace-height');
     };
-  }, [active]);
+  }, [active, layout]);
 }

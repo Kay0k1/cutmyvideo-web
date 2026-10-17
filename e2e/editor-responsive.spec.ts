@@ -411,3 +411,73 @@ test('source, exact editing, export settings and download remain reachable at 20
   await goToMoment(page)
   await readablePlayer(page)
 })
+
+for (const language of ['ru', 'en']) {
+  test(`start screen ${language} owns the viewport while history scrolls`, async ({ page, context }, testInfo) => {
+    const sources = Array.from({ length: 20 }, (_, index) => ({
+      id: `saved_${index}`, title: `Saved recording ${index + 1}.mp4`, kind: 'upload', duration_ms: 12000,
+    }));
+    await page.route('**/api/v1/**', route => {
+      const path = new URL(route.request().url()).pathname;
+      return route.fulfill({ json: path.endsWith('/session') ? { authenticated: true }
+        : path.endsWith('/sources') ? { sources } : { jobs: [] } });
+    });
+    await page.goto(`/?lang=${language}`);
+    await expect(page.locator('main')).toHaveAttribute('data-bootstrap-state', 'ready');
+    const inView = async (control: Locator) => {
+      const box = await control.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(await page.evaluate(() => Math.min(innerHeight, visualViewport!.height)) + 1);
+    };
+    const fits = async () => {
+      await settle(page);
+      expect(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(1);
+      expect(await page.evaluate(() => scrollY)).toBe(0);
+      await noHorizontalClipping(page);
+      await inView(page.locator('.page-footer'));
+      await inView(page.locator('.source-choice'));
+      await inView(page.locator('.source-open, .upload-button'));
+    };
+    for (const [width, height] of [[1280, 800], [1280, 762], [1280, 620], [1280, 582], [1280, 540], [1280, 500], [900, 500], [1440, 900], [1920, 1080], [2560, 1440]]) {
+      await page.setViewportSize({ width, height });
+      for (const mode of [0, 1]) {
+        await page.locator('.source-choice button').nth(mode).click();
+        await fits();
+        expect(await page.locator('.source-entry').evaluate(node => node.scrollHeight - node.clientHeight), 'Default form fits without internal scrolling').toBeLessThanOrEqual(1);
+      }
+    }
+    await page.setViewportSize({ width: 1280, height: 600 });
+    for (const selector of ['.project-library > button', '.source-library > button', '.job-library > button']) await page.locator(selector).click();
+    await expect(page.locator('.source-library li')).toHaveCount(20);
+    const formTop = (await page.locator('.source-chooser').boundingBox())!.y;
+    await page.locator('.source-history').hover(); await page.mouse.wheel(0, 1200);
+    await expect.poll(() => page.locator('.source-history').evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+    expect((await page.locator('.source-chooser').boundingBox())!.y).toBe(formTop);
+    await page.locator('.source-library li').last().getByRole('button').first().scrollIntoViewIfNeeded();
+    await inView(page.locator('.source-library li').last().getByRole('button').first());
+    await fits();
+    // Safari can change the visible viewport without changing the layout viewport.
+    await page.evaluate(() => {
+      Object.defineProperty(visualViewport!, 'height', { configurable: true, value: innerHeight - 38 });
+      visualViewport!.dispatchEvent(new Event('resize')); window.dispatchEvent(new Event('pageshow'));
+    });
+    await expect.poll(() => page.locator('.source-shell').evaluate(node => Math.round(node.getBoundingClientRect().height))).toBe(562);
+    await fits();
+    const otherTab = await context.newPage(); await otherTab.goto('about:blank'); await otherTab.bringToFront();
+    await page.bringToFront(); await otherTab.close(); await fits();
+    await page.screenshot({ path: testInfo.outputPath(`start-${language}-safari.png`) });
+    await page.evaluate(() => { Reflect.deleteProperty(visualViewport!, 'height'); visualViewport!.dispatchEvent(new Event('resize')); });
+    await page.locator('.source-entry').evaluate(node => { node.style.fontSize = '24px'; });
+    await page.locator('.app-shell').evaluate(node => { node.style.fontSize = '24px'; window.dispatchEvent(new Event('resize')); });
+    await expect.poll(() => page.locator('.app-shell').evaluate(node => getComputedStyle(node).position)).not.toBe('fixed');
+    await reachable(page.locator('.upload-button'), 'Enlarged text upload');
+    await page.locator('.app-shell').evaluate(node => { node.style.fontSize = ''; });
+    for (const width of [320, 390, 768, 899]) {
+      await page.setViewportSize({ width, height: 600 });
+      await expect.poll(() => page.locator('.app-shell').evaluate(node => getComputedStyle(node).position)).not.toBe('fixed');
+      await reachable(page.locator('.upload-button'), 'Narrow upload');
+      await noHorizontalClipping(page);
+    }
+  });
+}

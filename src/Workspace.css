@@ -127,12 +127,12 @@
 .editor-dialog .shortcut-guide { margin-top: 10px; }
 .editor-dialog .boundary-audition { flex-wrap: wrap; }
 .workspace-page .page-footer { margin-top: 24px; }
-/* Opening and recovering media follows the same readable, scrolling layout. */
+/* Source selection falls back to document flow on narrow screens. */
 .source-shell .stage-1 { max-width: 860px; padding-top: clamp(24px, 6dvh, 64px); }
 .source-shell .page-heading { margin-bottom: 28px; }
 .source-shell .project-library, .source-shell .source-library, .source-shell .job-library { margin-top: 18px; }
 /* Lock the document itself while the editing canvas owns the viewport.
-   Reflow, source selection and collection pages release this automatically. */
+   Reflow and collection pages release this automatically. */
 html:has(.editor-docked:not(.workspace-reflow)),
 body:has(.editor-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-behavior: none; }
 

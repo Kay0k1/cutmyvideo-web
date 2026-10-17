@@ -161,6 +161,7 @@ export const english: Record<string, string> = {
   "Готовые клипы и проект сохранятся. Для новой нарезки удалённую запись понадобится открыть заново.": "Completed clips and the project remain available. Reopen the deleted recording to make new cuts.",
 
   'В план входят выбранные фрагменты в порядке списка. Для CLI укажите путь к исходному файлу в поле input.': 'The plan contains selected clips in list order. For the CLI, set input to the original file path.',
+  "Проекты и файлы": "Projects and files",
   "Проекты в этом браузере": "Projects in this browser",
   "Мои проекты": "My projects",
   "Сохраняются в этом браузере. План можно скачать и перенести; видео и готовые файлы хранятся отдельно.": "Saved in this browser. Download a plan to move your work; media and completed files are stored separately.",
