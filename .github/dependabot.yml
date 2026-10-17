@@ -4,6 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Match the Node 22 build/CI runtime; raise this with the runtime baseline.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     groups:
       frontend:
         patterns: ['*']

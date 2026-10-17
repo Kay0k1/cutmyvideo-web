@@ -3,7 +3,8 @@
 .crop-editor > summary::before { content: '▸'; }
 .crop-editor[open] > summary::before { content: '▾'; }
 .crop-editor > summary::-webkit-details-marker { display: none; }
-.crop-editor:not([open]) > .crop-controls { display: none; }
+/* Native details hides closed content, including keyboard/accessibility access.
+   A second display:none rule leaves nested controls stale in WebKit on reopen. */
 .crop-editor .crop-current { color: var(--muted); font-weight: 350; margin-left: auto; }
 .crop-controls { display: grid; gap: 10px; padding: 8px 0; }
 .crop-controls label { display: grid; gap: 6px; font-size: .875rem; }

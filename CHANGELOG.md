@@ -5,7 +5,11 @@ Notable product changes are recorded here.
 ## Unreleased
 
 ### Changed
+- Frontend development and tests require Node.js 22.12 or later for Vitest 5. Playwright 1.64 uses the matching pinned browser image, and Node type definitions stay on the Node 22 runtime line.
 - Desktop editing uses a window-sized canvas with a flexible video area and a shared trim dock. Export opens from the top toolbar; secondary media and crop controls no longer expand the editing canvas. Safari tab restoration retains the visible viewport, while phones and enlarged text keep normal reflow. Saved drafts, both languages and the pinned core are compatible.
+
+### Fixed
+- Crop controls remain accessible after expanding or reopening their section in WebKit; closed sections continue to hide their controls through native details behavior.
 
 ## 0.6.1 — 2026-10-16
 

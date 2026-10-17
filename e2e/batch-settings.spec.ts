@@ -14,7 +14,39 @@ const tracks = [
 const ranges = [{ id: 'range_batch_ui_a', label: 'Second first', start_ms: 6000, end_ms: 8000 },
   { id: 'range_batch_ui_b', label: 'Opening last', start_ms: 1000, end_ms: 3000 }]
 
+type PlatformPreviewWindow = Window & { __batchPlatformPreview: { fail(): void } }
+
+async function installPlatformPreview(page: Page) {
+  // Export settings exercise our provider boundary, not a live YouTube video.
+  // Keep readiness and failure controllable while real fallback MP4s still decode.
+  await page.addInitScript(() => {
+    class ControlledPlayer {
+      frame: HTMLIFrameElement
+      currentTime = 0
+      state = 2
+      constructor(element: HTMLElement, options: { events: {
+        onReady(event: { target: ControlledPlayer }): void
+        onError(event: { target: ControlledPlayer }): void
+      } }) {
+        this.frame = document.createElement('iframe')
+        this.frame.src = 'about:blank'
+        element.replaceWith(this.frame)
+        Object.assign(window, { __batchPlatformPreview: { fail: () => options.events.onError({ target: this }) } })
+        queueMicrotask(() => options.events.onReady({ target: this }))
+      }
+      seekTo(seconds: number) { this.currentTime = seconds }
+      getCurrentTime() { return this.currentTime }
+      getPlayerState() { return this.state }
+      playVideo() { this.state = 1 }
+      pauseVideo() { this.state = 2 }
+      destroy() { this.frame.remove() }
+    }
+    Object.assign(window, { YT: { Player: ControlledPlayer } })
+  })
+}
+
 async function prepare(page: Page, options: { platform?: boolean; subtitleCodec?: string; output?: object } = {}) {
+  if (options.platform) await installPlatformPreview(page)
   const current = options.platform ? { ...source, kind: 'youtube', preview_url: null, embed_url: 'https://www.youtube-nocookie.com/embed/abcdefghijk' } : source
   await page.route('**/api/v1/session', route => route.fulfill({ json: { ok: true } }))
   await page.route('**/api/v1/sources/' + source.id, route => route.fulfill({ json: current }))
@@ -176,3 +208,29 @@ test('joined audio retry retains one request identity after restoring reordered 
   expect(attempts[0].key).toBeTruthy()
   expect(attempts[1]).toEqual(attempts[0])
 })
+
+for (const phase of ['pointermove', 'pointerdown'] as const) {
+  test(`export settings retain pointer activation during platform fallback at ${phase}`, async ({ page }) => {
+    const externalRequests: string[] = []
+    page.on('request', request => {
+      if (/^https:\/\/(?:www\.)?youtube(?:-nocookie)?\.com\//.test(request.url())) externalRequests.push(request.url())
+    })
+    await prepare(page, { platform: true })
+    await expect(page.locator('.youtube-player iframe')).toBeVisible()
+    await closeExportSettings(page)
+    const trigger = page.locator('.export-options-toggle')
+    await trigger.scrollIntoViewIfNeeded()
+    await page.mouse.move(0, 0)
+    // Inject the provider failure after actionability/hit testing or after press,
+    // instead of hoping a third-party response happens to hit this input window.
+    await page.evaluate(phase => document.addEventListener(phase, () => (window as unknown as PlatformPreviewWindow).__batchPlatformPreview.fail(), { once: true }), phase)
+    await trigger.click()
+    await expect(page.locator('.window-player')).toBeVisible()
+    const fallbackVideo = page.locator('.window-player-screen video')
+    await expect(fallbackVideo).toHaveJSProperty('videoWidth', 640)
+    await expect.poll(() => fallbackVideo.evaluate(video => (video as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)
+    await expect(page.locator('.export-settings-dialog')).toBeVisible()
+    await expect(page.locator('#audio-track-export-hint')).toContainText('Upload the original file')
+    expect(externalRequests).toEqual([])
+  })
+}
