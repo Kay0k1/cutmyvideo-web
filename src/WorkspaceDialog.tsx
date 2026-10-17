@@ -31,7 +31,7 @@ export function WorkspaceDialog({ open, onClose, title, children, className = ''
       if (event.target instanceof Node && !dialog.current?.contains(event.target)) onClose();
     };
     const escape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !document.querySelector('dialog:modal')) { event.preventDefault(); onClose(); }
+      if (event.key === 'Escape' && document.querySelectorAll('dialog[open]').length === 1) { event.preventDefault(); onClose(); }
     };
     document.addEventListener('pointerdown', outside);
     document.addEventListener('keydown', escape);

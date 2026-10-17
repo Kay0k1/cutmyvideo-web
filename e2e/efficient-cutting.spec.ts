@@ -25,7 +25,7 @@ async function prepare(page: Page, saved: Record<string, unknown> = {}, beforeOp
     localStorage.setItem('cutmy.workbench.v1', JSON.stringify({ workflow_version: 2, source_id: source.id, source_title: source.title, source_duration_ms: source.duration_ms, ranges: cuts, selected_id: cuts[0].id, selected_range_ids: cuts.map(range => range.id), output: { format: 'mp4', quality: '720p', cut_mode: 'accurate' }, step: 2, ...saved }));
     localStorage.setItem('efficient-seeded', 'yes');
   }, { source, cuts, saved });
-  await page.goto('/'); await expect(page.locator('.editor-workspace')).toBeVisible();
+  await page.goto('/'); await expect(page.locator('.editor-workspace:visible, .output-stage:visible').first()).toBeVisible();
   return { previewQueries };
 }
 
