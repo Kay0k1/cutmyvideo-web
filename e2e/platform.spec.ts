@@ -264,7 +264,7 @@ test('a real public platform source exposes honest preview availability and expo
   }
   await goToExport(page)
   const created = page.waitForResponse(result => result.request().method() === 'POST' && result.url().endsWith(`${api}/jobs`))
-  await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
+  await goToExport(page); await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
   const creation = await created
   expect(creation.ok(), await creation.text()).toBeTruthy()
   expect(creation.request().postDataJSON()).toMatchObject({ format: 'mp4', quality: '1080p', cut_mode: 'accurate' })

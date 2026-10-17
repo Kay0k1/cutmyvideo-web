@@ -20,7 +20,7 @@ async function completedExport(page: Page) {
   await page.getByRole('checkbox', { name: 'Удалить исходник после экспорта', exact: true }).uncheck()
   await closeExportSettings(page)
   const jobPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
-  await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
+  await goToExport(page); await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
   const creation = await jobPromise
   expect(creation.ok()).toBeTruthy()
   const job = await waitJob(page.request, (await creation.json()).id)

@@ -4,8 +4,8 @@ import { useLanguage } from './Language';
 import { Icon } from './Icons';
 
 /** Optional tools live above the workspace without resizing the video. */
-export function WorkspaceDialog({ open, onClose, title, children, className = '' }: {
-  open: boolean; onClose(): void; title: string; children: ReactNode; className?: string;
+export function WorkspaceDialog({ open, onClose, title, children, className = '', modal = true }: {
+  open: boolean; onClose(): void; title: string; children: ReactNode; className?: string; modal?: boolean;
 }) {
   const { t } = useLanguage();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -15,14 +15,32 @@ export function WorkspaceDialog({ open, onClose, title, children, className = ''
     if (!node) return;
     if (open && !node.open) {
       trigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      node.showModal();
+      if (modal) node.showModal(); else node.show();
     } else if (!open && node.open) {
+      const restoreFocus = modal || node.contains(document.activeElement);
       node.close();
-      trigger.current?.focus({ preventScroll: true });
+      if (restoreFocus) trigger.current?.focus({ preventScroll: true });
     }
-  }, [open]);
+  }, [open, modal]);
+  useEffect(() => {
+    if (!open || modal) return;
+    // Export is an inspector: outside actions dismiss it, while its nested
+    // settings dialog still owns modal focus and Escape handling.
+    const outside = (event: PointerEvent) => {
+      if (dialog.current?.querySelector('dialog[open]')) return;
+      if (event.target instanceof Node && !dialog.current?.contains(event.target)) onClose();
+    };
+    const escape = (event: KeyboardEvent) => {
+      const owner = event.target instanceof Element ? event.target.closest('dialog') : null;
+      if (event.defaultPrevented || owner && owner !== dialog.current) return;
+      if (event.key === 'Escape' && document.querySelectorAll('dialog[open]').length === 1) { event.preventDefault(); onClose(); }
+    };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
+  }, [open, modal, onClose]);
   return <dialog ref={dialog} className={`workspace-dialog editor-dialog ${className}`} aria-label={title}
-    onCancel={event => { event.preventDefault(); onClose(); }} onClose={() => { if (open) onClose(); }}
+    onCancel={event => { if (event.target === event.currentTarget) { event.preventDefault(); onClose(); } }} onClose={event => { if (event.target === event.currentTarget && open) onClose(); }}
     onClick={event => { if (event.target === event.currentTarget) { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onClose(); } }}>
     <div className="dialog-header"><h2>{title}</h2><button type="button" className="icon-button" aria-label={t('Закрыть')} onClick={onClose}><Icon name="close" size={20} /></button></div>
     <div className="editor-dialog-content">{children}</div>

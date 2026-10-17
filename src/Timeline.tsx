@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useLanguage } from './Language';
 import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
@@ -11,7 +12,7 @@ import { Icon } from './Icons';
 import { TimelineSection } from './TimelineSection';
 import './Timeline.css';
 
-export function Timeline({ duration, position, ranges, selected, section, view, maximumRange = Infinity, showOverview = true, compact = false, sourceID, active, audioTrack, noAudio, onSeek, onRange, onReveal, onSection, onView, onBeginChange, onEndChange }: {
+export function Timeline({ duration, position, ranges, selected, section, view, maximumRange = Infinity, showOverview = true, compact = false, toolsContainer, sourceID, active, audioTrack, noAudio, onSeek, onRange, onReveal, onSection, onView, onBeginChange, onEndChange }: {
   duration: number;
   position: PlaybackPosition;
   ranges: ClipRange[];
@@ -21,6 +22,7 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
   maximumRange?: number;
   showOverview?: boolean;
   compact?: boolean;
+  toolsContainer?: HTMLElement | null;
   sourceID: string;
   active: boolean;
   audioTrack?: number;
@@ -167,9 +169,16 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
     <Storyboard sourceID={sourceID} duration={duration} current={current} active={active} onSeek={ms => { onSeek(ms); onReveal(ms); }} />
   </>;
 
+  const zoomTools = <div className="timeline-detail-label"><span>{t('Уточните границы')}</span><div className="timeline-zoom-buttons"><button type="button" aria-label={t('Отдалить шкалу')} title={t('Отдалить шкалу')} disabled={!zoomed} onClick={() => zoomAt(2)}>−</button><button type="button" aria-label={t('Приблизить шкалу')} title={t('Приблизить шкалу')} disabled={span <= Math.min(1000, sectionSpan) + 1} onClick={() => zoomAt(.5)}>+</button>{closeHandles && span > 1000 ? <button type="button" className="text-button" onClick={fitBoundaries}>{t('Приблизить границы')}</button> : <button type="button" className="text-button" aria-label={t('Показать весь участок')} disabled={!zoomed} onClick={() => onView(section)}>{t('Весь участок')}</button>}</div></div>;
+
+  const mediaDisclosure = <details className="timeline-media-disclosure" open={mediaOpen} onToggle={event => setMediaOpen(event.currentTarget.open)}>
+      <summary>{t('Кадры и звук')}<Icon name="chevron" size={15} /></summary>
+      {mediaOpen && <div className="timeline-media-content">{mediaTools}</div>}
+    </details>;
+
   return <div className={`timeline${compact ? ' timeline-compact' : ''}${showOverview ? ' timeline-overview' : ''}`} data-section-start={section[0]} data-section-end={section[1]} data-view-start={view[0]} data-view-end={view[1]}>
     <TimelineSection duration={duration} section={section} ranges={ranges} selected={selected} current={current} onSeek={onSeek} showPlayback={showOverview} onChange={onSection} onBeginChange={onBeginChange} onEndChange={onEndChange} />
-    <div className="timeline-detail-label"><span>{t('Уточните границы')}</span><div className="timeline-zoom-buttons"><button type="button" aria-label={t('Отдалить шкалу')} title={t('Отдалить шкалу')} disabled={!zoomed} onClick={() => zoomAt(2)}>−</button><button type="button" aria-label={t('Приблизить шкалу')} title={t('Приблизить шкалу')} disabled={span <= Math.min(1000, sectionSpan) + 1} onClick={() => zoomAt(.5)}>+</button>{closeHandles && span > 1000 ? <button type="button" className="text-button" onClick={fitBoundaries}>{t('Приблизить границы')}</button> : <button type="button" className="text-button" aria-label={t('Показать весь участок')} disabled={!zoomed} onClick={() => onView(section)}>{t('Весь участок')}</button>}</div></div>
+    {toolsContainer ? createPortal(zoomTools, toolsContainer) : zoomTools}
     <div className="trim-track" ref={track}>
       <div className="trim-ticks" aria-hidden="true">{Array.from({ length: 21 }, (_, i) => <i key={i} />)}</div>
       <div className="trim-selection" style={{ left: `${pct(selected.start_ms)}%`, width: `${Math.max(0, pct(selected.end_ms) - pct(selected.start_ms))}%` }} aria-hidden="true" />
@@ -212,10 +221,7 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
     </div>
     <div className="tick-labels" aria-hidden="true"><span>{formatTimecode(view[0], span < 10000)}</span><span>{formatTimecode((view[0] + view[1]) / 2, span < 10000)}</span><span>{formatTimecode(view[1], span < 10000)}</span></div>
     <div className="timeline-zoom-hint"><span>{t('Колесо или жест сведения — масштаб; жест вбок — перемещение.')}</span></div>
-    {compact ? <details className="timeline-media-disclosure" open={mediaOpen} onToggle={event => setMediaOpen(event.currentTarget.open)}>
-      <summary>{t('Кадры и звук')}<Icon name="chevron" size={15} /></summary>
-      {mediaOpen && <div className="timeline-media-content">{mediaTools}</div>}
-    </details> : mediaTools}
+    {compact ? (toolsContainer ? createPortal(mediaDisclosure, toolsContainer) : mediaDisclosure) : mediaTools}
     <p id="trim-hint" className="sr-only">{t('Двигайте ручки начала и конца. Стрелки меняют время на 0,1 секунды, Shift — на секунду.')}</p>
     <p id="seek-hint" className="sr-only">{t('Нажмите на шкалу или двигайте указатель, чтобы перемотать. Стрелки — 0,1 секунды, Shift — секунда; Home и End — начало и конец видео.')}</p>
   </div>;

@@ -1,12 +1,12 @@
-/* Small and touch screens use the document; desktop editing panels have
-   their own scroll areas within the measured browser viewport. */
+/* Small and touch screens use the document. Desktop editing fills the window. */
 .app-shell { min-height: 100dvh; }
 .site-header { background: var(--surface); }
 .header-inner { max-width: 1600px; min-height: 72px; padding-inline: 28px; gap: 8px 20px; }
 .brand-symbol { width: 34px; height: 34px; border-radius: 10px; background: var(--selection); }
 .workspace-nav button[aria-current] { background: var(--soft); }
 .workspace-page { width: 100%; max-width: 1600px; padding: 24px 28px 0; }
-.workspace-page .page-heading { margin-bottom: 22px; }
+.workspace-page .page-heading { margin-bottom: 22px; flex-wrap: wrap; }
+.workspace-page .page-heading > div:first-child { min-width: 0; max-width: 100%; }
 .workspace-page .page-heading h1 { font-size: 1.5rem; letter-spacing: -.6px; }
 .workspace-page .page-heading h1 + p { margin-top: 5px; font-size: .875rem; }
 .workspace-heading-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
@@ -117,7 +117,7 @@
 .workspace-results .file-description > span { font-size: .75rem; }
 .workspace-results .download-button { min-height: 44px; padding: 8px 10px; font-size: .8125rem; }
 .workspace-empty-editor { padding: 20px; color: var(--muted); }
-.editor-dialog { width: min(640px, calc(100% - 32px)); }
+.editor-dialog { width: min(640px, calc(100% - 32px)); max-height: min(880px, calc(var(--workspace-height, 100dvh) - 32px)); }
 .editor-dialog-content { min-width: 0; padding: 20px 24px; }
 .editor-dialog-content > .button:last-child { margin-top: 20px; }
 .editor-dialog fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
@@ -131,54 +131,14 @@
 .source-shell .stage-1 { max-width: 860px; padding-top: clamp(24px, 6dvh, 64px); }
 .source-shell .page-heading { margin-bottom: 28px; }
 .source-shell .project-library, .source-shell .source-library, .source-shell .job-library { margin-top: 18px; }
-@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
-  .workspace-shell:not(.collection-shell) {
-    --workspace-preview-height: clamp(240px, calc(var(--workspace-height, 100dvh) * .42), 480px);
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    height: var(--workspace-height, 100dvh);
-    min-height: 0;
-    overflow: clip;
-  }
-  .workspace-shell:not(.collection-shell) .site-header { flex: none; }
-  .workspace-shell:not(.collection-shell) .header-inner { min-height: 56px; padding-block: 4px; }
-  .workspace-shell:not(.collection-shell) .workspace-page { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0 auto; padding: 12px 20px; }
-  .workspace-shell:not(.collection-shell) .page-heading { flex: none; min-height: 44px; margin-bottom: 12px; }
-  .workspace-shell:not(.collection-shell) .page-heading h1 { font-size: 1.25rem; }
-  .workspace-shell:not(.collection-shell) .page-heading h1 + p { display: none; }
-  .workspace-shell:not(.collection-shell) .editor-workspace { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) 304px; align-items: stretch; gap: 20px; }
-  .workspace-shell:not(.collection-shell) .moments-stage { display: flex; min-height: 0; }
-  .workspace-shell:not(.collection-shell) .editing-panel { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: auto; overscroll-behavior: contain; container-type: size; }
-  .workspace-shell:not(.collection-shell) .media-heading { flex: none; min-height: 44px; padding: 8px 16px; }
-  .workspace-shell:not(.collection-shell) .moment-layout { flex: 1; min-height: calc(var(--workspace-preview-height) + 150px); }
-  .workspace-shell:not(.collection-shell) .moment-layout > .player-frame { flex: none; height: var(--workspace-preview-height); max-height: none; aspect-ratio: auto; }
-  .workspace-shell:not(.collection-shell) .moment-layout .youtube-player { max-width: calc(var(--workspace-preview-height) * 16 / 9); }
-  /* Window navigation retains its natural height, including enlarged text. */
-  .workspace-shell:not(.collection-shell) .moment-layout > .player-frame:has(> .window-player) { height: auto; }
-  .workspace-shell:not(.collection-shell) .moment-layout .window-player { max-height: 100cqh; overflow: auto; overscroll-behavior: contain; }
-  .workspace-shell:not(.collection-shell) .window-player-screen { flex: 0 1 auto; min-height: 240px; }
-  .workspace-shell:not(.collection-shell) .moment-controls { flex: 1; min-height: 150px; overflow: auto; overscroll-behavior: contain; padding: 12px 16px; }
-  .workspace-shell:not(.collection-shell) .trim-heading { margin-bottom: 8px; }
-  .workspace-shell:not(.collection-shell) .moment-boundaries { margin-bottom: 10px; }
-  .workspace-shell:not(.collection-shell) .workspace-sidebar { position: static; display: flex; flex-direction: column; min-height: 0; gap: 12px; overflow: auto; overscroll-behavior: contain; }
-  .workspace-shell:not(.collection-shell) .workspace-collection-tabs { flex: none; }
-  .workspace-shell:not(.collection-shell) .workspace-clips { display: flex; flex: 1; min-height: 150px; overflow: auto; }
-  .workspace-shell:not(.collection-shell) .clip-library.compact { flex: 1; min-width: 0; min-height: 300px; }
-  .workspace-shell:not(.collection-shell) .clip-library.compact .clip-list { flex: 1; min-height: 120px; max-height: none; }
-  .workspace-shell:not(.collection-shell) .workspace-results { flex: 1; min-height: 150px; max-height: none; }
-  /* In-flow actions let enlarged text scroll without covering the settings. */
-  .workspace-shell:not(.collection-shell) .export-panel { flex: none; height: clamp(280px, calc(var(--workspace-height, 100dvh) * .4), 360px); padding: 14px; overflow: auto; overscroll-behavior: contain; }
-  .workspace-shell:not(.collection-shell) .export-panel form { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-  .workspace-shell:not(.collection-shell) .export-scroll { flex: 1; min-height: 100px; overflow: auto; overscroll-behavior: contain; }
-  .workspace-shell:not(.collection-shell) .export-actions { flex: none; background: var(--surface); }
-  .workspace-shell:not(.collection-shell) .export-heading { margin-bottom: 8px; }
-  .workspace-shell:not(.collection-shell) .format-picker button { min-height: 44px; }
-  .workspace-shell:not(.collection-shell) .export-settings-summary { gap: 6px; margin-top: 12px; }
-  .workspace-shell:not(.collection-shell) .export-summary { margin-top: 10px; padding-top: 10px; }
-  .workspace-shell:not(.collection-shell) .export-submit { margin-top: 10px; }
-  .workspace-shell:not(.collection-shell) .page-footer { display: none; }
-}
+/* Lock the document itself while the editing canvas owns the viewport.
+   Reflow, source selection and collection pages release this automatically. */
+html:has(.editor-docked:not(.workspace-reflow)),
+body:has(.editor-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-behavior: none; }
+
+/* The desktop editor is a grid of tools, not a scrolling document. The
+   preview receives the remaining space after the intrinsic toolbar heights. */
+
 @media (min-width: 1100px) and (min-height: 850px) {
   .workspace-sidebar { position: sticky; top: 20px; }
 }
@@ -246,4 +206,88 @@
   .workspace-page .moment-mobile-markers > .marker-button { flex-wrap: wrap; gap: 4px; }
   .workspace-page .moment-mobile-markers .marker-text { display: inline; }
   .workspace-page .moment-mobile-markers kbd { display: inline-grid; }
+}
+
+.workspace-export-toggle { display: none; }
+.timeline-tools { display: contents; }
+.workspace-export-dialog { position: fixed; inset: 50% auto auto 50%; margin: 0; transform: translate(-50%, -50%); z-index: 30; }
+.workspace-export-dialog .export-panel { padding: 0; border: 0; background: none; }
+.workspace-export-dialog .export-heading h2 { display: none; }
+
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .editor-docked:not(.workspace-reflow) { position: fixed; inset: 0; display: flex; flex-direction: column; height: var(--workspace-height, 100dvh); min-height: 0; overflow: clip; }
+  .editor-docked:not(.workspace-reflow) .site-header { flex: none; }
+  .editor-docked:not(.workspace-reflow) .header-inner { min-height: 56px; padding-block: 4px; }
+  .editor-docked:not(.workspace-reflow) .workspace-page { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0 auto; padding: 8px 12px; }
+  .editor-docked:not(.workspace-reflow) .page-heading { flex: none; min-height: 44px; margin-bottom: 8px; gap: 16px; flex-wrap: nowrap; }
+  .editor-docked:not(.workspace-reflow) .page-heading > div:first-child { min-width: 0; }
+  .editor-docked:not(.workspace-reflow) .page-heading h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1rem; letter-spacing: -.2px; }
+  .editor-docked:not(.workspace-reflow) .page-heading h1 + p { display: none; }
+  .editor-docked:not(.workspace-reflow) .workspace-heading-actions { flex: none; flex-wrap: nowrap; }
+  .editor-docked:not(.workspace-reflow) .editor-workspace { position: relative; flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) 304px; grid-template-rows: minmax(0, 1fr) auto; align-items: stretch; gap: 12px; }
+  .editor-docked:not(.workspace-reflow) :is(.moments-stage, .editing-panel, .moment-layout) { display: contents; }
+  .editor-docked:not(.workspace-reflow) .media-heading { display: none; }
+  .editor-docked:not(.workspace-reflow) .moment-layout > .player-frame { grid-column: 1; grid-row: 1; align-self: stretch; width: 100%; height: 100%; min-height: 0; max-height: none; aspect-ratio: auto; border: 1px solid var(--line); border-radius: 10px; container-type: size; }
+  .editor-docked:not(.workspace-reflow) .moment-layout .youtube-player { width: min(100cqw, calc(100cqh * 16 / 9)); height: min(100cqh, calc(100cqw * 9 / 16)); max-width: none; }
+  .editor-docked:not(.workspace-reflow) .moment-layout .window-player { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; }
+  .editor-docked:not(.workspace-reflow) .window-player-screen { justify-self: center; align-self: center; width: auto; height: 100%; min-height: 0; max-width: 100%; max-height: calc(100cqw * 9 / 16); aspect-ratio: 16 / 9; }
+  .editor-docked:not(.workspace-reflow) .moment-controls { position: relative; grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 24px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  .editor-docked:not(.workspace-reflow) .trim-heading { display: none; }
+  .editor-docked:not(.workspace-reflow) .moment-boundaries { grid-column: 2; grid-row: 1; grid-template-columns: max-content max-content auto; margin: 0; gap: 8px; }
+  .editor-docked:not(.workspace-reflow) .moment-boundaries > div:not(.moment-duration) { grid-template-columns: max-content auto; padding: 4px 8px; }
+  .editor-docked:not(.workspace-reflow) .moment-duration { padding: 0; }
+  .editor-docked:not(.workspace-reflow) .timeline { grid-column: 1; grid-row: 1; display: grid; grid-template-columns: minmax(80px, .4fr) minmax(0, 1fr); align-items: center; gap: 0 20px; min-width: 0; position: relative; }
+  .editor-docked:not(.workspace-reflow) .timeline-section { grid-column: 1; grid-row: 1; margin: 0; padding: 0; border: 0; background: none; }
+  .editor-docked:not(.workspace-reflow) :is(.timeline-section-heading, .timeline-section-labels, .timeline-detail-label > span, .timeline-zoom-hint) { display: none; }
+  .editor-docked:not(.workspace-reflow) .timeline-detail-label { grid-column: 2; grid-row: 1; }
+  .editor-docked:not(.workspace-reflow) .trim-track { grid-column: 2; grid-row: 1; height: 44px; margin-inline: 30px; }
+  .editor-docked:not(.workspace-reflow) .timeline .trim-handle { height: 44px; }
+  .editor-docked:not(.workspace-reflow) .tick-labels { grid-column: 2; grid-row: 2; margin: 0; font-size: .6875rem; line-height: 1.2; }
+  .editor-docked:not(.workspace-reflow) .workspace-toolstrip { grid-column: 1 / -1; grid-row: 2; gap: 4px 12px; margin: 4px 0 0; padding-top: 4px; flex-wrap: nowrap; }
+  .editor-docked:not(.workspace-reflow) .timeline-media-disclosure { grid-column: 1 / -1; grid-row: 4; position: static; margin: 0; border: 0; inset: auto; order: 2; }
+  .editor-docked:not(.workspace-reflow) .timeline-media-disclosure > summary { min-width: 112px; gap: 8px; }
+  .editor-docked:not(.workspace-reflow) :is(.timeline-media-content, .crop-controls) { position: absolute; z-index: 20; inset: auto auto calc(100% + 12px) 12px; width: min(600px, calc(100vw - 48px)); max-height: min(calc(var(--workspace-height, 100dvh) * .65), 600px); overflow: auto; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 40px #0003; }
+  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .crop-editor[open] { flex-basis: auto; order: 0; }
+  .editor-docked:not(.workspace-reflow) .workspace-sidebar { grid-column: 2; grid-row: 1; position: static; display: flex; flex-direction: column; min-height: 0; gap: 0; }
+  .editor-docked:not(.workspace-reflow) .workspace-collection-tabs { flex: none; margin-bottom: 8px; }
+  .editor-docked:not(.workspace-reflow) .workspace-clips { display: flex; flex: 1; min-height: 0; }
+  .editor-docked:not(.workspace-reflow) .clip-library.compact { flex: 1; min-width: 0; min-height: 0; padding: 8px; }
+  .editor-docked:not(.workspace-reflow) .clip-library.compact .clip-library-heading { margin-bottom: 0; }
+  .editor-docked:not(.workspace-reflow) .clip-library.compact .clip-bulkbar { margin-bottom: 4px; }
+  .editor-docked:not(.workspace-reflow) .clip-library.compact .clip-list { flex: 1; min-height: 0; max-height: none; }
+  .editor-docked:not(.workspace-reflow) .workspace-results { flex: 1; min-height: 0; max-height: none; }
+  .editor-docked:not(.workspace-reflow) .page-footer { display: none; }
+  .editor-docked .workspace-export-toggle { display: inline-flex; order: 3; }
+  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .moment-preview { order: 0; }
+  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .crop-editor { order: 3; }
+  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .editor-tools-toggle { order: 4; }
+  .editor-docked .workspace-export-dialog :is(.export-panel,.export-scroll,.export-actions) { height: auto; overflow: visible; }
+  .editor-docked .workspace-export-dialog .export-panel { padding: 0; }
+  .editor-docked .workspace-export-dialog .export-settings-summary { display: grid; }
+  .editor-docked .workspace-export-dialog .export-empty-hint { display: block; }
+  .editor-docked .workspace-export-dialog .export-options-toggle { min-height: 44px; }
+  .editor-docked:not(.workspace-reflow) .timeline-tools .timeline-detail-label { order: 1; }
+  .editor-docked:not(.workspace-reflow) .clip-library.compact .clip-list .clip-compact-edit { min-height: 44px; padding: 4px 8px; }
+  .editor-docked:not(.workspace-reflow) .clip-compact-edit .clip-row-times > span:last-child, .editor-docked:not(.workspace-reflow) .clip-edit-label { display: none; }
+  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .preview-button-label { display: none; }
+  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .moment-preview > .button { width: 44px; min-width: 44px; padding: 0; justify-content: center; }
+  .editor-docked:not(.workspace-reflow) .clip-library[data-at-limit] .clip-compact-hint { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); border: 0; }
+  .editor-docked:not(.workspace-reflow) .workspace-nav { order: 0; width: auto; margin-left: auto; }
+  .editor-docked:not(.workspace-reflow) .workspace-nav button { padding-inline: 8px; font-size: .75rem; }
+  .editor-docked:not(.workspace-reflow) .brand { font-size: 1.25rem; }
+  .editor-docked:not(.workspace-reflow) .time-value { flex-wrap: nowrap; white-space: nowrap; font-size: 1rem; }
+  .editor-docked:not(.workspace-reflow) .sequence-preview { display: contents; }
+  .editor-docked:not(.workspace-reflow) .sequence-preview > button { width: 44px; min-width: 44px; padding: 0; justify-content: center; order: 0; }
+  .editor-docked:not(.workspace-reflow) .sequence-label { display: none; }
+  .editor-docked:not(.workspace-reflow) .sequence-preview > span { position: fixed; top: 124px; left: 24px; max-width: 40ch; padding: 6px 10px; border-radius: 6px; background: var(--surface); z-index: 5; }
+
+  .editor-docked .page-heading h1 > span { overflow: hidden; text-overflow: ellipsis; }
+
+  .editor-docked .editor-dialog { position: fixed; inset: calc(var(--workspace-height, 100dvh) / 2) auto auto 50%; margin: 0; transform: translate(-50%, -50%); }
+
+  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .crop-editor { position: static; }
+  .editor-docked:not(.workspace-reflow) .crop-controls { left: auto; right: 12px; width: min(320px, calc(100vw - 48px)); }
+
+  .editor-docked:not(.workspace-reflow) .time-input { width: 13ch; min-width: 13ch; }
+
 }

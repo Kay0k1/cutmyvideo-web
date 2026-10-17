@@ -42,10 +42,11 @@ async function unifiedWorkspace(page: Page) {
 }
 
 async function closeWorkspaceDialogs(page: Page) {
-  const open = page.locator('dialog.workspace-dialog[open]')
-  if (await open.count()) {
+  while (await page.locator('dialog.workspace-dialog[open]').count()) {
+    const count = await page.locator('dialog.workspace-dialog[open]').count()
+    if (!count) break
     await page.keyboard.press('Escape')
-    await expect(open).toHaveCount(0)
+    await expect.poll(() => page.locator('dialog.workspace-dialog[open]').count()).toBeLessThan(count)
   }
 }
 
@@ -78,11 +79,14 @@ export async function goToMoment(page: Page) {
 }
 
 export async function goToExport(page: Page) {
+  if (await page.locator('.workspace-export-dialog').isVisible() && !await page.locator('.export-settings-dialog').isVisible()) return
   await closeWorkspaceDialogs(page)
   if (await unifiedWorkspace(page) || await page.locator('.export-panel').isVisible()) {
-    await expect(page.locator('.export-panel').first()).toBeVisible()
     const files = page.getByRole('tab', { name: /^(Готовые файлы|Ready files)$/ })
     if (await files.isVisible() && await files.isEnabled()) await files.click()
+    const review = page.locator('.workspace-export-toggle')
+    if (await review.isVisible()) await review.click()
+    await expect(page.locator('.export-panel').first()).toBeVisible()
     return
   } else {
     const downloads = page.getByRole('button', { name: /^(Вернуться к скачиванию|Return to downloads)$/ })

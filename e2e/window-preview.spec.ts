@@ -1,3 +1,4 @@
+import { goToExport } from './helpers';
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 
@@ -91,6 +92,7 @@ for (const outcome of ['ready', 'unavailable', 'busy'] as const) test(`export pr
   await seekWindow(page, 70_000);
   await expect.poll(() => attempts).toBe(1);
   const accepted = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/jobs');
+  await goToExport(page)
   await page.locator('.export-submit').click();
   expect((await accepted).status()).toBe(202);
   expect(posted, 'One click starts export while preview is still pending').toBe(1);
@@ -124,6 +126,7 @@ test('an export waiting for admission leaves uncached seeking and playback usabl
     await route.fulfill({ status: 202, json: { id: 'admission-pending', status: 'running', stage: 'encoding', items: [] } });
   });
   const accepted = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/jobs');
+  await goToExport(page)
   await page.locator('.export-submit').click();
   try {
     await expect.poll(() => posted).toBe(1);

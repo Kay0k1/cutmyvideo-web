@@ -86,7 +86,7 @@ test('the original-quality UI submits an uncapped local copy and reports its act
   await expect(page.getByRole('combobox', { name: 'Качество видео', exact: true })).toBeDisabled()
   await closeExportSettings(page)
   const created = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
-  await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
+  await goToExport(page); await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
   const creation = await created
   expect(creation.ok(), await creation.text()).toBeTruthy()
   expect(creation.request().postDataJSON()).toMatchObject({ format: 'mp4', quality: 'best', cut_mode: 'copy', ranges: [{ start_ms: 2500, end_ms: 4750 }] })

@@ -180,7 +180,7 @@ test('resource lifecycle: cancellation cannot be undone by an older running poll
   await expect(page.getByRole('heading', { name: 'Обработка отменена', exact: true })).toBeVisible()
   release(); await page.waitForTimeout(2000)
   await expect(page.getByRole('heading', { name: 'Обработка отменена', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled(); expect(reads).toBe(2)
+  await goToExport(page); await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled(); expect(reads).toBe(2)
 })
 
 test('resource lifecycle: a transient restore failure preserves the saved draft and can be retried', async ({ page }) => {
@@ -192,8 +192,8 @@ test('resource lifecycle: a transient restore failure preserves the saved draft 
   await page.waitForTimeout(1200)
   expect(await readBrowserDraft(page).then(saved => saved.source_id)).toBe(source.id)
   await page.getByRole('button', { name: 'Повторить подключение', exact: true }).click()
-  await expect(page.locator('.export-panel')).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled()
+  await goToExport(page); await expect(page.locator('.export-panel')).toBeVisible()
+  await goToExport(page); await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled()
 })
 
 test('resource lifecycle: results survive subsequent reloads after their source has expired', async ({ page }) => {
@@ -323,7 +323,7 @@ test('resource lifecycle: real multipart export results and source are explicitl
   await page.getByRole('checkbox', { name: 'Удалить исходник после экспорта', exact: true }).uncheck()
   await closeExportSettings(page)
   const createdResponse = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
-  await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
+  await goToExport(page); await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
   const response = await createdResponse; expect(response.ok(), await response.text()).toBeTruthy()
   const created = await response.json()
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible({ timeout: 60000 })
@@ -357,6 +357,7 @@ test('resource policy: shorter range and total duration limits preserve drafts a
   let posts = 0
   await page.route(`**${api}/jobs`, route => { posts++; return route.fulfill({ json: job }) })
   await page.reload(); await expect(page.locator('.clip-list > li')).toHaveCount(2)
+  await goToExport(page)
   await expect(page.getByRole('alert')).toContainText('Один фрагмент может длиться до 2 с.')
   await expect(page.getByRole('button', { name: 'Вырезать фрагменты', exact: true })).toBeDisabled()
   await goToClips(page)
@@ -369,7 +370,7 @@ test('resource policy: shorter range and total duration limits preserve drafts a
   await page.getByRole('button', { name: 'Русский', exact: true }).click()
   await page.getByLabel('Конец', { exact: true }).fill('6'); await page.getByLabel('Конец', { exact: true }).press('Tab')
   await goToExport(page)
-  await expect(page.getByRole('button', { name: 'Вырезать фрагменты', exact: true })).toBeEnabled(); expect(posts).toBe(0)
+  await goToExport(page); await expect(page.getByRole('button', { name: 'Вырезать фрагменты', exact: true })).toBeEnabled(); expect(posts).toBe(0)
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await showExportSettings(page)
   await expect(page.locator('.export-limits')).toContainText('Each clip: up to 2 s; entire export: up to 3 s.')
@@ -384,6 +385,7 @@ test('resource policy: lowered count limits keep all saved clips and existing do
   } }] } }))
   await page.reload()
   await expect(page.locator('.clip-list > li')).toHaveCount(3)
+  await goToExport(page)
   await expect(page.getByRole('alert')).toContainText('Можно экспортировать не больше 2 фрагментов')
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
   await goToClips(page); await expect(page.locator('.clip-list > li')).toHaveCount(3)
@@ -423,7 +425,7 @@ test('long recordings: 42-minute and full-stream selections, fast export, and a 
   await page.screenshot({ path: testInfo.outputPath('long-export-mobile.png'), fullPage: true })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
   await closeExportSettings(page)
-  await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
+  await goToExport(page); await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
   await expect.poll(() => submitted?.cut_mode).toBe('copy')
   expect(submitted.ranges).toMatchObject([{ start_ms: 0, end_ms: 2520000 }])
   await expect(page.getByText('25%', { exact: true })).toBeVisible()
@@ -469,7 +471,7 @@ test('background exports: replacing a source ignores the previous job poll alrea
     await expect(page.locator('.source-title')).toContainText(replacement.title)
     release(); await responded
     await goToExport(page)
-    await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled()
+    await goToExport(page); await expect(page.getByRole('button', { name: 'Вырезать фрагмент', exact: true })).toBeEnabled()
     await expect(page.locator('.job-status')).toHaveCount(0)
     const draft = await readBrowserDraft(page)
     expect(draft.source_id).toBe(replacement.id)

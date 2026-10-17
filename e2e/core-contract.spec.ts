@@ -17,7 +17,7 @@ test.describe('current core database contract', () => {
     const release = await holdDatabaseTableLock('storage_counters')
     try {
       const creationPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
-      await page.getByRole('button', { name: /Вырезать/ }).click()
+      await goToExport(page); await page.getByRole('button', { name: /Вырезать/ }).click()
       const creation = await creationPromise
       expect(creation.ok()).toBeTruthy()
       const id = (await creation.json()).id
@@ -102,7 +102,7 @@ test.describe('current core database contract', () => {
     const release = await holdDatabaseTableLock('jobs')
     try {
       const unavailable = page.waitForResponse(r => r.url().endsWith(`${api}/jobs`) && r.request().method() === 'POST')
-      await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
+      await goToExport(page); await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
       const response = await unavailable
       expect(response.status()).toBe(503)
       expect(await response.json()).toEqual({ error: { code: 'database_unavailable', message: 'Database is temporarily unavailable; try again' } })
@@ -112,9 +112,9 @@ test.describe('current core database contract', () => {
     await page.waitForTimeout(2200)
     expect(attempts).toHaveLength(1)
     await page.reload()
-    await expect(page.locator('.export-panel')).toBeVisible()
+    await goToExport(page); await expect(page.locator('.export-panel')).toBeVisible()
     const accepted = page.waitForResponse(r => r.url().endsWith(`${api}/jobs`) && r.request().method() === 'POST')
-    await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
+    await goToExport(page); await page.getByRole('button', { name: 'Вырезать фрагмент', exact: true }).click()
     const response = await accepted
     expect(response.status()).toBe(202)
     const created = await response.json()

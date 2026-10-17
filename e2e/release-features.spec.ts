@@ -126,7 +126,7 @@ test('default cleanup submits an explicit policy and preserves browser projects 
   const cleanup = page.getByRole('checkbox', { name: 'Delete source after export', exact: true }); await expect(cleanup).toBeChecked();
   await cleanup.uncheck(); await page.reload(); await showExportSettings(page); await expect(cleanup).not.toBeChecked(); await cleanup.check();
   await closeExportSettings(page);
-  await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
+  await goToExport(page); await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
   await expect.poll(() => state.submitted()?.cleanup_source).toBe(true);
   await expect(page.getByRole('link', { name: 'Download', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Download', exact: true })).toHaveAttribute('href', '/release-clip.mp4');
@@ -150,7 +150,7 @@ test('real square crop keeps selected audio and cleanup removes original media w
   await showExportSettings(page); await expect(page.getByRole('checkbox', { name: 'Delete source after export', exact: true })).toBeChecked();
   const accepted = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`${api}/jobs`));
   await closeExportSettings(page);
-  await page.getByRole('button', { name: 'Cut a clip', exact: true }).click(); const response = await accepted; expect(response.ok(), await response.text()).toBeTruthy();
+  await goToExport(page); await page.getByRole('button', { name: 'Cut a clip', exact: true }).click(); const response = await accepted; expect(response.ok(), await response.text()).toBeTruthy();
   const submitted = response.request().postDataJSON(); expect(submitted.cleanup_source).toBe(true); expect(submitted.audio_track).toBe(1); expect(submitted.crop).toMatchObject({ width: .5625, height: 1 });
   const job = await waitJob(page.request, (await response.json()).id); expect(job.status, JSON.stringify(job)).toBe('succeeded');
   const artifact = job.items[0].artifact; const probe = await probeDownloadedFile(page.request, artifact.download_url, 'square-crop.mp4', testInfo);
