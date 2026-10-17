@@ -79,13 +79,14 @@ export async function goToMoment(page: Page) {
 }
 
 export async function goToExport(page: Page) {
+  if (await page.locator('.workspace-export-dialog').isVisible() && !await page.locator('.export-settings-dialog').isVisible()) return
   await closeWorkspaceDialogs(page)
   if (await unifiedWorkspace(page) || await page.locator('.export-panel').isVisible()) {
+    const files = page.getByRole('tab', { name: /^(Готовые файлы|Ready files)$/ })
+    if (await files.isVisible() && await files.isEnabled()) await files.click()
     const review = page.locator('.workspace-export-toggle')
     if (await review.isVisible()) await review.click()
     await expect(page.locator('.export-panel').first()).toBeVisible()
-    const files = page.getByRole('tab', { name: /^(Готовые файлы|Ready files)$/ })
-    if (!await review.isVisible() && await files.isVisible() && await files.isEnabled()) await files.click()
     return
   } else {
     const downloads = page.getByRole('button', { name: /^(Вернуться к скачиванию|Return to downloads)$/ })

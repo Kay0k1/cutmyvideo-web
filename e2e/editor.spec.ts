@@ -45,7 +45,7 @@ test('real editor supports exact multiple ranges, preview, reload and export', a
 
   await goToExport(page)
   const createResponse = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
-  await page.getByRole('button', { name: /Вырезать/ }).click()
+  await goToExport(page); await page.getByRole('button', { name: /Вырезать/ }).click()
   const response = await createResponse
   expect(response.ok()).toBeTruthy()
   expect(response.request().postDataJSON().ranges.map((range: any) => [range.start_ms, range.end_ms])).toEqual([[1250, 3750], [6000, 8500]])
@@ -90,7 +90,7 @@ test('range handles support keyboard and invalid time input can be corrected', a
   await expect(handle).toHaveAttribute('aria-valuenow', '2000')
   await expect(exportButton).toBeEnabled()
   await goToExport(page)
-  await expect(page.getByRole('button', { name: /Вырезать/ })).toBeEnabled()
+  await goToExport(page); await expect(page.getByRole('button', { name: /Вырезать/ })).toBeEnabled()
 })
 
 test('replacing a source resets selections belonging to the old video', async ({ page }) => {
@@ -175,7 +175,7 @@ test('a real three-hour source supports a precise middle selection and export', 
   expect(selected!.width / track!.width).toBeLessThan(0.6)
   await goToExport(page)
   const responsePromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
-  await page.getByRole('button', { name: /Вырезать/ }).click()
+  await goToExport(page); await page.getByRole('button', { name: /Вырезать/ }).click()
   const creation = await responsePromise
   expect(creation.ok()).toBeTruthy()
   const job = await waitJob(page.request, (await creation.json()).id)

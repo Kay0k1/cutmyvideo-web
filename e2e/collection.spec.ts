@@ -1,3 +1,4 @@
+import { goToExport } from './helpers';
 import { expect, test, type Page } from '@playwright/test'
 import { addClip, api, assertFirstFrameMatchesSource, chooseOption, goToClips, probeDownloadedFile, saveClip, showExactTimes, showExportSettings, uploadThroughUI, waitJob } from './helpers'
 
@@ -49,7 +50,7 @@ test('the export contains only checked clips in source-list order after language
   await page.keyboard.press('Escape')
   await expect(page.locator('dialog.export-settings-dialog')).not.toBeVisible()
   const created = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`${api}/jobs`))
-  await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
+  await goToExport(page); await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
   const response = await created
   expect(response.ok(), await response.text()).toBeTruthy()
   const submitted = response.request().postDataJSON()

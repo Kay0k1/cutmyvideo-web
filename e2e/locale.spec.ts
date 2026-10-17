@@ -61,7 +61,7 @@ test('language switching preserves the real source, ranges and export', async ({
   await expect(page.getByRole('checkbox', { name: 'Delete source after export', exact: true })).not.toBeChecked()
   await closeExportSettings(page)
   const creationPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
-  await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
+  await goToExport(page); await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
   const creation = await creationPromise
   expect(creation.ok()).toBeTruthy()
   const id = (await creation.json()).id
@@ -187,7 +187,7 @@ test('a real failed audio export explains the cause in both languages and can re
   await page.getByRole('button', { name: 'MP3 Audio', exact: true }).click()
   await closeExportSettings(page)
   const creationPromise = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST')
-  await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
+  await goToExport(page); await page.getByRole('button', { name: 'Cut a clip', exact: true }).click()
   const creation = await creationPromise
   expect(creation.ok()).toBeTruthy()
   const job = await waitJob(page.request, (await creation.json()).id)

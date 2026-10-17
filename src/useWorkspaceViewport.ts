@@ -24,7 +24,9 @@ export function useWorkspaceViewport(active: boolean) {
       if (document.hidden || (viewport && Math.abs(viewport.scale - 1) > 0.01)) return;
       const shell = document.querySelector<HTMLElement>('.workspace-shell:not(.collection-shell)');
       // Large text must reflow rather than clip controls in a fixed canvas.
-      shell?.classList.toggle('workspace-reflow', parseFloat(getComputedStyle(shell).fontSize) >= 24);
+      const navigation = document.querySelector<HTMLElement>('.window-player-position');
+      shell?.classList.toggle('workspace-reflow', parseFloat(getComputedStyle(shell).fontSize) >= 24
+        || !!navigation && parseFloat(getComputedStyle(navigation).fontSize) >= 24);
       const height = Math.min(window.innerHeight, viewport?.height ?? window.innerHeight);
       if (height > 0) style.setProperty('--workspace-height', `${Math.floor(height)}px`);
     };
@@ -33,6 +35,10 @@ export function useWorkspaceViewport(active: boolean) {
     const observer = new ResizeObserver(schedule);
     const controls = document.querySelector('.moment-controls');
     if (controls) observer.observe(controls);
+    const preview = document.querySelector('.player-frame');
+    if (preview) observer.observe(preview);
+    const navigation = document.querySelector('.window-player-navigation');
+    if (navigation) observer.observe(navigation);
     window.addEventListener('resize', schedule);
     window.addEventListener('pageshow', schedule);
     document.addEventListener('visibilitychange', schedule);

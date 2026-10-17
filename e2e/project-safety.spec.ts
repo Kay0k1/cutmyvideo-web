@@ -27,7 +27,7 @@ async function closeExportSettings(page: Page) {
 async function submitClip(page: Page) {
   await closeExportSettings(page);
   await goToExport(page);
-  await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
+  await goToExport(page); await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
 }
 async function openProjects(page: Page) { await closeExportSettings(page); await goToSource(page); await page.getByRole('button', { name: 'My projects', exact: true }).click(); }
 async function deleteClip(page: Page, index: number) {
@@ -118,12 +118,12 @@ test('retry identity is written to the project before POST and restored after na
     await route.fulfill({ status: 503, json: { error: { code: 'database_unavailable', message: 'Unknown acceptance' } } });
   });
   await page.goto('/?lang=en'); await goToExport(page); await submitClip(page); await expect.poll(() => keys.length).toBe(1); await expect.poll(() => checkedPreflight).toBe(true);
-  await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled();
+  await goToExport(page); await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled();
   await openProjects(page); await page.getByRole('button', { name: 'Open project “B.mp4”', exact: true }).click();
   await expect(page.locator('.source-title')).toContainText('B.mp4');
   await openProjects(page); await page.getByRole('button', { name: 'Open project “A.mp4”', exact: true }).click();
   await expect(page.locator('.source-title')).toContainText('A.mp4'); await goToExport(page);
-  await submitClip(page); await expect.poll(() => keys.length).toBe(2); expect(keys[1]).toBe(keys[0]); await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled();
+  await submitClip(page); await expect.poll(() => keys.length).toBe(2); expect(keys[1]).toBe(keys[0]); await goToExport(page); await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled();
   await page.reload(); await goToExport(page); await submitClip(page); await expect.poll(() => keys.length).toBe(3); expect(keys[2]).toBe(keys[0]);
 });
 
@@ -140,7 +140,7 @@ test('an upgraded 0.3 lost acknowledgement keeps its exact request and key witho
     await route.fulfill({ status: 503, json: { error: { code: 'database_unavailable', message: 'Unknown acceptance' } } });
   });
   await page.goto('/?lang=en'); await showExportSettings(page); await expect(page.getByRole('checkbox', { name: 'Delete source after export', exact: true })).not.toBeChecked();
-  await submitClip(page); await expect.poll(() => keys.length).toBe(1); await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled();
+  await submitClip(page); await expect.poll(() => keys.length).toBe(1); await goToExport(page); await expect(page.getByRole('button', { name: 'Cut a clip', exact: true })).toBeEnabled();
   expect(keys[0]).toBe('legacy-ack-key'); expect(bodies[0]).toBe(body);
   await goToSource(page); await openOther(page); await expect(page.locator('.source-title')).toContainText('C.mp4'); await showExportSettings(page); await expect(page.getByRole('checkbox', { name: 'Delete source after export', exact: true })).toBeChecked();
   await openProjects(page); await page.getByRole('button', { name: 'Open project “A.mp4”', exact: true }).click(); await goToExport(page); await submitClip(page); await expect.poll(() => keys.length).toBe(2);

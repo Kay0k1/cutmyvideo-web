@@ -1,3 +1,4 @@
+import { goToExport } from './helpers';
 import { execFileSync } from 'node:child_process'
 import { expect, test } from '@playwright/test'
 import { addClip, chooseOption, probeDownloadedFile, saveClip, showExactTimes, uploadThroughUI, waitJob, showExportSettings, closeExportSettings } from './helpers'
@@ -31,7 +32,7 @@ test('real joined MKV keeps selected audio and rebased subtitles; separate no-so
   await expect(cleanup).not.toBeChecked()
   await closeExportSettings(page)
   const accepted = page.waitForResponse(response => response.url().endsWith('/api/v1/jobs') && response.request().method() === 'POST')
-  await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
+  await goToExport(page); await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
   const response = await accepted
   expect(response.ok(), await response.text()).toBeTruthy()
   const created = await response.json()
@@ -70,7 +71,7 @@ test('real joined MKV keeps selected audio and rebased subtitles; separate no-so
   await chooseOption(page, page.locator('#audio-track-export'), 'No sound')
   await closeExportSettings(page)
   const silentAccepted = page.waitForResponse(response => response.url().endsWith('/api/v1/jobs') && response.request().method() === 'POST')
-  await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
+  await goToExport(page); await page.getByRole('button', { name: 'Cut clips', exact: true }).click()
   const silentResponse = await silentAccepted
   expect(silentResponse.ok(), await silentResponse.text()).toBeTruthy()
   const silent = await waitJob(page.request, (await silentResponse.json()).id)

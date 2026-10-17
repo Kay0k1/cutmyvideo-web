@@ -116,7 +116,7 @@ test('a project restores completed exports after its source media is removed', a
   } finally { release(); }
   await navigate;
   await expect(page.locator('.source-chooser')).toBeVisible();
-  await goToExport(page); await expect(page.locator('.export-panel')).toBeVisible();
+  await goToExport(page); await goToExport(page); await expect(page.locator('.export-panel')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toHaveAttribute('href', '/completed-A-clip.mp4');
   const download = page.waitForEvent('download'); await page.getByRole('link', { name: 'Скачать', exact: true }).click(); await expect((await download).suggestedFilename()).toBe('A-clip.mp4');
   await goToSource(page); await expect(page.locator('.draft-recovery')).toContainText('A clip'); await page.reload();

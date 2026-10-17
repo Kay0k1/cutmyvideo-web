@@ -173,7 +173,7 @@ test('a source expiring during export offers recovery immediately without losing
   await page.route(`**${api}/jobs`, route => route.request().method() === 'POST'
     ? route.fulfill({ status: 404, json: { error: { code: 'not_found', message: 'Source expired while editing' } } }) : route.fallback());
   await goToExport(page);
-  await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
+  await goToExport(page); await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Clips saved', exact: true })).toBeVisible();
   await expect(page.locator('.draft-recovery')).toContainText('00:00:01.125 — 00:00:03.875');
   await page.getByRole('checkbox', { name: 'Restore saved clips in the video you open', exact: true }).check();
@@ -305,7 +305,7 @@ test('a real upload keeps precise boundaries from audition through decoded downl
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(3.875, 2);
     await goToExport(page);
     const created = page.waitForResponse(response => response.url().endsWith(`${api}/jobs`) && response.request().method() === 'POST');
-    await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
+    await goToExport(page); await page.getByRole('button', { name: 'Cut a clip', exact: true }).click();
     const exported = await created;
     expect(exported.ok(), await exported.text()).toBeTruthy();
     expect(exported.request().postDataJSON().ranges).toEqual([{ start_ms: 1225, end_ms: 3875, label: '' }]);

@@ -25,7 +25,7 @@ async function prepare(page: Page, saved: Record<string, unknown> = {}, beforeOp
     localStorage.setItem('cutmy.workbench.v1', JSON.stringify({ workflow_version: 2, source_id: source.id, source_title: source.title, source_duration_ms: source.duration_ms, ranges: cuts, selected_id: cuts[0].id, selected_range_ids: cuts.map(range => range.id), output: { format: 'mp4', quality: '720p', cut_mode: 'accurate' }, step: 2, ...saved }));
     localStorage.setItem('efficient-seeded', 'yes');
   }, { source, cuts, saved });
-  await page.goto('/'); await expect(page.locator('.export-panel').first()).toBeVisible();
+  await page.goto('/'); await expect(page.locator('.editor-workspace')).toBeVisible();
   return { previewQueries };
 }
 
@@ -168,7 +168,7 @@ for (const loseResponse of [false, true]) test(`selective retry retains earlier 
   await goToSource(page);
   await page.getByRole('button', { name: 'Мои проекты', exact: true }).click();
   await page.getByRole('button', { name: 'Открыть проект «Long recording.mp4»', exact: true }).click();
-  await expect(page.locator('.export-panel').first()).toBeVisible();
+  await expect(page.locator('.editor-workspace')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toHaveCount(3);
   await expect(all).toHaveAttribute('href', '/api/v1/jobs/retry-job/download.zip?artifact_id=ready-original&artifact_id=retry-0&artifact_id=retry-1');
 });
