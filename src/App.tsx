@@ -670,6 +670,7 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
   }, [workspaceVisible]);
 
   useEffect(() => { if (job) setExportOpen(false); }, [job?.id]);
+  useEffect(() => { if (jobError && workspaceVisible) setExportOpen(true); }, [jobError, workspaceVisible]);
 
   useEffect(() => { document.title = `${workspaceVisible ? source?.title : t(step === 4 ? 'Сохраните фрагменты' : 'Откройте видео')} · cutmyvideo`; }, [workspaceVisible, source?.title, step, locale]);
 

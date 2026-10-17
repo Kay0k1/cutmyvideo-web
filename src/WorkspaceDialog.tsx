@@ -27,6 +27,7 @@ export function WorkspaceDialog({ open, onClose, title, children, className = ''
     // Export is an inspector: outside actions dismiss it, while its nested
     // settings dialog still owns modal focus and Escape handling.
     const outside = (event: PointerEvent) => {
+      if (dialog.current?.querySelector('dialog[open]')) return;
       if (event.target instanceof Node && !dialog.current?.contains(event.target)) onClose();
     };
     const escape = (event: KeyboardEvent) => {

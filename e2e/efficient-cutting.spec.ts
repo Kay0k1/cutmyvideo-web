@@ -168,7 +168,7 @@ for (const loseResponse of [false, true]) test(`selective retry retains earlier 
   await goToSource(page);
   await page.getByRole('button', { name: 'Мои проекты', exact: true }).click();
   await page.getByRole('button', { name: 'Открыть проект «Long recording.mp4»', exact: true }).click();
-  await expect(page.locator('.editor-workspace')).toBeVisible();
+  await expect(page.locator('.export-panel').first()).toBeVisible();
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toHaveCount(3);
   await expect(all).toHaveAttribute('href', '/api/v1/jobs/retry-job/download.zip?artifact_id=ready-original&artifact_id=retry-0&artifact_id=retry-1');
 });
