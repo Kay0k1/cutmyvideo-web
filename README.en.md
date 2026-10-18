@@ -7,6 +7,8 @@
 
 The [cutmy.video](https://cutmy.video) product browser interface for selecting moments from video and exporting MP4/MP3 and MKV in copy mode. Accepts uploaded files and accessible public links. The interface source is open under the MIT license. Media processing, the HTTP API and persistent job queue live in the open-source MIT [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
 
+The core **1.5.0** integration provides silence analysis with editable plans, loudness measurement and normalization, output dimensions with canvas padding, CSV/FFmetadata chapter interchange, scene-change and black-interval detection, and separate audio replacement with an explicit offset through Go, CLI, HTTP API and Python/TypeScript SDKs. These tools are invoked programmatically; the manual browser controls are described below. [Core examples and limits](https://github.com/Kay0k1/cutmyvideo-core/blob/v1.5.0/docs/media-analysis-and-rendering.md) · [Integration gates and database upgrade](docs/QA.md#core-150-integration).
+
 [Usage](#usage) · [Collections](#collections-and-agent-review) · [Local development](#local-development) · [Checks](#checks) · [Deployment](#deployment) · [Contributing](#contributing-and-license)
 
 ## Usage
@@ -112,7 +114,7 @@ npm run test:e2e -- --project=desktop --project=mobile
 
 CI runs unit/build/deployment checks and the complete npm dependency audit, tests PostgreSQL privileges against the actual core, then verifies integration/usability in Chromium/Firefox on Linux and WebKit on macOS. [core.version](core.version) pins the backend; dependencies and images are pinned. CI saves a distributable website build. Linux WebKit has a known GTK/GStreamer seeking instability; the complete CI media matrix runs on macOS. Additional network providers and the three-hour fixture are opt-in. See [QA](docs/QA.md) for evidence and limitations.
 
-The core revision is pinned in [core.version](core.version). The production image records that revision’s version, commit and build time.
+The core 1.5.0 revision is pinned in [core.version](core.version). The production image records that revision’s version, commit and build time.
 
 ## Deployment
 

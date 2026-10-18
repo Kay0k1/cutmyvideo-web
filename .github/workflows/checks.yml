@@ -78,6 +78,12 @@ jobs:
           repository: Kay0k1/cutmyvideo-core
           ref: e4a0477b727ccfbbf21f86027fdd07f6ffe78419
           path: core-schema007
+      - name: Check out the immutable schema008 recovery target
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: Kay0k1/cutmyvideo-core
+          ref: 106d0d2d7887540768cc21e3bd4e2c71629af6c4
+          path: core-schema008
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.27.2'
@@ -88,6 +94,15 @@ jobs:
       - name: Build the actual schema007 recovery command
         working-directory: core-schema007
         run: CGO_ENABLED=0 go build -trimpath -o /tmp/cutmy-schema007-core ./cmd/cutmy
+      - name: Build the exact 1.4.2 schema008 recovery command
+        working-directory: core-schema008
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 106d0d2d7887540768cc21e3bd4e2c71629af6c4
+          built=$(TZ=UTC git show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd HEAD)
+          CGO_ENABLED=0 go build -trimpath \
+            -ldflags "-s -w -X main.version=v1.4.2 -X main.commit=106d0d2d7887540768cc21e3bd4e2c71629af6c4 -X main.buildTime=$built" \
+            -o /tmp/cutmy-schema008-core ./cmd/cutmy
       - name: Verify database privileges and migrations in isolated PostgreSQL
         working-directory: web
         run: |
@@ -109,8 +124,13 @@ jobs:
           CUTMY_DATABASE_TEST_CORE_BINARY=/tmp/cutmy-role-core \
             python3 -m unittest discover -s deploy -p 'database_access_test.py'
           sudo python3 deploy/deployment_restore_drill.py \
+            --core-dir "$GITHUB_WORKSPACE/core-schema008" \
+            --old-binary /tmp/cutmy-schema007-core --new-binary /tmp/cutmy-schema008-core
+          sudo python3 deploy/deployment_external_audio_drill.py \
             --core-dir "$GITHUB_WORKSPACE/core" \
-            --old-binary /tmp/cutmy-schema007-core --new-binary /tmp/cutmy-role-core
+            --old-binary /tmp/cutmy-schema008-core \
+            --old-binary-sha256 "$(sha256sum /tmp/cutmy-schema008-core | cut -d ' ' -f 1)" \
+            --new-binary /tmp/cutmy-role-core
 
   integration:
     needs: scope
@@ -122,7 +142,7 @@ jobs:
       matrix:
         project: [desktop, mobile, layout-chromium, layout-firefox, usability-chromium, usability-firefox]
     container:
-      image: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
+      image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf
       options: --init --ipc=host
     defaults:
       run:

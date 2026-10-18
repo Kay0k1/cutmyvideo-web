@@ -4,7 +4,15 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+Integrates core 1.5.0. Its Go, CLI, HTTP and Python/TypeScript SDK interfaces add
+silence analysis with editable cutting plans, loudness analysis/normalization,
+canvas padding, CSV/FFmetadata interchange, scene/black-interval analysis and
+separate audio replacement with a timeline offset. These are programmatic
+tools; this integration adds no browser controls for them.
+
 ### Changed
+- Qualify coordinated schema 008 → 009 → 008 database/media recovery with the exact 1.4.2 rollback binary, alongside the preserved 007 → 008 → 007 drill. Require the final core pin and complete browser matrix before activation.
+- Update React/React DOM to 19.3.1 and Playwright to 1.64.1; match the browser package with its immutable Noble CI image. The Playwright patch fixes registered-route cross-origin redirects in current Chromium.
 - Frontend development and tests require Node.js 22.12 or later for Vitest 5. Playwright 1.64 uses the matching pinned browser image, and Node type definitions stay on the Node 22 runtime line.
 - Desktop editing uses a window-sized canvas with a flexible video area and a shared trim dock. Export opens from the top toolbar; secondary media and crop controls no longer expand the editing canvas. Safari tab restoration retains the visible viewport, while phones and enlarged text keep normal reflow. Saved drafts, both languages and the pinned core are compatible.
 

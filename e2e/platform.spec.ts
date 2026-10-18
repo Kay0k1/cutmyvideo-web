@@ -609,9 +609,20 @@ for (const mode of ['promote', 'replace', 'slow-cover'] as const) test(`window p
   const clock = await video.evaluate((el: HTMLVideoElement) => el.currentTime)
   await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeGreaterThan(clock + 0.05)
   await video.evaluate((el: HTMLVideoElement) => el.pause())
+  // Exercise a fractional-millisecond clock just below a 100 ms half-step.
+  // Wait for the real seek and its rendered time update before sampling it.
+  await video.evaluate((el: HTMLVideoElement) => new Promise<void>(resolve => {
+    const settled = () => requestAnimationFrame(() => resolve())
+    if (el.currentTime === 2.149922 && !el.seeking) { settled(); return }
+    el.addEventListener('seeked', settled, { once: true })
+    el.currentTime = 2.149922
+  }))
   const intervalStart = mode !== 'replace' ? 6000 : 28800000
   const actualPosition = intervalStart + await video.evaluate((el: HTMLVideoElement) => el.currentTime) * 1000
-  expect(Number(await seek.inputValue())).toBeCloseTo(actualPosition, -2)
+  // The player publishes integer milliseconds; the native range then chooses
+  // its nearest 100 ms tick, including the valid tie at exactly half a step.
+  const expectedTick = Math.round(Math.round(actualPosition) / 100) * 100
+  await expect(seek).toHaveValue(String(expectedTick))
   // The replaced response arrives after foreground playback progressed. It
   // cannot move the playhead back or replace the displayed rendition.
   releaseBackground!()

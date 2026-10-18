@@ -149,7 +149,29 @@ core and product commits. Set `CUTMY_SSH_TARGET`, `CUTMY_SSH_KEY`, and optionall
 `CUTMY_CORE_DIR`; it does not need GitHub credentials on the server.
 The core checkout must match `core.version`, the revision verified by product CI.
 
-### Core 1.4.1 resource lifecycle — 2026-10-16
+### Core 1.5.0 activation
+
+The immutable `core.version` pin and Compose `VCS_REF` are
+`ca334380ef6f8a8aa9e336b2817eb183501528b6`. Image metadata uses `v1.5.0` and
+the genuine UTC commit time `2026-10-18T00:22:14Z`. Require the final website
+ref's complete 12 Product checks, including all
+eight browser projects and both recovery profiles, plus the signed core release
+and all five signed native consumers. [Current release QA](QA.md#core-150-integration)
+defines the release and post-activation evidence.
+
+The analysis, loudness, canvas, interchange and separate-recording tools are
+available through the core's Go/CLI/API/SDK interfaces. Analysis reads local
+media within explicit budgets; a suggested silence plan remains editable until
+an export is requested. No additional Compose setting enables these tools.
+Existing worker concurrency and storage limits remain authoritative.
+
+Migration 009 adds external recording references. A 1.4.2 image cannot open the
+upgraded database. Retain the private coordinated pre-activation database/media
+packet and previous configuration until production verification is complete;
+an image switch alone is not a rollback. The public-write boundary below applies
+to this release as well.
+
+### Historical Core 1.4.1 resource lifecycle — 2026-10-16
 
 The 0.6.1 update uses request-scoped source inspection and bounded tool
 checks for local, ready collection sources. Every pending clip is checked
@@ -193,8 +215,9 @@ snapshot and public-write boundary below still apply.
 
 ### Current activation: coordinated schema and media recovery
 
-Core 1.4 adds ordered migration 008. A 1.3 binary refuses a database containing
-that migration, so selecting its image alone cannot recover a failed upgrade.
+Core 1.5 adds ordered migration 009; a 1.4.2 binary refuses it. The earlier 1.4
+migration 008 is likewise incompatible with 1.3. Selecting an older image alone
+cannot recover a schema upgrade.
 Activation now builds the new images while the old service is running, then
 holds `deployment.lock` and stops the edge, API and worker before capturing a
 coordinated database/media snapshot. The database container stays available for
@@ -240,7 +263,7 @@ statically built old/new binaries, for example:
 
 ```sh
 sudo python3 deploy/deployment_restore_drill.py \
-  --core-dir /path/to/core \
+  --core-dir /path/to/core-1.4.2 \
   --old-binary /path/to/schema007-cutmy --new-binary /path/to/schema008-cutmy
 ```
 
@@ -249,6 +272,33 @@ unchanged volume identities; a corrupt packet must fail before changing live dat
 drill uses only its own labelled containers and volumes, and never pulls an image
 implicitly. The activation checks separately cover stopped writers, the order of
 snapshot and migration, and the public-write boundary.
+
+Core 1.5 adds migration 009 for separate audio recordings. Core 1.4.2 refuses
+that schema, so its rollback also requires the coordinated database/media
+snapshot. Product CI retains the historical drill above with an actual schema
+008 binary and additionally requires `deployment_external_audio_drill.py` for
+008 → 009 → 008. The latter checks all prior rows, projects and grants, the
+complete schema catalog, recording references, media bytes/ownership and volume
+identities. A corrupt snapshot must fail before any live data changes.
+
+The previous binary must be built from immutable core
+`106d0d2d7887540768cc21e3bd4e2c71629af6c4` using Go 1.27.2, with version
+`v1.4.2`, that commit and its genuine UTC build time
+`2026-10-17T21:57:14Z`. The new binary and migration sources must come from the
+candidate core pin. Supply the verified previous binary's SHA256 explicitly:
+
+```sh
+sudo python3 deploy/deployment_external_audio_drill.py \
+  --core-dir /path/to/core-1.5 \
+  --old-binary /path/to/schema008-cutmy \
+  --old-binary-sha256 VERIFIED_PREVIOUS_BINARY_SHA256 \
+  --new-binary /path/to/schema009-cutmy
+```
+
+Both drills create and remove only their own labelled, network-isolated
+PostgreSQL containers and named volumes. They do not connect to production or
+qualify an activation by themselves; the stopped-writer and public-write
+boundary checks remain mandatory.
 
 ### Earlier migrations
 
