@@ -17,6 +17,35 @@ Link / MP4 → Player + trim rail          → Video / audio + Cut
 
 The tokens remain intentional and consistent: light page #f4f6f5, white surface #ffffff, ink #203431, muted text #5c7067, action #35645b and amber trim #eac389. Dark appearance uses page #18201f, surface #222c29, ink #e7eeea, muted text #a4b7ac and action #a8cbb9. Self-hosted Geologica Variable covers Cyrillic and Latin; restrained weights explain hierarchy, and timecodes use tabular numerals. Core text uses relative font units; supporting copy generally starts at14px, with16px text inputs to preserve comfortable phone editing. No new typeface, decorative hero or unrelated illustration is introduced.
 
+## Optional helpers in 0.7.0
+
+The primary editor retains its existing open, trim and export controls. Three
+collapsed rows inside Tools hold pauses, visual transitions and cut-list
+exchange. Export settings has one collapsed More: sound and size row with
+three subordinate sections. Active export enhancements remain listed outside
+these disclosures, with a clear note that the player remains the original.
+
+The current light palette uses page #f2f4f7, surface #ffffff, ink #202832,
+muted #5d6977 and action #08736c. Existing dark tokens and self-hosted Geologica
+remain authoritative; no extra palette, font, panel or motion system is added.
+Quiet divider rows express the helper hierarchy. Native disclosures, 44px
+controls, wrapping layouts and ordinary dialog scrolling work on phones.
+
+Analysis describes the exact selected source window. It proposes editable cuts;
+append preserves current selection and replace requires confirmation. Both are
+one undoable edit. Seeking closes the dialog so the user can inspect the video.
+Closing restores keyboard focus to the opener. Errors and compatibility actions
+appear beside the affected tool, including when the dialog has been scrolled.
+
+Output-only adjustments never silently rewrite the format. A single nearby
+compatibility action explains and applies the required settings. Audio source
+references survive only in their project, and pending work cannot cross a
+source or project change. Closing cancels analysis/uploads; completed owned
+uploads remain discoverable in server files. Missing audio offers reconnection
+without deleting the primary recording or its edits. Known export requests can
+be recovered with their original identity even if a secondary file later expires.
+Source-clock CSV/chapters and output-clock chapters use distinct labels.
+
 ## Selection and state
 
 A checkbox means that a clip is included in export. Editing a clip and opening Clip list do not change export selection. Continue to download explicitly includes the moment being edited while preserving other checked clips. Select all reflects the actual checked subset; duplicate and delete act on that subset. Added and duplicated clips receive new IDs and respect the server's twelve-range limit. An empty list offers Add clip and prevents export with a clear reason.

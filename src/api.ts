@@ -1,4 +1,4 @@
-import type { Job, Source, ClipRange, OutputSettings, UploadProgress, SessionResponse, JobSummary, MediaTrack } from './types';
+import type { Job, Source, ClipRange, OutputSettings, UploadProgress, SessionResponse, JobSummary, MediaTrack, AnalysisOptions, SilenceOptions, VideoAnalysisOptions, SilenceAnalysis, VideoAnalysis, LoudnessAnalysis, CutList, CutListFormat, CutListText, Artifact } from './types';
 
 const base = '/api/v1';
 
@@ -108,6 +108,9 @@ export function jobRequestBody(source_id: string, ranges: ClipRange[], output: O
     ...(output.no_audio ? { no_audio: true } : {}),
     ...(output.subtitle_mode === 'preserve' ? { subtitle_mode: 'preserve' } : {}),
     ...(output.crop ? { crop: { x: output.crop.x, y: output.crop.y, width: output.crop.width, height: output.crop.height } } : {}),
+    ...(output.audio_normalize ? { audio_normalize: { integrated_lufs: output.audio_normalize.integrated_lufs, true_peak_dbtp: output.audio_normalize.true_peak_dbtp, loudness_range_lu: output.audio_normalize.loudness_range_lu } } : {}),
+    ...(output.canvas ? { canvas: { width: output.canvas.width, height: output.canvas.height, fit: output.canvas.fit, background: output.canvas.background } } : {}),
+    ...(output.audio_replace ? { audio_replace: { source_id: output.audio_replace.source_id, ...(output.audio_replace.audio_track !== undefined ? { audio_track: output.audio_replace.audio_track } : {}), ...(output.audio_replace.offset_ms !== undefined ? { offset_ms: output.audio_replace.offset_ms } : {}) } } : {}),
     ...(output.cleanup_source !== false ? { cleanup_source: true } : {}) });
 }
 
@@ -122,6 +125,12 @@ export const api = {
   }, 123 * 60 * 1000),
   upload,
   deleteSource: (id: string) => request<void>(`/sources/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  analyzeSilence: (id: string, options: SilenceOptions, signal?: AbortSignal) => request<SilenceAnalysis>(`/sources/${encodeURIComponent(id)}/analysis/silence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(options), signal }, 125000),
+  analyzeVideo: (id: string, options: VideoAnalysisOptions, signal?: AbortSignal) => request<VideoAnalysis>(`/sources/${encodeURIComponent(id)}/analysis/video`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(options), signal }, 125000),
+  analyzeLoudness: (id: string, options: AnalysisOptions, signal?: AbortSignal) => request<LoudnessAnalysis>(`/sources/${encodeURIComponent(id)}/analysis/loudness`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(options), signal }, 125000),
+  importCutList: (format: CutListFormat, text: string, signal?: AbortSignal) => request<CutList>('/cut-lists/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ format, text }), signal }),
+  exportCutList: (format: CutListFormat, cut_list: CutList, signal?: AbortSignal) => request<CutListText>('/cut-lists/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ format, cut_list }), signal }),
+  exportChapters: (segments: NonNullable<Artifact['segments']>, signal?: AbortSignal) => request<CutListText>('/cut-lists/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ format: 'ffmetadata', segments }), signal }),
   createJob: async (source_id: string, ranges: ClipRange[], output: OutputSettings, key: string): Promise<Job> => {
     const options = {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
@@ -165,6 +174,11 @@ export function errorMessage(error: unknown, action: 'source' | 'source-create' 
     return `${message} ${retry}`;
   }
   const messages: Record<string, string> = {
+    local_source_required: 'Для анализа загрузите запись файлом. Ссылки на площадки не анализируются.',
+    invalid_analysis: 'Выберите участок внутри записи длительностью до 30 минут.',
+    invalid_cut_list: 'Не удалось преобразовать список фрагментов. Проверьте формат и границы.',
+    output_limit: 'Анализ достиг ограничения. Выберите более короткий участок.',
+    tool_unavailable: 'Инструмент обработки временно недоступен. Попробуйте позже.',
     connection: 'Сервер не ответил. Попробуйте ещё раз.',
     not_ready: 'Сервис запускается. Попробуйте подключиться через минуту.',
     origin_rejected: 'Откройте инструмент на cutmy.video и повторите действие.',

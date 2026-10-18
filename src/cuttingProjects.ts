@@ -60,10 +60,10 @@ export function sourceMismatch(draft: Record<string, unknown>, source: Source): 
   return true;
 }
 
-export interface CuttingPlan { version: 1; input: string; ranges: { label: string; start_ms: number; end_ms: number }[]; options: Omit<OutputSettings, 'output_mode' | 'cleanup_source'>; output_mode?: 'separate' | 'joined'; }
+export interface CuttingPlan { version: 1; input: string; ranges: { label: string; start_ms: number; end_ms: number }[]; options: Omit<OutputSettings, 'output_mode' | 'cleanup_source' | 'audio_replace'>; output_mode?: 'separate' | 'joined'; }
 /** The local engine's strict v1 schema: no resource IDs, URLs or credentials. */
 export function exportCuttingPlan(title: string, ranges: ClipRange[], output: OutputSettings): CuttingPlan {
-  const { output_mode, cleanup_source: _cleanup, ...options } = output;
+  const { output_mode, cleanup_source: _cleanup, audio_replace: _replacement, ...options } = output;
   const input = (/^https?:/i.test(title) ? 'video.mp4' : title).split(/[\\/]/).at(-1)?.replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 500) || 'video.mp4';
   return { version: 1, input, ranges: ranges.map(({ label, start_ms, end_ms }) => ({ label, start_ms, end_ms })), options, ...(output_mode ? { output_mode } : {}) };
 }
@@ -74,6 +74,7 @@ export function importCuttingPlan(raw: string, duration: number, createID: () =>
   try { plan = JSON.parse(raw); } catch { throw new Error('Не удалось прочитать JSON-план.'); }
   if (!plan || typeof plan !== 'object' || Array.isArray(plan) || plan.version !== 1 || !safeText(plan.input) || !plan.input || !Array.isArray(plan.ranges) || !plan.ranges.length || plan.ranges.length > maxClientRanges) throw new Error('Некорректный план нарезки версии 1.');
   const options = plan.options && typeof plan.options === 'object' && !Array.isArray(plan.options) ? plan.options as Record<string, unknown> : {};
+  if (Object.prototype.hasOwnProperty.call(options, 'audio_replace')) throw new Error('Подключите внешний звук после открытия плана. Файлы и ссылки на сервере не переносятся между проектами.');
   const output = readOutputSettings({ format: 'mp4', quality: 'best', cut_mode: 'accurate', ...options, ...(plan.output_mode !== undefined ? { output_mode: plan.output_mode } : {}) });
   if (!output) throw new Error('В плане указаны неподдерживаемые настройки экспорта.');
   const candidate = plan.ranges.map(item => item && typeof item === 'object' ? { ...(item as object), id: createID() } : item);

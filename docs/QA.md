@@ -6,9 +6,11 @@ The six new core capabilities are available through Go, CLI, HTTP and the
 Python/TypeScript SDKs: silence analysis with editable plans, loudness analysis
 and normalization, canvas padding, CSV/FFmetadata interchange, scene-change and
 black-interval analysis, and separate recording replacement with an offset.
-This release's browser acceptance covers its existing manual editor and
-collection controls. See the [core examples and limits](https://github.com/Kay0k1/cutmyvideo-core/blob/v1.5.0/docs/media-analysis-and-rendering.md)
-for the programmatic workflows.
+Browser acceptance additionally covers the optional classic-editor helpers,
+explicit apply/undo, source-scoped audio, interchange clocks and actual rendered
+outputs in desktop/mobile and Chromium/Firefox/WebKit. Existing collection
+controls retain their established behavior. See the [core examples and limits](https://github.com/Kay0k1/cutmyvideo-core/blob/v1.5.0/docs/media-analysis-and-rendering.md)
+for the core workflows.
 
 The immutable core pin is `ca334380ef6f8a8aa9e336b2817eb183501528b6`, with tree
 `5ddccece0576288d819c79e2fdf06794eb09b956`. Production image metadata records

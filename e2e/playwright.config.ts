@@ -34,13 +34,13 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    { name: 'desktop', testMatch: /(?:agent-projects|timeline-section|unified-workspace|window-preview|efficient-cutting|project-safety|release-features|projects-history|cutting-ux|batch-media|batch-settings|acceptance|security|editor|locale|workflow|collection|controls|platform|recovery|core-contract|resources|usability-components)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1000 } } },
-    { name: 'mobile', testMatch: /(?:agent-projects|timeline-section|window-preview|efficient-cutting|project-safety|release-features|projects-history|cutting-ux|batch-settings|mobile|usability-components)\.spec\.ts/, use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } } },
+    { name: 'desktop', testMatch: /(?:media-tools|agent-projects|timeline-section|unified-workspace|window-preview|efficient-cutting|project-safety|release-features|projects-history|cutting-ux|batch-media|batch-settings|acceptance|security|editor|locale|workflow|collection|controls|platform|recovery|core-contract|resources|usability-components)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 1000 } } },
+    { name: 'mobile', testMatch: /(?:media-tools|agent-projects|timeline-section|window-preview|efficient-cutting|project-safety|release-features|projects-history|cutting-ux|batch-settings|mobile|usability-components)\.spec\.ts/, use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } } },
     { name: 'layout-chromium', testMatch: /layout\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
     { name: 'layout-firefox', testMatch: /layout\.spec\.ts/, use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 900 } } },
     { name: 'layout-webkit', testMatch: /layout\.spec\.ts/, use: { ...devices['Desktop Safari'], ...webkitLaunch, viewport: { width: 1440, height: 900 } } },
-    { name: 'usability-chromium', testMatch: /(?:editor-responsive|agent-projects|timeline-section|unified-workspace|project-safety|window-preview|efficient-cutting|usability)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
-    { name: 'usability-firefox', testMatch: /(?:editor-responsive|agent-projects|timeline-section|unified-workspace|project-safety|window-preview|efficient-cutting|usability)\.spec\.ts/, use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 900 } } },
-    { name: 'usability-webkit', testMatch: /(?:editor-responsive|agent-projects|timeline-section|unified-workspace|project-safety|window-preview|efficient-cutting|usability)\.spec\.ts/, use: { ...devices['Desktop Safari'], ...webkitLaunch, viewport: { width: 1440, height: 900 } } },
+    { name: 'usability-chromium', testMatch: /(?:media-tools|editor-responsive|agent-projects|timeline-section|unified-workspace|project-safety|window-preview|efficient-cutting|usability)\.spec\.ts/, use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
+    { name: 'usability-firefox', testMatch: /(?:media-tools|editor-responsive|agent-projects|timeline-section|unified-workspace|project-safety|window-preview|efficient-cutting|usability)\.spec\.ts/, use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 900 } } },
+    { name: 'usability-webkit', testMatch: /(?:media-tools|editor-responsive|agent-projects|timeline-section|unified-workspace|project-safety|window-preview|efficient-cutting|usability)\.spec\.ts/, use: { ...devices['Desktop Safari'], ...webkitLaunch, viewport: { width: 1440, height: 900 } } },
   ],
 })

@@ -43,6 +43,9 @@ import { defaultLimits, maxClientRanges, readPublicLimits } from './limits';
 import { SourceLibrary } from './SourceLibrary';
 import { JobLibrary } from './JobLibrary';
 import { WorkspaceDialog } from './WorkspaceDialog';
+import { AnalysisTools } from './AnalysisTools';
+import { ExportEnhancements } from './ExportEnhancements';
+import { activeEnhancementLabels, enhancementConflict } from './exportEnhancementModel';
 import { useDesktopWorkspace, useWorkspaceViewport } from './useWorkspaceViewport';
 import './Workspace.css';
 import './SourceScreen.css';
@@ -152,10 +155,15 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [editorToolsOpen, setEditorToolsOpen] = useState(false);
   const [advancedOutputOpen, setAdvancedOutputOpen] = useState(false);
+  const [enhancementStatus, setEnhancementStatus] = useState({ key: '', blocked: false });
   const [notice, setNotice] = useState('');
   const [projects, setProjects] = useState(readProjects);
   const projectStore = useRef(projects);
   const activeProjectID = useRef<string | null>(projects.active_id);
+  const enhancementKey = `${activeProjectID.current ?? ''}:${source?.id ?? ''}:${output.audio_replace?.source_id ?? ''}`;
+  const enhancementsBlocked = enhancementStatus.key === enhancementKey ? enhancementStatus.blocked : !!output.audio_replace;
+  const reportEnhancementBlocking = useCallback((blocked: boolean) => setEnhancementStatus(previous => previous.key === enhancementKey && previous.blocked === blocked ? previous : { key: enhancementKey, blocked }), [enhancementKey]);
+  const reportEnhancementSessionError = useCallback(() => setJobError('Сессия закончилась. Обновите страницу и откройте видео заново.'), []);
   const projectRevisions = useRef(new Map(projects.projects.map(project => [project.id, (project as Partial<PersistedProject>).revision ?? null])));
   const projectSaveQueue = useRef<Promise<unknown>>(Promise.resolve());
   const [projectConflict, setProjectConflict] = useState<ProjectConflictError | null>(null);
@@ -165,6 +173,15 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
   const [projectError, setProjectErrorValue] = useState('');
   const projectErrorFromPersistence = useRef(false);
   function setProjectError(message: string, fromPersistence = false) { projectErrorFromPersistence.current = !!message && fromPersistence; setProjectErrorValue(message); }
+  function restoreOutputSettings(saved: Record<string, unknown>) {
+    const restoredOutput = restoredProjectOutput(saved);
+    setOutput(restoredOutput ?? withoutSourceAudio(preferences.output));
+    if (!restoredOutput) {
+      exportAttempt.current = null;
+      setProjectError('Настройки экспорта этого проекта не удалось восстановить. Фрагменты сохранены; проверьте настройки перед экспортом.');
+    }
+    return restoredOutput;
+  }
   const [recoveringDraft, setRecoveringDraft] = useState<Record<string, unknown> | null>(null);
   const latestDraft = useRef<Record<string, unknown>>({});
   const player = useRef<PlayerControls>(null);
@@ -185,6 +202,7 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
   const exportRanges = ranges.filter(range => selectedRangeIds.includes(range.id));
   const retryRequest = !source && recoverableSource ? recoverExportRequest(recoverableSource.id, ranges, output, exportAttempt.current) : null;
   const retryOutput = retryRequest?.output ?? null;
+  const pendingSourceExport = source ? recoverExportRequest(source.id, ranges, output, exportAttempt.current) : null;
   const busy = activeJob(job) || submitting || deletingSource;
   const duration = source?.duration_ms ?? 0;
   const workspaceVisible = !!source && step !== 1;
@@ -207,9 +225,11 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
   // Multi-track browser defaults differ between engines; use the same inspected
   // default stream as the exporter when more than one audio track is available.
   const previewAudioTrack = output.audio_track ?? (audioTracks.length > 1 && !output.no_audio ? selectedAudio?.index : undefined);
-  const invalidAudio = output.audio_track !== undefined && (tracks !== null && !selectedAudio || tracksError !== '');
+  const invalidAudio = !output.audio_replace && output.audio_track !== undefined && (tracks !== null && !selectedAudio || tracksError !== '');
   const incompatibleCrop = !!output.crop && (output.format !== 'mp4' || output.cut_mode !== 'accurate');
-  const incompatibleOutput = incompatibleCrop || output.format === 'mkv' && !videoCopy || output.subtitle_mode === 'preserve' && !canPreserveSubtitles;
+  const mediaConflict = enhancementConflict(output);
+  const activeEnhancements = activeEnhancementLabels(output);
+  const incompatibleOutput = incompatibleCrop || output.format === 'mkv' && !videoCopy || output.subtitle_mode === 'preserve' && !canPreserveSubtitles || !!mediaConflict || enhancementsBlocked;
   const navigation = useWorkflowHistory({ ready: sessionReady, step, panel, onNavigate: navigateHistory });
 
   const playbackPosition = useCallback((ms: number, confirmed = true) => {
@@ -367,8 +387,7 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
               setViewCenter(active ? (active.start_ms + active.end_ms) / 2 : 0);
               if (active) setSimpleView(simpleRangeView(original.duration_ms, active));
               restoreProjectView(saved, original.duration_ms, active);
-              const restoredOutput = restoredProjectOutput(saved);
-              if (restoredOutput) setOutput(restoredOutput);
+              restoreOutputSettings(saved);
             } catch (error) {
               if (disposed) return;
               if (!(error instanceof ApiError) || !(error.httpStatus === 404 || error.httpStatus === 410 || ['not_found', 'expired', 'source_unavailable', 'source_expired'].includes(error.code))) throw error;
@@ -381,7 +400,7 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
                 restoreProjectView(saved, recovered.source.duration_ms, active);
                 const recoveredPosition = typeof saved.current_ms === 'number' && Number.isFinite(saved.current_ms) ? Math.max(0, Math.min(recovered.source.duration_ms, saved.current_ms)) : 0;
                 position.set(recoveredPosition); restoredPosition.current = recoveredPosition;
-                const restoredOutput = restoredProjectOutput(saved); if (restoredOutput) setOutput(restoredOutput);
+                const restoredOutput = restoreOutputSettings(saved);
                 if (restoredOutput && recoverExportRequest(recovered.source.id, recovered.ranges, restoredOutput, exportAttempt.current)) setStep(4);
               }
               setSourceError(recovered ? 'Источник больше недоступен. Фрагменты сохранены. Загрузите ту же запись или откройте её ссылку, чтобы продолжить.' : 'Предыдущий источник больше недоступен. Откройте его заново.');
@@ -478,6 +497,24 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
   function editSnapshot(): EditorSnapshot { return { ranges, selectedId, selectedRangeIds, output, simpleView, span, viewCenter }; }
   function currentHistory() { const id = activeProjectID.current ?? 'new'; return histories.current[id] ??= emptyHistory<EditorSnapshot>(); }
   function rememberHistory() { rememberEdit(currentHistory(), editSnapshot()); refreshHistory(value => value + 1); }
+  function changeEnhancements(update: (previous: OutputSettings) => OutputSettings) {
+    rememberHistory();
+    setOutput(update);
+  }
+  function applyHelperRanges(proposed: { label: string; start_ms: number; end_ms: number }[], mode: 'append' | 'replace'): boolean {
+    if (!source || busy || sourceBusy || !proposed.length || invalidDraft) return false;
+    const next = proposed.map(range => ({ ...range, id: crypto.randomUUID() }));
+    const combined = mode === 'append' ? [...ranges, ...next] : next;
+    const included = mode === 'append' ? [...selectedRangeIds, ...next.map(range => range.id)] : next.map(range => range.id);
+    if (combined.length > limits.max_ranges || combined.some(range => validateRange(range.start_ms, range.end_ms, duration, limits.max_range_ms) || new TextEncoder().encode(range.label).length > 200 || /[\u0000-\u001f\u007f]/.test(range.label)) || combined.filter(range => included.includes(range.id)).reduce((sum, range) => sum + range.end_ms - range.start_ms, 0) > limits.max_job_ms) return false;
+    rememberHistory(); stopPreview();
+    setRanges(combined); setSelectedRangeIds(included);
+    const active = next[0]; setSelectedId(active.id); setFields(active); setRevealId(active.id);
+    setSimpleView(simpleRangeView(duration, active)); setViewCenter((active.start_ms + active.end_ms) / 2);
+    setResultsOpen(false); setStep(2); seek(active.start_ms);
+    setNotice('Фрагменты применены. Изменение можно отменить.');
+    return true;
+  }
   function beginHistory() { beginGesture(currentHistory(), editSnapshot()); refreshHistory(value => value + 1); }
   function finishHistory() { pendingHistoryEnd.current = currentHistory(); refreshHistory(value => value + 1); }
   // Some controls begin/change/end within one event; finalize after React applies
@@ -551,12 +588,12 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
     const active = nextRanges.find(range => range.id === saved.selected_id) ?? nextRanges[0];
     setSource(fresh); setRanges(nextRanges); setSelectedId(active?.id ?? ''); setSelectedRangeIds(rangeSelection(nextRanges, saved.selected_range_ids)); setRevealId(active?.id ?? '');
     if (active) { setFields(active); restoreTimeFields(saved, active); } else { setStartText(''); setEndText(''); }
-    const nextOutput = restoredProjectOutput(saved); if (nextOutput) setOutput(nextOutput);
+    const nextOutput = restoreOutputSettings(saved);
     restoreProjectView(saved, length, active);
     const savedPosition = typeof saved.current_ms === 'number' && Number.isFinite(saved.current_ms) ? Math.max(0, Math.min(length, saved.current_ms)) : 0;
     position.set(savedPosition); restoredPosition.current = savedPosition;
     setPrecisionOpen(saved.precision_open === true);
-    setPlayerAvailable(false); exportAttempt.current = restoredExportAttempt(saved); void restorePriorJobs(saved);
+    setPlayerAvailable(false); exportAttempt.current = nextOutput ? restoredExportAttempt(saved) : null; void restorePriorJobs(saved);
     if (fresh) { setRecoverableSource(null); setRecoveringDraft(null); setStep(active ? 2 : 3); }
     else { setRecoverableSource({ id: String(saved.source_id), title: String(saved.source_title ?? ''), duration_ms: length }); setRecoveringDraft(saved); setKeepRecoveredCuts(false); setStep(nextOutput && recoverExportRequest(String(saved.source_id), nextRanges, nextOutput, exportAttempt.current) ? 4 : 1); setSourceError('Источник больше недоступен. Фрагменты сохранены. Загрузите ту же запись или откройте её ссылку, чтобы продолжить.'); }
     refreshHistory(value => value + 1);
@@ -580,6 +617,7 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
     const plan = exportCuttingPlan(source?.title ?? recoverableSource?.title ?? 'video.mp4', included, output);
     const blobURL = URL.createObjectURL(new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json' }));
     const link = document.createElement('a'); link.href = blobURL; link.download = 'cutmy-plan.json'; link.click(); window.setTimeout(() => URL.revokeObjectURL(blobURL), 1000);
+    if (output.audio_replace) setNotice('План сохранён. Внешний звук подключите отдельно после открытия плана.');
   }
 
   async function loadPlan(file: File) {
@@ -1100,14 +1138,14 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
       setJobCuts(requestedRanges); setJoinedJob(requestedOutput.output_mode === 'joined'); setJob(created);
     }
     catch (error) {
-      if (error instanceof ApiError && (error.httpStatus === 404 || error.httpStatus === 410 || ['expired', 'source_expired', 'source_unavailable'].includes(error.code))) void sourceUnavailable(source.id);
+      if (error instanceof ApiError && (error.httpStatus === 404 || error.httpStatus === 410 || ['expired', 'source_expired', 'source_unavailable'].includes(error.code))) void sourceUnavailable(source.id, !!output.audio_replace);
       setJobError(errorMessage(error, 'export'));
     }
     finally { resumePreparation?.(); mutationPending.current = false; setSubmitting(false); }
   }
 
   async function recoverExport() {
-    const id = recoverableSource?.id, attempt = exportAttempt.current;
+    const id = source?.id ?? recoverableSource?.id, attempt = exportAttempt.current;
     if (!id || !attempt || busy || sourceBusy || mutationPending.current) return;
     const recovered = recoverExportRequest(id, ranges, output, attempt);
     if (!recovered) return;
@@ -1119,7 +1157,7 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
       setJobRangeNumbers(recoveredOutput.output_mode === 'joined' ? [1] : exportAttemptNumbers.current.length === recovered.ranges.length ? exportAttemptNumbers.current : recovered.ranges.map(range => ranges.findIndex(value => value.id === range.id) + 1));
     } catch (error) {
       setJobError(errorMessage(error, 'export'));
-      if (error instanceof ApiError && (error.httpStatus === 404 || error.httpStatus === 410)) { exportAttempt.current = null; setStep(1); }
+      if (!source && error instanceof ApiError && (error.httpStatus === 404 || error.httpStatus === 410)) { exportAttempt.current = null; setStep(1); }
     } finally { mutationPending.current = false; setSubmitting(false); }
   }
 
@@ -1160,7 +1198,7 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
   }
 
   function applyPreferences(value: Preferences) {
-    savePreferences(value); setPreferences({ ...value, output: withoutSourceAudio(value.output) }); setOutput(previous => ({ ...withoutSourceAudio(value.output), ...(previous.audio_track !== undefined ? { audio_track: previous.audio_track } : {}), ...(previous.no_audio && value.output.format !== 'mp3' ? { no_audio: true } : {}), ...(previous.crop ? { crop: previous.crop } : {}), ...(previous.cleanup_source !== undefined ? { cleanup_source: previous.cleanup_source } : {}) }));
+    savePreferences(value); setPreferences({ ...value, output: withoutSourceAudio(value.output) }); setOutput(previous => ({ ...withoutSourceAudio(value.output), ...(previous.audio_track !== undefined ? { audio_track: previous.audio_track } : {}), ...(previous.no_audio && value.output.format !== 'mp3' ? { no_audio: true } : {}), ...(previous.crop ? { crop: previous.crop } : {}), ...(previous.audio_normalize ? { audio_normalize: previous.audio_normalize } : {}), ...(previous.canvas ? { canvas: previous.canvas } : {}), ...(previous.audio_replace ? { audio_replace: previous.audio_replace } : {}), ...(previous.cleanup_source !== undefined ? { cleanup_source: previous.cleanup_source } : {}) }));
     setSpan(source ? Math.min(source.duration_ms, value.timeline_span) : value.timeline_span);
     if (selected) setViewCenter((selected.start_ms + selected.end_ms) / 2);
     setNotice('Настройки сохранены.');
@@ -1209,7 +1247,7 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
       <fieldset disabled={submitting || activeJob(job)}><legend className="sr-only">{t('Настройки экспорта')}</legend>
             <div className="export-primary-fields">
               <div className="export-field"><label htmlFor="output-mode">{t('Результат нарезки')}</label><SelectControl id="output-mode" value={output.output_mode ?? 'separate'} label={t('Результат нарезки')} describedBy="output-mode-hint" onChange={value => setOutput(previous => ({ ...previous, output_mode: value as OutputSettings['output_mode'] }))} options={[{ value: 'separate', label: t('Отдельные файлы') }, { value: 'joined', label: t('Один объединённый файл') }]} /><p id="output-mode-hint" className="field-hint">{t(output.output_mode === 'joined' ? 'Фрагменты соединятся в порядке выбранного списка, без промежутков между ними.' : 'Каждый выбранный фрагмент станет отдельным файлом.')}</p></div>
-              <AudioTrackSelector id="audio-track-export" output={output} tracks={tracks} loading={tracksLoading} error={tracksError} onChange={changeAudio} onRetry={() => setTrackRevision(value => value + 1)} />
+              {!output.audio_replace && <AudioTrackSelector id="audio-track-export" output={output} tracks={tracks} loading={tracksLoading} error={tracksError} onChange={changeAudio} onRetry={() => setTrackRevision(value => value + 1)} />}
               {output.no_audio && <p className="field-hint">{t('Чтобы сохранить MP3, выберите аудиодорожку.')}</p>}
             </div>
             {output.format === 'mp4' && totalDuration >= 10 * 60 * 1000 && <div className="long-export-choice"><strong>{t(output.cut_mode === 'copy' ? 'Быстрый экспорт включён' : 'Длинную запись можно сохранить быстрее')}</strong><p>{t(output.cut_mode === 'copy' ? 'Сохраним видео без перекодирования. Начало может сдвинуться до ближайшего ключевого кадра.' : 'Без перекодирования сохраняется качество записи и сокращается время обработки. Для точных границ оставьте текущий режим.')}</p>{output.cut_mode === 'accurate' && <button type="button" className="button secondary" onClick={() => setOutput(previous => ({ ...previous, cut_mode: 'copy' }))}>{t('Ускорить без перекодирования')}</button>}</div>}
@@ -1220,24 +1258,28 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
             {(preserveLocalQuality && subtitleTracks.length > 0 || output.subtitle_mode === 'preserve') && <div className="export-field"><label htmlFor="subtitle-mode">{t('Субтитры')}</label><SelectControl id="subtitle-mode" value={output.subtitle_mode ?? 'omit'} label={t('Субтитры')} onChange={value => setOutput(previous => ({ ...previous, subtitle_mode: value as OutputSettings['subtitle_mode'] }))} options={[{ value: 'omit', label: t('Исключить субтитры') }, { value: 'preserve', label: t('Сохранить текстовые субтитры'), disabled: !canPreserveSubtitles }]} /><p className="field-hint">{t(canPreserveSubtitles ? 'Текстовые субтитры сохранятся со временем каждого фрагмента. Оформление будет упрощено.' : source.kind === 'platform' || source.kind === 'youtube' ? 'Для сохранения субтитров площадки загрузите исходный файл и выберите копирование.' : 'Есть неподдерживаемые субтитры. ASS, SSA и графические субтитры сохранить пока нельзя.')}</p></div>}
       </div>
           <div className="export-track-summary" aria-label={t('Дорожки результата')}>
-            <p>{t(output.format === 'mp3' ? 'Видео будет исключено.' : 'Сохраним одну видеодорожку.')}{' '}{output.no_audio ? t('Звук будет исключён.') : selectedAudio ? trackLabel(selectedAudio, t) : tracks !== null && audioTracks.length === 0 ? t('В источнике нет звука.') : t('Сохраним аудиодорожку по умолчанию.')}</p>
+            <p>{t(output.format === 'mp3' ? 'Видео будет исключено.' : 'Сохраним одну видеодорожку.')}{' '}{output.audio_replace ? t('Вместо исходного звука используем подключённую запись.') : output.no_audio ? t('Звук будет исключён.') : selectedAudio ? trackLabel(selectedAudio, t) : tracks !== null && audioTracks.length === 0 ? t('В источнике нет звука.') : t('Сохраним аудиодорожку по умолчанию.')}</p>
             {audioTracks.length > 1 && <p>{t('Остальные аудиодорожки будут исключены.')}</p>}
             <p>{t(output.subtitle_mode === 'preserve' ? 'Сохраним совместимые текстовые субтитры; время будет сдвинуто к началу фрагмента.' : 'Субтитры, вложения и служебные дорожки будут исключены.')}</p>
             {tracks !== null && <details className="artifact-details"><summary>{t('Все дорожки источника')}</summary><ul>{tracks.map(track => <li key={track.index}><strong>{t(includedTracks.has(track.index) ? 'Включена' : 'Исключена')}</strong>{': '}{trackLabel(track, t)}</li>)}</ul></details>}
           </div>
+          <ExportEnhancements key={`${activeProjectID.current ?? ''}:${source.id}`} active={advancedOutputOpen} source={displayGeometry?.id === source.id ? { ...source, width: displayGeometry.width, height: displayGeometry.height } : source} output={output} tracks={tracks} analysisRange={selected ?? undefined} maximumBytes={limits.max_source_bytes} disabled={busy || sourceBusy || !sessionReady} onChange={changeEnhancements} onBlockingChange={reportEnhancementBlocking} onSessionError={reportEnhancementSessionError} />
           <label className="source-cleanup-choice"><input type="checkbox" checked={output.cleanup_source !== false} disabled={busy} onChange={event => setOutput(previous => ({ ...previous, cleanup_source: event.target.checked }))} />{t('Удалить исходник после экспорта')}</label>
           <p className="field-hint source-cleanup-hint">{t('Готовые клипы и проект сохранятся. Для новой нарезки удалённую запись понадобится открыть заново.')}</p>
           <p className="field-hint export-limits">{t('Один фрагмент — до {range}; весь экспорт — до {total}.', { range: durationLabel(limits.max_range_ms, locale), total: durationLabel(limits.max_job_ms, locale) })}</p>{limits.max_output_bytes && <p className="field-hint export-limits">{t('Готовый файл — до {limit}.', { limit: formatBytes(limits.max_output_bytes, locale) })}</p>}      </fieldset>
       <button type="button" className="button secondary" onClick={() => setAdvancedOutputOpen(false)}>{t('Готово')}</button>
     </WorkspaceDialog>
           {invalidAudio && <p className="error-message" role="alert">{t('Выбранная аудиодорожка недоступна. Выберите другую дорожку.')}</p>}
-          {!incompatibleCrop && incompatibleOutput && <p className="error-message" role="alert">{t('Эти настройки требуют исходного файла и режима копирования. Выберите MP4 и исключите субтитры либо загрузите исходный файл.')}</p>}
+          {!incompatibleCrop && !mediaConflict && !enhancementsBlocked && incompatibleOutput && <p className="error-message" role="alert">{t('Эти настройки требуют исходного файла и режима копирования. Выберите MP4 и исключите субтитры либо загрузите исходный файл.')}</p>}
+          {(mediaConflict || enhancementsBlocked) && <div className="enhancement-export-blocker" role="alert"><p>{t(mediaConflict || 'Проверьте дополнительные настройки экспорта.')}</p><button type="button" className="text-button" onClick={() => setAdvancedOutputOpen(true)}>{t('Проверить настройки')}</button></div>}
+          {pendingSourceExport && <div className="pending-export-recovery"><p className="field-hint">{t('Ответ на отправленный экспорт не получен. Проверьте прежний запрос перед созданием нового.')}</p><button type="button" className="text-button" disabled={busy || sourceBusy} onClick={() => void recoverExport()}>{t('Восстановить отправленный экспорт')}</button></div>}
           {incompatibleCrop && <div className="crop-export-conflict" role="alert"><p>{t('Выбранный кадр требует точного MP4. Выберите совместимый режим или сбросьте кадр.')}</p>
             <button type="button" className="text-button" onClick={() => { rememberHistory(); setOutput(previous => ({ ...previous, format: 'mp4', cut_mode: 'accurate', subtitle_mode: 'omit' })); }}>{t('Выбрать точный MP4')}</button>
             <button type="button" className="text-button" onClick={() => { rememberHistory(); setOutput(previous => ({ ...previous, crop: undefined })); }}>{t('Сбросить кадр')}</button></div>}
           {videoCopy && <p className="copy-boundary-warning" role="note">{t('Копирование сохраняет исходное качество. Начало может сдвинуться к ключевому кадру; фактические границы будут указаны у готового файла.')}</p>}
     {exportLimitError && <p className="error-message" role="alert">{exportLimitError}</p>}
     <dl className="export-settings-summary"><div><dt>{t(output.format === 'mp3' ? 'Формат файла' : 'Качество видео')}</dt><dd>{output.format === 'mp3' ? 'MP3' : t(preserveLocalQuality ? 'Исходное качество' : output.quality === 'best' ? 'Лучшее доступное' : output.quality === '720p' ? 'До 720p' : 'До 1080p')}</dd></div><div><dt>{t('Результат нарезки')}</dt><dd>{t(output.output_mode === 'joined' ? 'Один объединённый файл' : 'Отдельные файлы')}</dd></div></dl>
+    {activeEnhancements.length > 0 && <div className="enhancement-export-summary"><p>{activeEnhancements.map(label => t(label)).join(', ')}</p><p className="field-hint">{t('Применится при экспорте. В плеере остаётся исходная запись.')}</p><button type="button" className="text-button" onClick={() => setAdvancedOutputOpen(true)}>{t('Изменить дополнения')}</button></div>}
 </div><div className="export-actions"><div className="export-summary"><span>{source ? countLabel(exportRanges.length, 'clip', locale) : t("Фрагменты не выбраны")}</span>{source && <strong>{durationLabel(totalDuration, locale)}</strong>}</div>
           <button className="button primary export-submit" type="submit" disabled={!sessionReady || !source || !exportRanges.length || busy || sourceBusy || invalidDraft || !!exportLimitError || invalidAudio || incompatibleOutput}>{submitting ? <><span className="spinner" />{t("Создаём задание…")}</> : activeJob(job) ? <><span className="spinner" />{t("Идёт обработка…")}</> : <><Icon name="cut" size={18} />{repeatExport ? t('Повторить экспорт') : exportRanges.length > 1 ? t("Вырезать фрагменты") : t("Вырезать фрагмент")}</>}</button>
     <p className="export-empty-hint">{output.output_mode === 'joined' || exportRanges.length === 1 ? t('один файл') : t('отдельные файлы')} {output.format.toUpperCase()}{output.no_audio ? ` · ${t('Без звука')}` : ''}{output.crop ? ` · ${t('Кадрирование')}` : ''}</p>
@@ -1292,9 +1334,10 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
               displayWidth={displayGeometry?.id === source.id ? displayGeometry.width : 0} displayHeight={displayGeometry?.id === source.id ? displayGeometry.height : 0}
               locale={locale} disabled={busy || output.format !== 'mp4' || output.cut_mode !== 'accurate'} previewContainer={cropContainer}
               onBeginChange={beginHistory} onEndChange={finishHistory} onOpenChange={setCropOpen} />
-            <button type="button" className="text-button editor-tools-toggle" onClick={() => setEditorToolsOpen(true)} aria-haspopup="dialog">{t('Инструменты')}<Icon name="chevron" size={15} /></button>
+            <button type="button" className="text-button editor-tools-toggle" onClick={() => { if (selected && !validateFields(true)) return; setEditorToolsOpen(true); }} aria-haspopup="dialog">{t('Инструменты')}<Icon name="chevron" size={15} /></button>
             {(exportRanges.length > 1 || sequenceIndex !== null) && <div className="sequence-preview"><button className="text-button" type="button" disabled={!playerAvailable || invalidDraft} onClick={previewSequence} aria-label={t(sequenceIndex !== null ? 'Остановить подборку' : 'Посмотреть подборку')} title={t(sequenceIndex !== null ? 'Остановить подборку' : 'Посмотреть подборку')}><Icon name={sequenceIndex !== null ? 'pause' : 'play'} size={16} /><span className="sequence-label">{t(sequenceIndex !== null ? 'Остановить подборку' : 'Посмотреть подборку')}</span></button>{sequenceIndex !== null && <span role="status">{t('Сейчас: {name}', { name: sequence.current?.ranges[sequenceIndex]?.label || t('Фрагмент {index}', { index: ranges.findIndex(range => range.id === sequence.current?.ranges[sequenceIndex]?.id) + 1 }) })}</span>}</div>}</div>
             <WorkspaceDialog open={editorToolsOpen} onClose={() => setEditorToolsOpen(false)} title={t('Инструменты')}>
+            <AnalysisTools key={`${activeProjectID.current ?? ''}:${source.id}`} active={editorToolsOpen} source={source} selectedRange={selected ?? null} ranges={ranges} audioTrack={previewAudioTrack} disabled={busy || sourceBusy || !sessionReady || invalidDraft} maxRanges={limits.max_ranges} maxRangeMS={limits.max_range_ms} maxJobMS={limits.max_job_ms} onSeek={ms => { setEditorToolsOpen(false); stopPreview(); seek(ms); }} onApplyRanges={applyHelperRanges} onApplied={() => setEditorToolsOpen(false)} />
             {videoCopy && <p className="field-hint">{t('Проверяем выбранные моменты. При копировании фактические границы могут сдвинуться к ключевым кадрам.')}</p>}
             <div className="moment-selection-tools"><span>{t('Фрагмент до {limit}', { limit: durationLabel(limits.max_range_ms, locale) })}</span>{duration <= Math.min(limits.max_range_ms, limits.max_job_ms) && <button type="button" className="text-button" disabled={busy} onClick={() => { changeBounds(0, duration); setSimpleView([0, duration]); setSpan(duration); setViewCenter(duration / 2); }}>{t('Выбрать всё видео')}</button>}</div>
             <div className="boundary-audition" role="group" aria-label={t('Проверить границы')}><button type="button" className="text-button" disabled={!playerAvailable} onClick={() => { setEditorToolsOpen(false); audition('start'); }}><Icon name="play" size={13} />{t('Проверить начало')}</button><button type="button" className="text-button" disabled={!playerAvailable} onClick={() => { setEditorToolsOpen(false); audition('end'); }}><Icon name="play" size={13} />{t('Проверить конец')}</button><span>{t('По 1,5 с до и после границы')}</span></div>

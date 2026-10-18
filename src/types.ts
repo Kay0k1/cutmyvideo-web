@@ -78,6 +78,22 @@ export interface UploadProgress { bytesPerSecond?: number; loaded: number; total
 
 export interface CropRect { x: number; y: number; width: number; height: number; }
 
+export interface AudioNormalize { integrated_lufs: number; true_peak_dbtp: number; loudness_range_lu: number; }
+export interface OutputCanvas { width: number; height: number; fit: 'contain'; background: string; }
+export interface AudioReplace { source_id: string; audio_track?: number; offset_ms?: number; }
+export interface AnalysisWindow { start_ms: number; end_ms: number; }
+export interface AnalysisOptions extends AnalysisWindow { audio_track?: number; }
+export interface SilenceOptions extends AnalysisOptions { threshold_db?: number; min_silence_ms?: number; keep_before_ms?: number; keep_after_ms?: number; min_clip_ms?: number; }
+export interface VideoAnalysisOptions extends AnalysisWindow { scene_threshold?: number; black_pixel_threshold?: number; black_picture_ratio?: number; min_black_ms?: number; }
+export interface AnalysisResult extends AnalysisWindow { version: 1; analyzed_end_ms: number; }
+export interface SilenceAnalysis extends AnalysisResult { audio_track: number; silence: AnalysisWindow[]; keep: (AnalysisWindow & { label?: string })[]; }
+export interface VideoAnalysis extends AnalysisResult { video_track: number; scenes: { at_ms: number; score: number }[]; black: AnalysisWindow[]; }
+export interface LoudnessAnalysis extends AnalysisResult { audio_track: number; integrated_lufs: number | null; true_peak_dbtp: number | null; loudness_range_lu: number | null; }
+export type CutListFormat = 'csv' | 'ffmetadata';
+export interface CutListEntry { start_ms: number; end_ms: number | null; label: string; }
+export interface CutList { version: 1; entries: CutListEntry[]; }
+export interface CutListText { version: 1; format: CutListFormat; text: string; }
+
 export interface OutputSettings {
   crop?: CropRect;
   format: 'mp4' | 'mp3' | 'mkv';
@@ -88,6 +104,9 @@ export interface OutputSettings {
   no_audio?: boolean;
   subtitle_mode?: 'omit' | 'preserve';
   cleanup_source?: boolean;
+  audio_normalize?: AudioNormalize;
+  canvas?: OutputCanvas;
+  audio_replace?: AudioReplace;
 }
 
 export interface PublicLimits { max_output_bytes?: number; max_fetch_bytes?: number; max_source_bytes: number; max_ranges: number; max_range_ms: number; max_job_ms: number; }

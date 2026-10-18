@@ -4,11 +4,19 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+## 0.7.0 — 2026-10-18
+
+### Added
+- Optional helper disclosures in Tools for editable pause suggestions, scene/black-interval navigation and CSV/FFmetadata cut-list previews. Applying suggestions is explicit and undoable; replacing existing cuts requires confirmation.
+- Optional export enhancements for measured loudness normalization, contain canvases with solid backgrounds, and owned uploaded audio with a source-clock offset. Active effects remain visible in the export summary; incompatible settings require an explicit correction.
+- Source-timeline cut-list downloads and finished-file chapter downloads derived from actual output segment timestamps.
+- Source-scoped draft restoration, cancellable analysis/uploads, stale-response protection and known-request export recovery with all new settings included in the retry identity.
+
 Integrates core 1.5.0. Its Go, CLI, HTTP and Python/TypeScript SDK interfaces add
 silence analysis with editable cutting plans, loudness analysis/normalization,
 canvas padding, CSV/FFmetadata interchange, scene/black-interval analysis and
-separate audio replacement with a timeline offset. These are programmatic
-tools; this integration adds no browser controls for them.
+separate audio replacement with a timeline offset. The classic editor exposes
+these operations through the optional helpers described above.
 
 ### Changed
 - Qualify coordinated schema 008 → 009 → 008 database/media recovery with the exact 1.4.2 rollback binary, alongside the preserved 007 → 008 → 007 drill. Require the final core pin and complete browser matrix before activation.

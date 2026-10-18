@@ -1,7 +1,14 @@
+import { analysisToolsMessages } from './analysisToolsMessages';
+import { exportEnhancementsMessages } from './exportEnhancementsMessages';
+import { mediaToolsMessages } from './mediaToolsMessages';
+
 export type Locale = 'ru' | 'en';
 
 /** Russian is the source language. The English catalog covers visible and assistive copy. */
 export const english: Record<string, string> = {
+  ...analysisToolsMessages,
+  ...exportEnhancementsMessages,
+  ...mediaToolsMessages,
   'Обрезка фрагмента': 'Trim clip',
   'Выберите нужный момент и сохраните его отдельным файлом.': 'Choose a moment and save it as a clip.',
   'Потяните за края выделения или задайте время.': 'Drag the selection edges or enter a time.',

@@ -291,3 +291,7 @@ body:has(.editor-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-b
   .editor-docked:not(.workspace-reflow) .time-input { width: 13ch; min-width: 13ch; }
 
 }
+.enhancement-export-summary { margin: 10px 0; padding: 10px 0; border-top: 1px solid var(--line); font-size: .875rem; }
+.enhancement-export-summary > p:first-child { font-weight: 480; }
+.enhancement-export-blocker { margin: 10px 0; padding: 12px; border: 1px solid var(--error); border-radius: 8px; color: var(--error); background: var(--error-bg); font-size: .875rem; }
+.result-chapters { margin-block: 8px; }
