@@ -240,7 +240,7 @@ statically built old/new binaries, for example:
 
 ```sh
 sudo python3 deploy/deployment_restore_drill.py \
-  --core-dir /path/to/core \
+  --core-dir /path/to/core-1.4.2 \
   --old-binary /path/to/schema007-cutmy --new-binary /path/to/schema008-cutmy
 ```
 
@@ -249,6 +249,33 @@ unchanged volume identities; a corrupt packet must fail before changing live dat
 drill uses only its own labelled containers and volumes, and never pulls an image
 implicitly. The activation checks separately cover stopped writers, the order of
 snapshot and migration, and the public-write boundary.
+
+Core 1.5 adds migration 009 for separate audio recordings. Core 1.4.2 refuses
+that schema, so its rollback also requires the coordinated database/media
+snapshot. Product CI retains the historical drill above with an actual schema
+008 binary and additionally requires `deployment_external_audio_drill.py` for
+008 → 009 → 008. The latter checks all prior rows, projects and grants, the
+complete schema catalog, recording references, media bytes/ownership and volume
+identities. A corrupt snapshot must fail before any live data changes.
+
+The previous binary must be built from immutable core
+`106d0d2d7887540768cc21e3bd4e2c71629af6c4` using Go 1.27.2, with version
+`v1.4.2`, that commit and its genuine UTC build time
+`2026-10-17T21:57:14Z`. The new binary and migration sources must come from the
+candidate core pin. Supply the verified previous binary's SHA256 explicitly:
+
+```sh
+sudo python3 deploy/deployment_external_audio_drill.py \
+  --core-dir /path/to/core-1.5 \
+  --old-binary /path/to/schema008-cutmy \
+  --old-binary-sha256 VERIFIED_PREVIOUS_BINARY_SHA256 \
+  --new-binary /path/to/schema009-cutmy
+```
+
+Both drills create and remove only their own labelled, network-isolated
+PostgreSQL containers and named volumes. They do not connect to production or
+qualify an activation by themselves; the stopped-writer and public-write
+boundary checks remain mandatory.
 
 ### Earlier migrations
 
