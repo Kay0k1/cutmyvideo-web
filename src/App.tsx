@@ -178,7 +178,7 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
     setOutput(restoredOutput ?? withoutSourceAudio(preferences.output));
     if (!restoredOutput) {
       exportAttempt.current = null;
-      setProjectError('Настройки экспорта этого проекта не удалось восстановить. Фрагменты сохранены; проверьте настройки перед экспортом.');
+      if (saved.output !== undefined) setProjectError('Настройки экспорта этого проекта не удалось восстановить. Фрагменты сохранены; проверьте настройки перед экспортом.');
     }
     return restoredOutput;
   }
