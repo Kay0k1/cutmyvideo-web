@@ -7,7 +7,7 @@
 
 The [cutmy.video](https://cutmy.video) product browser interface for selecting moments from video and exporting MP4/MP3 and MKV in copy mode. Accepts uploaded files and accessible public links. The interface source is open under the MIT license. Media processing, the HTTP API and persistent job queue live in the open-source MIT [cutmyvideo-core](https://github.com/Kay0k1/cutmyvideo-core).
 
-The core **1.5.0** integration provides silence analysis with editable plans, loudness measurement and normalization, output dimensions with canvas padding, CSV/FFmetadata chapter interchange, scene-change and black-interval detection, and separate audio replacement with an explicit offset through Go, CLI, HTTP API and Python/TypeScript SDKs. These tools are invoked programmatically; the manual browser controls are described below. [Core examples and limits](https://github.com/Kay0k1/cutmyvideo-core/blob/v1.5.0/docs/media-analysis-and-rendering.md) · [Integration gates and database upgrade](docs/QA.md#core-150-integration).
+Six core **1.5.0** capabilities are available as optional helpers in the classic browser editor. **Tools** contains pause, scene and black-interval analysis plus CSV/FFmetadata interchange. **Export settings** → **More: sound and size** contains loudness normalization, canvas padding and a separate recording with a timeline offset. [Helper workflows](docs/media-tools.md) · [Core examples and limits](https://github.com/Kay0k1/cutmyvideo-core/blob/v1.5.0/docs/media-analysis-and-rendering.md).
 
 [Usage](#usage) · [Collections](#collections-and-agent-review) · [Local development](#local-development) · [Checks](#checks) · [Deployment](#deployment) · [Contributing](#contributing-and-license)
 

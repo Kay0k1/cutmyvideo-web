@@ -23,7 +23,7 @@ export function includedTrackIndices(tracks: MediaTrack[], output: OutputSetting
   const result = new Set<number>();
   const video = tracks.filter(track => track.type === 'video' && !track.attached_picture).sort((a, b) => a.index - b.index)[0];
   if (video && output.format !== 'mp3') result.add(video.index);
-  if (!output.no_audio) {
+  if (!output.no_audio && !output.audio_replace) {
     const audio = output.audio_track === undefined ? defaultAudioTrack(tracks) : tracks.find(track => track.type === 'audio' && track.index === output.audio_track);
     if (audio) result.add(audio.index);
   }

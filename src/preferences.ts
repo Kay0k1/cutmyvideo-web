@@ -1,13 +1,14 @@
 import type { OutputSettings } from './types';
 import { validCrop } from './crop';
 import { readStoredRecord } from './browserStorage';
+import { readAudioNormalize, readAudioReplace, readOutputCanvas } from './mediaOptions';
 
 export interface Preferences { output: OutputSettings; timeline_span: number; }
 export const defaultPreferences: Preferences = { output: { format: 'mp4', quality: '1080p', cut_mode: 'accurate' }, timeline_span: 60000 };
 
 export function readOutputSettings(value: unknown): OutputSettings | null {
   if (typeof value !== 'object' || value === null) return null;
-  const { format, quality, cut_mode, output_mode, audio_track, no_audio, subtitle_mode, crop, cleanup_source } = value as Record<string, unknown>;
+  const { format, quality, cut_mode, output_mode, audio_track, no_audio, subtitle_mode, crop, cleanup_source, audio_normalize, canvas, audio_replace } = value as Record<string, unknown>;
   if ((format !== 'mp4' && format !== 'mp3' && format !== 'mkv') || (quality !== 'best' && quality !== '1080p' && quality !== '720p') || (cut_mode !== 'accurate' && cut_mode !== 'copy')) return null;
   if (format === 'mkv' && cut_mode !== 'copy') return null;
   if (audio_track !== undefined && (typeof audio_track !== 'number' || !Number.isSafeInteger(audio_track) || audio_track < 0 || audio_track > 999)) return null;
@@ -18,13 +19,18 @@ export function readOutputSettings(value: unknown): OutputSettings | null {
   if (subtitle_mode === 'preserve' && (format === 'mp3' || cut_mode !== 'copy')) return null;
   if (crop !== undefined && !validCrop(crop)) return null;
   if (cleanup_source !== undefined && typeof cleanup_source !== 'boolean') return null;
+  const normalized = audio_normalize === undefined ? undefined : readAudioNormalize(audio_normalize);
+  const framed = canvas === undefined ? undefined : readOutputCanvas(canvas);
+  const replaced = audio_replace === undefined ? undefined : readAudioReplace(audio_replace);
+  if (normalized === null || framed === null || replaced === null) return null;
   return { format, quality, cut_mode: format === 'mp3' ? 'accurate' : cut_mode,
     ...(output_mode !== undefined ? { output_mode } : {}), ...(audio_track !== undefined ? { audio_track } : {}),
-    ...(no_audio !== undefined ? { no_audio } : {}), ...(subtitle_mode !== undefined ? { subtitle_mode } : {}), ...(crop !== undefined ? { crop: crop as OutputSettings['crop'] } : {}), ...(cleanup_source !== undefined ? { cleanup_source } : {}) };
+    ...(no_audio !== undefined ? { no_audio } : {}), ...(subtitle_mode !== undefined ? { subtitle_mode } : {}), ...(crop !== undefined ? { crop: crop as OutputSettings['crop'] } : {}), ...(cleanup_source !== undefined ? { cleanup_source } : {}),
+    ...(normalized ? { audio_normalize: normalized } : {}), ...(framed ? { canvas: framed } : {}), ...(replaced ? { audio_replace: replaced } : {}) };
 }
 
 // Stream indices belong to one source and must never become defaults for another.
-export function withoutSourceAudio({ audio_track: _audio, no_audio: _silent, crop: _crop, ...output }: OutputSettings): OutputSettings { return output; }
+export function withoutSourceAudio({ audio_track: _audio, no_audio: _silent, crop: _crop, audio_replace: _replacement, ...output }: OutputSettings): OutputSettings { return output; }
 
 export function readPreferences(): Preferences {
   try {

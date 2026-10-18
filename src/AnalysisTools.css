@@ -1,0 +1,66 @@
+.media-analysis-tools { min-width: 0; margin-top: 20px; border-top: 1px solid var(--line); }
+.analysis-tools-intro { margin: 16px 0 12px; color: var(--muted); font-size: .8125rem; line-height: 1.65; max-width: 66ch; }
+.analysis-tool { border-top: 1px solid var(--line); }
+.analysis-tool > summary { min-height: 52px; padding: 14px 2px; cursor: pointer; font-size: .9375rem; font-weight: 480; color: var(--ink); }
+.analysis-tool > summary::marker { color: var(--muted); font-size: .8em; }
+.analysis-tool-body { display: grid; gap: 14px; padding: 0 0 20px; min-width: 0; }
+.analysis-tool-body > .field-hint { margin: 0; }
+.analysis-window { padding: 12px 14px; border-left: 3px solid var(--accent); background: var(--page); min-width: 0; }
+.analysis-window > span { display: block; color: var(--muted); font-size: .75rem; }
+.analysis-window strong { display: block; font-size: .875rem; font-weight: 480; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.analysis-window strong > span { color: var(--muted); font-weight: 350; }
+.analysis-window .field-hint { font-size: .75rem; margin-top: 5px; }
+.analysis-options > summary { color: var(--accent); cursor: pointer; min-height: 44px; padding-block: 10px; font-size: .8125rem; }
+.analysis-options-fields, .analysis-list-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.analysis-options-fields label, .analysis-list-fields label, .analysis-list-format, .analysis-list-text { display: grid; gap: 6px; min-width: 0; font-size: .8125rem; color: var(--muted); }
+.analysis-options-fields input, .analysis-list-fields select { width: 100%; }
+.analysis-options .field-hint { font-size: .75rem; }
+.analysis-run-actions, .analysis-apply-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px; }
+.analysis-run-actions .button, .analysis-apply-actions .button { font-size: .8125rem; min-height: 44px; padding: 9px 13px; }
+.analysis-preview { min-width: 0; padding-top: 16px; border-top: 1px solid var(--line); }
+.analysis-preview-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; }
+.analysis-preview h4, .analysis-list-download h4 { margin: 0; font-size: .875rem; font-weight: 500; }
+.analysis-preview-heading > span { color: var(--muted); font-size: .75rem; }
+.analysis-preview > .field-hint { font-size: .75rem; }
+.analysis-selection-actions { display: flex; justify-content: flex-end; }
+.analysis-selection-actions .text-button { min-height: 44px; font-size: .75rem; }
+.analysis-draft-list { list-style: none; margin: 0 0 12px; padding: 0; max-height: 340px; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; border-block: 1px solid var(--line); }
+.analysis-draft-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: start; gap: 6px; padding: 12px 4px 12px 0; border-bottom: 1px solid var(--line); }
+.analysis-draft-row:last-child { border-bottom: 0; }
+.analysis-draft-check { display: grid; place-items: center; width: 44px; min-height: 44px; cursor: pointer; }
+.analysis-draft-check input[type='checkbox'] { width: 20px; height: 20px; min-height: 20px; margin: 0; padding: 0; accent-color: var(--accent); cursor: inherit; }
+.analysis-draft-fields, .analysis-draft-name { display: grid; min-width: 0; gap: 6px; }
+.analysis-draft-fields input { width: 100%; min-height: 44px; padding: 8px 10px; font-size: .8125rem; }
+.analysis-draft-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.analysis-draft-times label { display: grid; gap: 4px; color: var(--muted); font-size: .6875rem; }
+.analysis-draft-times input { font-variant-numeric: tabular-nums; }
+.analysis-draft-seek { font-size: .75rem; margin-left: 4px; }
+.analysis-preview .analysis-validation { color: var(--error); margin: 10px 0; }
+.analysis-replace-confirm { margin-top: 12px; border-left: 3px solid var(--trim-line); padding: 10px 12px; background: var(--page); }
+.analysis-replace-confirm > p { font-size: .8125rem; line-height: 1.6; margin-bottom: 8px; }
+.analysis-events { min-width: 0; }
+.analysis-events > .field-hint:first-child { margin: 0; }
+.analysis-events ul { list-style: none; margin: 8px 0; padding: 0; max-height: 260px; overflow: auto; overscroll-behavior: contain; }
+.analysis-events li { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 2px 12px; min-height: 44px; border-bottom: 1px solid var(--line); }
+.analysis-events li > span { font-size: .8125rem; color: var(--muted); }
+.analysis-events li .text-button { font-variant-numeric: tabular-nums; font-size: .8125rem; }
+.analysis-list-file input { width: 100%; min-height: 48px; font-size: .75rem; padding: 8px; }
+.analysis-list-file input::file-selector-button { min-height: 30px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; margin-right: 8px; }
+.analysis-list-text textarea { width: 100%; resize: vertical; min-height: 118px; max-height: 320px; background: var(--input); color: var(--ink); border: 1px solid var(--strong-line); border-radius: 8px; padding: 10px 12px; font-size: .875rem; line-height: 1.65; }
+.analysis-list-text textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.analysis-file-name { overflow-wrap: anywhere; }
+.analysis-list-download { border-top: 1px solid var(--line); padding-top: 16px; }
+.analysis-list-download .field-hint { font-size: .75rem; }
+.analysis-list-download .analysis-apply-actions { gap: 4px 20px; }
+.analysis-notice { padding: 12px 0; border-top: 1px solid var(--line); }
+.analysis-error { margin-top: 12px; }
+@media (max-width: 499px) {
+  .analysis-options-fields, .analysis-list-fields { grid-template-columns: minmax(0, 1fr); }
+  .analysis-draft-row { grid-template-columns: 44px minmax(0, 1fr); }
+  .analysis-draft-seek { grid-column: 2; justify-self: start; margin: 0; min-height: 44px; }
+  .analysis-draft-times { gap: 6px; }
+  .analysis-draft-fields input { font-size: 1rem; padding-inline: 6px; }
+  .analysis-run-actions, .analysis-apply-actions { align-items: stretch; }
+  .analysis-run-actions .button, .analysis-apply-actions .button { flex: 1 1 100%; }
+  .analysis-list-text textarea { font-size: 1rem; }
+}
