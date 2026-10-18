@@ -523,7 +523,7 @@ test('an accepted export remains recoverable with the exact request after its re
   await page.locator('.export-submit').click()
   await serverAccepted
   expect(acceptedID).toBeTruthy(); expect(acceptedKey).toBeTruthy()
-  await expect(page.locator('.export-panel').getByRole('alert')).toBeVisible()
+  await expect(page.locator('.export-panel').getByRole('alert').filter({ hasText: /^Нет связи с сервером\. Проверьте подключение и попробуйте ещё раз\.$/ })).toBeVisible()
   const completed = await waitJob(page.request, acceptedID)
   expect(completed.status, JSON.stringify(completed)).toBe('succeeded')
   await expect.poll(async () => (await savedMediaDraft(page))?.export_attempt?.key).toBe(acceptedKey)
