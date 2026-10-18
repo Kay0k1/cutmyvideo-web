@@ -149,6 +149,43 @@ core and product commits. Set `CUTMY_SSH_TARGET`, `CUTMY_SSH_KEY`, and optionall
 `CUTMY_CORE_DIR`; it does not need GitHub credentials on the server.
 The core checkout must match `core.version`, the revision verified by product CI.
 
+### Core 1.6.0 activation
+
+Use the exact merged core commit in `core.version`, with matching Compose
+`VERSION`, `VCS_REF` and genuine UTC `BUILD_TIME`. Require complete Product
+checks and all three recovery profiles, the signed core CLI/SDK release and
+native consumers. [Current release QA](QA.md#core-160-runtime-integration)
+defines the scope. Existing editor controls and media helpers remain compatible.
+
+Migration 010 stores image derivatives and bounded parent-reader leases.
+Core 1.5 refuses schema 10. Stop API, workers, maintenance and public access
+before taking the coordinated schema-9 database/media snapshot. An image switch
+alone cannot recover the older schema. Retain the private packet and previous
+configuration until verification completes; the public-write boundary below
+also applies to this release.
+
+The separate `deployment_poster_drill.py` qualifies 009 → 010 → 009 without
+rewriting either historical recovery drill. It uses an actual core 1.5 binary
+from `ca334380ef6f8a8aa9e336b2817eb183501528b6`, version `v1.5.0`, Go 1.27.2
+and genuine build time `2026-10-18T00:22:14Z`. The current binary and migration
+inputs must come from the final core pin. Supply the previous binary's verified
+SHA256 explicitly:
+
+```sh
+sudo python3 deploy/deployment_poster_drill.py \
+  --core-dir /path/to/core-1.6 \
+  --old-binary /path/to/schema009-cutmy \
+  --old-binary-sha256 VERIFIED_PREVIOUS_BINARY_SHA256 \
+  --new-binary /path/to/schema010-cutmy
+```
+
+The drill uses only unique disposable volumes and a network-isolated PostgreSQL
+container. It verifies real finished MP4/PNG bytes, both populated new tables,
+full rows and migration timestamps, catalog definitions, ownership and unchanged
+volume identities through schema-10 recovery and schema-9 rollback. Corrupt
+database/media packets must leave the live fixture unchanged. It neither
+connects to production nor qualifies activation by itself.
+
 ### Core 1.5.0 activation
 
 The immutable `core.version` pin and Compose `VCS_REF` are
