@@ -151,9 +151,10 @@ The core checkout must match `core.version`, the revision verified by product CI
 
 ### Core 1.5.0 activation
 
-Bind the immutable `core.version` pin and Compose's `VERSION: v1.5.0`,
-`VCS_REF` and `BUILD_TIME` to the final merged core and its genuine UTC commit
-time. Require the final website ref's complete 12 Product checks, including all
+The immutable `core.version` pin and Compose `VCS_REF` are
+`ca334380ef6f8a8aa9e336b2817eb183501528b6`. Image metadata uses `v1.5.0` and
+the genuine UTC commit time `2026-10-18T00:22:14Z`. Require the final website
+ref's complete 12 Product checks, including all
 eight browser projects and both recovery profiles, plus the signed core release
 and all five signed native consumers. [Current release QA](QA.md#core-150-integration)
 defines the release and post-activation evidence.

@@ -75,9 +75,9 @@ services:
       context: ${CORE_CONTEXT:-../../core}
       # Keep these release identifiers aligned with the immutable core.version pin.
       args:
-        VERSION: v1.4.1
-        VCS_REF: 9b0833465a8d66ddb88a7cdab1a2ea97d0ba9892
-        BUILD_TIME: "2026-10-17T20:53:18Z"
+        VERSION: v1.5.0
+        VCS_REF: ca334380ef6f8a8aa9e336b2817eb183501528b6
+        BUILD_TIME: "2026-10-18T00:22:14Z"
     command: [server]
     depends_on:
       postgres:

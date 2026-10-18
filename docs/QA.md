@@ -10,6 +10,10 @@ This release's browser acceptance covers its existing manual editor and
 collection controls. See the [core examples and limits](https://github.com/Kay0k1/cutmyvideo-core/blob/v1.5.0/docs/media-analysis-and-rendering.md)
 for the programmatic workflows.
 
+The immutable core pin is `ca334380ef6f8a8aa9e336b2817eb183501528b6`, with tree
+`5ddccece0576288d819c79e2fdf06794eb09b956`. Production image metadata records
+`v1.5.0`, that commit and its genuine UTC commit time `2026-10-18T00:22:14Z`.
+
 Core 1.5 uses ordered schema 009. Core 1.4.2 refuses that schema; recovering an
 earlier image requires a verified coordinated database/media restoration while
 writers are stopped. Product CI requires both the historical 007 → 008 → 007
