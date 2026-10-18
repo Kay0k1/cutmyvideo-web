@@ -25,6 +25,7 @@ these operations through the optional helpers described above.
 - Desktop editing uses a window-sized canvas with a flexible video area and a shared trim dock. Export opens from the top toolbar; secondary media and crop controls no longer expand the editing canvas. Safari tab restoration retains the visible viewport, while phones and enlarged text keep normal reflow. Saved drafts, both languages and the pinned core are compatible.
 
 ### Fixed
+- Keep the open project list stable during autosave updates so a project button cannot move away mid-click; refresh recent-first order when reopening the list.
 - Crop controls remain accessible after expanding or reopening their section in WebKit; closed sections continue to hide their controls through native details behavior.
 
 ## 0.6.1 — 2026-10-16

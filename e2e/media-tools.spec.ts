@@ -309,8 +309,8 @@ test('effects survive draft reload, incompatible format choices are explicit, an
   await chooseOption(page, audio.getByRole('combobox', { name: 'Аудиофайл на сервере', exact: true }), 'recorder-997hz.wav')
   await audio.getByLabel('Сдвиг звука, мс', { exact: true }).fill('-250')
   await page.getByRole('button', { name: 'Использовать совместимые настройки', exact: true }).click()
-  await expect.poll(async () => (await savedMediaDraft(page))?.output?.audio_replace).toEqual({ source_id: replacement.id, offset_ms: -250 })
-  const before = (await savedMediaDraft(page))!.output
+  await expect.poll(async () => (await readBrowserDraft(page)).output).toMatchObject({ format: 'mp4', quality: 'best', cut_mode: 'accurate', subtitle_mode: 'omit', audio_normalize: { integrated_lufs: -16, true_peak_dbtp: -1, loudness_range_lu: 11 }, canvas: { width: 1080, height: 1920, fit: 'contain', background: '#000000' }, audio_replace: { source_id: replacement.id, offset_ms: -250 } })
+  const before = (await readBrowserDraft(page)).output; expect(before.audio_replace).toEqual({ source_id: replacement.id, offset_ms: -250 })
   await closeExportSettings(page)
   await page.reload(); await expect(page.locator('.editor-workspace')).toBeVisible()
   await expect.poll(async () => (await savedMediaDraft(page))?.output).toEqual(before)

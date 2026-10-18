@@ -9,5 +9,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["e2e/databaseContract.ts", "e2e/core-contract.spec.ts", "e2e/batch-settings.spec.ts", "e2e/batch-media.spec.ts", "e2e/setup.ts", "e2e/media-tools.spec.ts", "e2e/support/media-tools.ts"]
+  "include": ["e2e/databaseContract.ts", "e2e/core-contract.spec.ts", "e2e/batch-settings.spec.ts", "e2e/batch-media.spec.ts", "e2e/setup.ts", "e2e/media-tools.spec.ts", "e2e/support/media-tools.ts", "e2e/support/project-library.ts"]
 }

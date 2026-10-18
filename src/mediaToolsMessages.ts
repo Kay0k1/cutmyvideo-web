@@ -1,6 +1,6 @@
 export const mediaToolsMessages: Record<string, string> = {
   'Настройки экспорта этого проекта не удалось восстановить. Фрагменты сохранены; проверьте настройки перед экспортом.': 'Could not restore this project’s export settings. Your clips are safe; check the settings before exporting.',
-  'Ответ на отправленный экспорт не получен. Проверьте прежний запрос перед созданием нового.': 'The export response was not received. Check the earlier request before creating another one.',
+  'Проверьте предыдущий запрос экспорта перед созданием нового.': 'Check the previous export request before starting another.',
   'Восстановить отправленный экспорт': 'Recover submitted export',
   'Фрагменты применены. Изменение можно отменить.': 'Clips applied. You can undo this change.',
   'План сохранён. Внешний звук подключите отдельно после открытия плана.': 'Plan saved. Attach the external recording again after opening the plan.',
