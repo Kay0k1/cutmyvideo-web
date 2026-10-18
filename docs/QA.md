@@ -1,5 +1,48 @@
 # Acceptance and UX review
 
+## Core 1.5.0 integration
+
+The six new core capabilities are available through Go, CLI, HTTP and the
+Python/TypeScript SDKs: silence analysis with editable plans, loudness analysis
+and normalization, canvas padding, CSV/FFmetadata interchange, scene-change and
+black-interval analysis, and separate recording replacement with an offset.
+This release's browser acceptance covers its existing manual editor and
+collection controls. See the [core examples and limits](https://github.com/Kay0k1/cutmyvideo-core/blob/v1.5.0/docs/media-analysis-and-rendering.md)
+for the programmatic workflows.
+
+Core 1.5 uses ordered schema 009. Core 1.4.2 refuses that schema; recovering an
+earlier image requires a verified coordinated database/media restoration while
+writers are stopped. Product CI requires both the historical 007 → 008 → 007
+drill and the separate current 008 → 009 → 008 drill. The latter uses immutable
+1.4.2 commit `106d0d2d7887540768cc21e3bd4e2c71629af6c4` and checks the ordinary
+application role, all earlier rows/projects/grants, exact schema definitions,
+recording pins, media bytes/ownership and unchanged persistent volume identities.
+The previous binary must refuse 009 without writes and accept restored 008;
+a corrupt packet must be refused before any live data changes. Activation
+fault controls retain the public-write boundary: automatic restoration is
+permitted only before opening public traffic is attempted.
+
+Release acceptance requires fresh evidence for the actual final refs:
+
+- Bind `core.version` and Compose's `v1.5.0`, source commit and genuine UTC build
+  timestamp to the final merged core. All 12 Product checks must succeed for
+  the final website ref, including database access, both recovery drills, all
+  eight browser projects and the complete-browser-coverage gate.
+- The core release must verify all 18 assets and their provenance, SPDX and SDK
+  signatures against that exact source.
+  All five native signed-consumer targets and their aggregate must succeed,
+  including the released 1.5.0 SDK installations. Fresh public downloads and
+  signature verification must retain the accepted release and asset identities.
+- After coordinated activation, record HTTPS health/readiness, both installed
+  binary identities, service health and persistent volume identities. Run the
+  bounded real HTTPS workflow for all six programmatic capabilities and an
+  ordinary export/download using the newly released packages; remove only the
+  smoke's owned data after success.
+
+Record the actual CI, signature and production bindings in the release
+verification evidence. The dated sections below preserve their original
+version and acceptance scope.
+
 ## Start screen viewport — 17 October 2026
 
 At desktop widths of at least 900px with a fine pointer, the start screen uses

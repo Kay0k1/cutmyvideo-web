@@ -149,7 +149,28 @@ core and product commits. Set `CUTMY_SSH_TARGET`, `CUTMY_SSH_KEY`, and optionall
 `CUTMY_CORE_DIR`; it does not need GitHub credentials on the server.
 The core checkout must match `core.version`, the revision verified by product CI.
 
-### Core 1.4.1 resource lifecycle — 2026-10-16
+### Core 1.5.0 activation
+
+Bind the immutable `core.version` pin and Compose's `VERSION: v1.5.0`,
+`VCS_REF` and `BUILD_TIME` to the final merged core and its genuine UTC commit
+time. Require the final website ref's complete 12 Product checks, including all
+eight browser projects and both recovery profiles, plus the signed core release
+and all five signed native consumers. [Current release QA](QA.md#core-150-integration)
+defines the release and post-activation evidence.
+
+The analysis, loudness, canvas, interchange and separate-recording tools are
+available through the core's Go/CLI/API/SDK interfaces. Analysis reads local
+media within explicit budgets; a suggested silence plan remains editable until
+an export is requested. No additional Compose setting enables these tools.
+Existing worker concurrency and storage limits remain authoritative.
+
+Migration 009 adds external recording references. A 1.4.2 image cannot open the
+upgraded database. Retain the private coordinated pre-activation database/media
+packet and previous configuration until production verification is complete;
+an image switch alone is not a rollback. The public-write boundary below applies
+to this release as well.
+
+### Historical Core 1.4.1 resource lifecycle — 2026-10-16
 
 The 0.6.1 update uses request-scoped source inspection and bounded tool
 checks for local, ready collection sources. Every pending clip is checked
@@ -193,8 +214,9 @@ snapshot and public-write boundary below still apply.
 
 ### Current activation: coordinated schema and media recovery
 
-Core 1.4 adds ordered migration 008. A 1.3 binary refuses a database containing
-that migration, so selecting its image alone cannot recover a failed upgrade.
+Core 1.5 adds ordered migration 009; a 1.4.2 binary refuses it. The earlier 1.4
+migration 008 is likewise incompatible with 1.3. Selecting an older image alone
+cannot recover a schema upgrade.
 Activation now builds the new images while the old service is running, then
 holds `deployment.lock` and stops the edge, API and worker before capturing a
 coordinated database/media snapshot. The database container stays available for
