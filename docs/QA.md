@@ -1,5 +1,41 @@
 # Acceptance and UX review
 
+## Core 1.6.0 runtime integration
+
+Web 0.7.1 integrates the immutable core revision in [core.version](../core.version)
+and matching Compose version, commit and genuine UTC build time. Existing
+editor controls and the six optional helpers retain their behavior. The new
+core's WAV/FLAC/M4A, rational speed, target-size MP4 and JPEG/PNG poster
+operations are available through its CLI/API/SDK contracts.
+
+Product CI requires all three independent deployment recovery drills:
+
+- Historical 007 → 008 → 007 uses the immutable schema-8 source and binary.
+- Historical 008 → 009 → 008 uses the immutable core 1.5.0 source and binary,
+  with the exact core 1.4.2 predecessor identity.
+- Current 009 → 010 → 009 uses the exact core 1.5.0 predecessor and current
+  core pin. The current server applies migration 10. The drill creates a real
+  completed MP4 and PNG through the respective CLIs, then restores populated
+  image/reader/reservation state, every old row, full migration timestamps,
+  catalog definitions and media bytes/ownership. Current and previous binary
+  startup must preserve compatible data or refuse incompatible data without
+  writes. Both persistent volume identities must remain unchanged; corrupt
+  media and database packets must be refused before changing live fixture data.
+
+The named-volume drill uses only its own disposable, labelled, network-isolated
+PostgreSQL project. Core service and installed-SDK gates separately test actual
+HTTP poster creation, duplicate reuse, owner guards, deletion, cancellation,
+byte limits and coordinated recovery. A passed local rehearsal does not
+qualify a published release or production activation.
+
+Before activation, require the exact core pin, all Product checks and complete
+collected browser coverage, signed core CLI/SDK packages and all native consumer
+targets. Migration 10 requires the coordinated schema-9 database/media snapshot
+for rollback to core 1.5 while writers and public access stay stopped. After
+public access is attempted, retain acknowledged new data and stop for inspection
+on a failure; do not rewind it automatically. Record actual source, CI, signature,
+volume and post-activation smoke identities in release evidence.
+
 ## Core 1.5.0 integration
 
 The six new core capabilities are available through Go, CLI, HTTP and the

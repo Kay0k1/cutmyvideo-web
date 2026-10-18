@@ -60,7 +60,7 @@ jobs:
     needs: scope
     if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -84,6 +84,12 @@ jobs:
           repository: Kay0k1/cutmyvideo-core
           ref: 106d0d2d7887540768cc21e3bd4e2c71629af6c4
           path: core-schema008
+      - name: Check out the immutable schema009 recovery target
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: Kay0k1/cutmyvideo-core
+          ref: ca334380ef6f8a8aa9e336b2817eb183501528b6
+          path: core-schema009
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: '1.27.2'
@@ -103,6 +109,19 @@ jobs:
           CGO_ENABLED=0 go build -trimpath \
             -ldflags "-s -w -X main.version=v1.4.2 -X main.commit=106d0d2d7887540768cc21e3bd4e2c71629af6c4 -X main.buildTime=$built" \
             -o /tmp/cutmy-schema008-core ./cmd/cutmy
+      - name: Build the exact 1.5.0 schema009 recovery command
+        working-directory: core-schema009
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = ca334380ef6f8a8aa9e336b2817eb183501528b6
+          built=$(TZ=UTC git show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd HEAD)
+          CGO_ENABLED=0 go build -trimpath \
+            -ldflags "-s -w -X main.version=v1.5.0 -X main.commit=ca334380ef6f8a8aa9e336b2817eb183501528b6 -X main.buildTime=$built" \
+            -o /tmp/cutmy-schema009-core ./cmd/cutmy
+      - name: Install media tools for the real poster restore drill
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Verify database privileges and migrations in isolated PostgreSQL
         working-directory: web
         run: |
@@ -127,10 +146,25 @@ jobs:
             --core-dir "$GITHUB_WORKSPACE/core-schema008" \
             --old-binary /tmp/cutmy-schema007-core --new-binary /tmp/cutmy-schema008-core
           sudo python3 deploy/deployment_external_audio_drill.py \
-            --core-dir "$GITHUB_WORKSPACE/core" \
+            --core-dir "$GITHUB_WORKSPACE/core-schema009" \
             --old-binary /tmp/cutmy-schema008-core \
             --old-binary-sha256 "$(sha256sum /tmp/cutmy-schema008-core | cut -d ' ' -f 1)" \
-            --new-binary /tmp/cutmy-role-core
+            --new-binary /tmp/cutmy-schema009-core
+          sudo python3 deploy/deployment_poster_drill.py \
+            --core-dir "$GITHUB_WORKSPACE/core" \
+            --old-binary /tmp/cutmy-schema009-core \
+            --old-binary-sha256 "$(sha256sum /tmp/cutmy-schema009-core | cut -d ' ' -f 1)" \
+            --new-binary /tmp/cutmy-role-core \
+            --output "$RUNNER_TEMP/poster-deployment-drill.json"
+          sudo chown "$(id -u):$(id -g)" "$RUNNER_TEMP/poster-deployment-drill.json"
+      - name: Retain the schema010 deployment recovery proof
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: poster-deployment-drill-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/poster-deployment-drill.json
+          if-no-files-found: error
+          retention-days: 3
 
   integration:
     needs: scope

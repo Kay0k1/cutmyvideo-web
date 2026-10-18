@@ -4,6 +4,13 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+## 0.7.1 — 2026-10-18
+
+### Changed
+- Integrate core 1.6.0 while retaining the existing editor controls and six optional media helpers. The core adds WAV/FLAC/M4A export, rational playback speed, bounded target-size MP4 export and JPEG/PNG poster artifacts through its CLI/API/SDK interfaces.
+- Require a separate real schema 009 → 010 → 009 deployment drill, including an actual finished MP4 and decoded poster, all historical rows and complete migration timestamps, populated image/reader state, coordinated schema 10 and schema 9 media recovery, both binary compatibility checks and unchanged persistent volumes.
+- Keep the historical 007 → 008 and 008 → 009 recovery drills bound to their immutable compatible core sources and binaries. Corrupt database or media snapshots must be refused before any live fixture mutation.
+
 ## 0.7.0 — 2026-10-18
 
 ### Added
