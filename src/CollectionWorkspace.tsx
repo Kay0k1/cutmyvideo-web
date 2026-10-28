@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { api, ApiError, errorMessage, request } from './api';
 import { collectionAPI } from './collectionApi';
 import type { AgentProject } from './collectionApi';
 import { CollectionProjectError, clipSignature, collectionDocumentLimit, collectionRequest, compareCollectionSource, effectiveCollectionOptions, readCollectionDocument, selectedCollectionIDs, sourceIdentity } from './collectionProject';
 import type { CollectionClip, CollectionOptions, CollectionProjectDocument } from './collectionProject';
 import { collectionStorageKey, readSavedCollection, saveCollection } from './collectionStorage';
+import { coalescedTask } from './coalescedTask';
 import type { SavedCollection } from './collectionStorage';
 import { SourceAccess } from './SourceAccess';
 import { SourceChooser } from './SourceChooser';
@@ -76,7 +77,7 @@ export function CollectionWorkspace({ opening, onExit }: { opening: CollectionOp
   const [geometry, setGeometry] = useState({ width: 0, height: 0 }), [section, setSection] = useState<[number, number]>([0, 60000]), [view, setView] = useState<[number, number]>([0, 60000]);
   const [startText, setStartText] = useState(''), [endText, setEndText] = useState(''), [historyVersion, setHistoryVersion] = useState(0);
   const history = useRef(emptyHistory<CollectionProjectDocument>()), sourceController = useRef<AbortController | null>(null), workerBusy = useRef(false);
-  const storedSnapshot = useRef<string | null | undefined>(undefined);
+  const storedSnapshot = useRef<string | null | undefined>(undefined), gesture = useRef(false), gestureWriter = useRef<ReturnType<typeof coalescedTask> | null>(null);
   if (storedSnapshot.current === undefined) { try { storedSnapshot.current = localStorage.getItem(collectionStorageKey); } catch { storedSnapshot.current = null; } }
   const sequence = useRef<{ ranges: CollectionClip['ranges']; index: number; seeking: boolean } | null>(null), [previewing, setPreviewing] = useState(false);
   const source = ready ? value.source : undefined, clip = value.document.plan.clips.find(clip => clip.id === value.selected_clip) ?? value.document.plan.clips[0];
@@ -93,7 +94,10 @@ export function CollectionWorkspace({ opening, onExit }: { opening: CollectionOp
     }
     catch { setStorageError(t('Не удалось сохранить коллекцию в браузере. Скачайте проект, чтобы не потерять изменения.')); return false; }
   }
-  function change(next: SavedCollection) { next = { ...next, jobs: Object.assign(Object.create(null), next.jobs) }; current.current = next; setValue(next); persist(next); }
+  // Pointer drags change the document on every move. Coalescing their writes
+  // keeps a large collection from being re-serialized per frame; the deadline
+  // still saves a gesture whose end event never arrives.
+  function change(next: SavedCollection) { next = { ...next, jobs: Object.assign(Object.create(null), next.jobs) }; current.current = next; setValue(next); if (gesture.current && gestureWriter.current) gestureWriter.current.schedule(1000); else persist(next); }
   function edit(document: CollectionProjectDocument) {
     if (locked) return;
     rememberEdit(history.current, current.current.document); setHistoryVersion(count => count + 1);
@@ -101,11 +105,19 @@ export function CollectionWorkspace({ opening, onExit }: { opening: CollectionOp
   }
   function editClip(patch: Partial<CollectionClip>) { edit({ ...value.document, plan: { ...value.document.plan, clips: value.document.plan.clips.map(item => item.id === clip.id ? { ...item, ...patch } : item) } }); }
   function clipOptions(patch: CollectionOptions) { const next = { ...clip.options, ...patch }; for (const key of Object.keys(next) as (keyof CollectionOptions)[]) if (next[key] === undefined) delete next[key]; editClip({ options: next }); }
-  function beginEdit() { beginGesture(history.current, current.current.document); }
-  function endEdit() { finishGesture(history.current, current.current.document); setHistoryVersion(count => count + 1); }
+  function beginEdit() { gesture.current = true; beginGesture(history.current, current.current.document); }
+  function endEdit() { gesture.current = false; gestureWriter.current?.flush(); finishGesture(history.current, current.current.document); setHistoryVersion(count => count + 1); }
   function restoreHistory(redo = false) { const document = (redo ? redoEdit : undoEdit)(history.current, current.current.document); if (document) change({ ...current.current, document, selected_ids: current.current.selected_ids.filter(id => document.plan.clips.some(clip => clip.id === id)), selected_clip: document.plan.clips.some(clip => clip.id === current.current.selected_clip) ? current.current.selected_clip : document.plan.clips[0].id, selected_range: 0 }); setHistoryVersion(count => count + 1); }
   function stopPreview() { sequence.current = null; setPreviewing(false); player.current?.pause(); }
   function chooseClip(id: string, index = 0) { stopPreview(); setCropOpen(false); change({ ...current.current, selected_clip: id, selected_range: index }); }
+
+  const persistLatest = useEffectEvent(() => { persist(current.current); });
+  useEffect(() => {
+    const writer = coalescedTask(persistLatest);
+    gestureWriter.current = writer;
+    window.addEventListener('pagehide', writer.flush);
+    return () => { window.removeEventListener('pagehide', writer.flush); writer.flush(); gestureWriter.current = null; };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();

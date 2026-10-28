@@ -140,3 +140,25 @@ test('a server revision conflict preserves local edits and performs no collectio
   await expect(page.getByRole('alert')).toContainText('Проект изменён в другой вкладке');
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.collection.current.v1')!).document.plan.clips[0].label)).toBe('Несохранённая правка'); expect(backend.submissions).toBe(0);
 });
+
+test('dragging a part boundary saves the final value without rewriting the collection on every pointer move', async ({ page }) => {
+  await setupProject(page);
+  await page.goto('/?lang=ru#handoff=' + token); await expect(page.locator('.collection-clip-list li')).toHaveCount(15);
+  await expect.poll(() => page.locator('video').evaluate((video: HTMLVideoElement) => video.videoWidth)).toBe(640);
+  await page.evaluate(() => {
+    const counter = window as unknown as { collectionWrites: number }, setItem = Storage.prototype.setItem;
+    counter.collectionWrites = 0;
+    Storage.prototype.setItem = function (key: string, value: string) { if (key === 'cutmy.collection.current.v1') counter.collectionWrites++; setItem.call(this, key, value); };
+  });
+  const handle = page.getByRole('slider', { name: 'Конец фрагмента на шкале', exact: true });
+  await handle.scrollIntoViewIfNeeded();
+  const box = (await handle.boundingBox())!;
+  const x = box.x + box.width / 2, y = box.y + box.height / 2;
+  await page.mouse.move(x, y); await page.mouse.down();
+  for (let step = 1; step <= 20; step++) await page.mouse.move(x + step * 4, y);
+  await page.mouse.up();
+  const end = Number(await handle.getAttribute('aria-valuenow'));
+  expect(end).toBeGreaterThan(9000);
+  expect(await page.evaluate(() => (window as unknown as { collectionWrites: number }).collectionWrites)).toBeLessThanOrEqual(2);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmy.collection.current.v1')!).document.plan.clips[0].ranges[0].end_ms)).toBe(end);
+});
