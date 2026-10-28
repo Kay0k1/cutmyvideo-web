@@ -139,7 +139,7 @@ services:
     restart: unless-stopped
     environment:
       DOMAIN: ${DOMAIN:-cutmy.video}
-      MAX_UPLOAD_BODY_BYTES: "${MAX_UPLOAD_BODY_BYTES:-1075838976}"
+      MAX_UPLOAD_BODY_BYTES: "${MAX_UPLOAD_BODY_BYTES:-34361835520}"
     ports:
       - 80:80
       - 443:443

@@ -13,6 +13,16 @@ describe('interface language', () => {
       expect(message).not.toMatch(/[А-Яа-яЁё]/);
     }
   });
+  it('translates every literal interface message', () => {
+    const sources = import.meta.glob<string>(['./*.ts', './*.tsx', '!./*.test.ts'], { query: '?raw', import: 'default', eager: true });
+    const missing: string[] = [];
+    for (const [filename, source] of Object.entries(sources)) {
+      for (const [, , message] of source.matchAll(/\bt\((['"])((?:(?!\1)[^\\\n])*[А-Яа-яЁё](?:(?!\1)[^\\\n])*)\1\s*[,)]/g)) {
+        if (!Object.hasOwn(english, message.trim())) missing.push(`${filename}: ${message}`);
+      }
+    }
+    expect(missing).toEqual([]);
+  });
   it('uses correct clip and file counts', () => {
     expect(countLabel(1, 'clip', 'ru')).toBe('1 фрагмент');
     expect(countLabel(4, 'clip', 'ru')).toBe('4 фрагмента');

@@ -683,6 +683,7 @@ export const english: Record<string, string> = {
   'Проверьте интервалы и настройки экспорта. Границы должны находиться внутри видео.': 'Check your ranges and export settings. Boundaries must fall within the video.',
   'Дождитесь текущего экспорта или отмените его.': 'Wait for the current export or cancel it.',
   'Срок хранения файла закончился. Вырежьте фрагмент заново.': 'The file has expired. Export the clip again.',
+  'Срок хранения файла закончился.': 'The file has expired.',
   'Источник или результат больше недоступен. Откройте видео заново.': 'The source or result is no longer available. Open the video again.',
   'Не удалось отправить настройки. Обновите страницу и попробуйте ещё раз.': 'Settings could not be sent. Reload the page and try again.',
   'Не удалось выполнить действие. Попробуйте ещё раз через минуту.': 'The action failed. Try again in a minute.',

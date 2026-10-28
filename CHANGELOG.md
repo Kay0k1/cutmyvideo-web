@@ -4,6 +4,11 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+### Fixed
+- Dragging a part boundary or crop in the collection workspace saves the project at most once per second and once when the gesture ends, instead of rewriting browser storage on every pointer move.
+- The expired-file status of a collection clip is translated in the English interface.
+- The edge upload limit defaults to the API source limit plus multipart metadata when the stack is started without the deployment script.
+
 ## 0.7.1 — 2026-10-18
 
 ### Changed
