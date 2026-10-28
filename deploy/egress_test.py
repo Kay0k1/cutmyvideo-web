@@ -91,7 +91,7 @@ iptables -A DOCKER-USER -j UNRELATED-SERVICE
 before=$(iptables -S UNRELATED-SERVICE)
 bash "$1" apply > /dev/null
 bash "$1" apply > /dev/null
-[[ $(iptables -S DOCKER-USER | rg -c '172.30.240.10/32') == 1 ]]
+[[ $(iptables -S DOCKER-USER | grep -cF '172.30.240.10/32') == 1 ]]
 [[ "$before" == "$(iptables -S UNRELATED-SERVICE)" ]]
 ip link add cutmy-fixture type dummy
 ip address add 172.30.240.10/24 dev cutmy-fixture
