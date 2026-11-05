@@ -13,6 +13,7 @@ import { Icon } from './Icons';
 import { Player } from './Player';
 import type { PlayerControls } from './Player';
 import { Timeline } from './Timeline';
+import { moveTimelineSection, normalizeTimelineSection, timelineView, trimBoundaryLimits } from './timelineControls';
 import { CropEditor } from './CropEditor';
 import { displayTimecode, durationLabel, formatBytes, formatTimecode, parseTimecode, validateRange, zoomWindow } from './timecode';
 import type { ClipRange, Job, OutputSettings, Source, UploadProgress, PublicLimits, MediaTrack } from './types';
@@ -76,10 +77,10 @@ function newRange(duration: number, start = 0, limits = defaultLimits): ClipRang
 }
 
 function simpleRangeView(duration: number, range: ClipRange): [number, number] {
-  return zoomWindow(duration, (range.start_ms + range.end_ms) / 2, Math.min(duration, Math.max(60000, (range.end_ms - range.start_ms) * 2)));
+  return normalizeTimelineSection(duration, range, null);
 }
 
-interface EditorSnapshot { ranges: ClipRange[]; selectedId: string; selectedRangeIds: string[]; output: OutputSettings; }
+interface EditorSnapshot { ranges: ClipRange[]; selectedId: string; selectedRangeIds: string[]; output: OutputSettings; simpleView: [number, number]; span: number; viewCenter: number; }
 
 export default function App() {
   const { locale, t } = useLanguage();
@@ -182,8 +183,8 @@ export default function App() {
   const busy = activeJob(job) || submitting || deletingSource;
   const duration = source?.duration_ms ?? 0;
   const workspaceVisible = !!source && step !== 1;
-  const view = zoomWindow(duration, viewCenter, span);
-  const zoomOptions = [duration, 300000, 60000, 10000].filter((value, index, all) => value > 0 && value <= duration && all.indexOf(value) === index);
+  const view = timelineView(simpleView, viewCenter, span);
+  const zoomOptions = [duration, 300000, 60000, 10000, view[1] - view[0]].filter((value, index, all) => value > 0 && value <= duration && all.indexOf(value) === index);
   const totalDuration = exportRanges.reduce((sum, range) => sum + range.end_ms - range.start_ms, 0);
   const invalidDraft = !!selected && !!validateRange(parseTimecode(startText), parseTimecode(endText), duration, limits.max_range_ms);
   const exportLimitError = exportRanges.length > limits.max_ranges ? t('Можно экспортировать не больше {limit} фрагментов за один раз.', { limit: limits.max_ranges }) : exportRanges.some(range => range.end_ms - range.start_ms > limits.max_range_ms) ? t('Один фрагмент может длиться до {limit}.', { limit: durationLabel(limits.max_range_ms, locale) }) : totalDuration > limits.max_job_ms ? t('Общая длительность одного экспорта — до {limit}. Разделите фрагменты на несколько заданий.', { limit: durationLabel(limits.max_job_ms, locale) }) : '';
@@ -462,14 +463,13 @@ export default function App() {
 
   function restoreProjectView(saved: Record<string, unknown>, length: number, range?: ClipRange) {
     const savedSpan = typeof saved.timeline_span === 'number' && Number.isFinite(saved.timeline_span) && saved.timeline_span > 0 ? saved.timeline_span : preferences.timeline_span;
-    setSpan(Math.min(length, savedSpan));
     const center = typeof saved.view_center === 'number' && Number.isFinite(saved.view_center) ? saved.view_center : range ? (range.start_ms + range.end_ms) / 2 : 0;
-    setViewCenter(Math.max(0, Math.min(length, center)));
-    if (Array.isArray(saved.simple_view) && saved.simple_view.length === 2 && saved.simple_view.every(value => typeof value === 'number' && Number.isFinite(value)) && saved.simple_view[0] >= 0 && saved.simple_view[1] <= length && saved.simple_view[1] > saved.simple_view[0]) setSimpleView(saved.simple_view as [number, number]);
-    else if (range) setSimpleView(simpleRangeView(length, range));
+    const section = range ? normalizeTimelineSection(length, range, saved.simple_view) : [0, length] as [number, number];
+    const restoredView = timelineView(section, center, savedSpan);
+    setSimpleView(section); setSpan(restoredView[1] - restoredView[0]); setViewCenter((restoredView[0] + restoredView[1]) / 2);
   }
 
-  function editSnapshot(): EditorSnapshot { return { ranges, selectedId, selectedRangeIds, output }; }
+  function editSnapshot(): EditorSnapshot { return { ranges, selectedId, selectedRangeIds, output, simpleView, span, viewCenter }; }
   function currentHistory() { const id = activeProjectID.current ?? 'new'; return histories.current[id] ??= emptyHistory<EditorSnapshot>(); }
   function rememberHistory() { rememberEdit(currentHistory(), editSnapshot()); refreshHistory(value => value + 1); }
   function beginHistory() { beginGesture(currentHistory(), editSnapshot()); refreshHistory(value => value + 1); }
@@ -486,7 +486,7 @@ export default function App() {
   function applyEditSnapshot(snapshot: EditorSnapshot) {
     setRanges(snapshot.ranges); setSelectedId(snapshot.selectedId); setSelectedRangeIds(snapshot.selectedRangeIds); setOutput(snapshot.output); setRevealId(snapshot.selectedId);
     const range = snapshot.ranges.find(value => value.id === snapshot.selectedId) ?? snapshot.ranges[0];
-    if (range) { setFields(range); setSelectedId(range.id); setViewCenter((range.start_ms + range.end_ms) / 2); setSimpleView(simpleRangeView(duration, range)); }
+    if (range) { setFields(range); setSelectedId(range.id); setViewCenter(snapshot.viewCenter); setSpan(snapshot.span); setSimpleView(normalizeTimelineSection(duration, range, snapshot.simpleView)); }
     else { setStartText(''); setEndText(''); setRangeError(''); if (step === 2) setStep(3); }
     stopPreview();
     if (range) seek(range.start_ms);
@@ -592,7 +592,7 @@ export default function App() {
         setProjectConflict(null); setRecoverableSource({ id, title: String(draft.source_title), duration_ms: length }); setRecoveringDraft(draft); setKeepRecoveredCuts(true);
       }
       setRanges(result.ranges); setSelectedId(result.ranges[0].id); setSelectedRangeIds(result.ranges.map(range => range.id)); setOutput(result.output); setFields(result.ranges[0]); setRevealId(result.ranges[0].id); setProjectError('');
-      if (source) { setStep(3); setNotice('План открыт. Проверьте соответствие записи и границы.'); } else { setStep(1); setSourceError('План открыт. Загрузите указанную запись и проверьте границы.'); }
+      if (source) { const range = result.ranges[0]; setSimpleView(simpleRangeView(duration, range)); setViewCenter((range.start_ms + range.end_ms) / 2); setStep(3); setNotice('План открыт. Проверьте соответствие записи и границы.'); } else { setStep(1); setSourceError('План открыт. Загрузите указанную запись и проверьте границы.'); }
     } catch (error) { setProjectError(error instanceof Error ? error.message : 'Не удалось прочитать JSON-план.'); }
   }
 
@@ -729,10 +729,36 @@ export default function App() {
   }
 
   function revealBoundary(ms: number) {
-    const visible = precisionOpen ? view : simpleView;
-    if (ms >= visible[0] && ms <= visible[1]) return;
-    if (precisionOpen) setViewCenter(ms);
-    else setSimpleView(zoomWindow(duration, ms, visible[1] - visible[0]));
+    if (ms < simpleView[0] || ms > simpleView[1] || ms >= view[0] && ms <= view[1]) return;
+    setViewCenter(ms);
+  }
+
+  function changeTimelineView(next: [number, number]) {
+    setSpan(next[1] - next[0]); setViewCenter((next[0] + next[1]) / 2);
+  }
+
+  function changeTimelineSection(start: number) {
+    const range = validateFields(true); if (!range) return;
+    const previous = normalizeTimelineSection(duration, range, simpleView);
+    const moved = moveTimelineSection(duration, range, previous, start);
+    const delta = moved.section[0] - previous[0];
+    const reframed = previous[0] !== simpleView[0] || previous[1] !== simpleView[1];
+    if (!delta && !reframed && range.start_ms === selected?.start_ms && range.end_ms === selected?.end_ms) return;
+    changeBounds(moved.range[0], moved.range[1]);
+    setSimpleView(moved.section); setViewCenter((reframed ? (range.start_ms + range.end_ms) / 2 : viewCenter) + delta);
+  }
+
+  function chooseTimelineScale(nextSpan: number) {
+    if (!selected) return;
+    // Explicit wider scales also make longer clips editable. Wheel zoom only
+    // changes the viewport inside this section.
+    const scale = Math.max(Math.min(1000, duration), Math.min(duration, Math.round(nextSpan)));
+    const width = Math.min(duration, Math.max(scale, selected.end_ms - selected.start_ms));
+    const fitted = zoomWindow(duration, (selected.start_ms + selected.end_ms) / 2, width);
+    const start = Math.round(fitted[0]);
+    const section: [number, number] = [start, start + width];
+    setSimpleView(section); setSpan(scale); setViewCenter((selected.start_ms + selected.end_ms) / 2);
+    setPrecisionOpen(true);
   }
 
   function validateFields(focus = false): ClipRange | null {
@@ -754,16 +780,18 @@ export default function App() {
     if (range) {
       if (range.start_ms !== selected?.start_ms || range.end_ms !== selected?.end_ms) rememberHistory();
       setRanges(previous => previous.map(item => item.id === range.id ? range : item));
-      setViewCenter((range.start_ms + range.end_ms) / 2);
-      setSimpleView(simpleRangeView(duration, range));
-      if (range.start_ms !== selected?.start_ms || range.end_ms !== selected?.end_ms) { player.current?.pause(); seek(range.start_ms !== selected?.start_ms ? range.start_ms : range.end_ms); }
+      if (range.start_ms !== selected?.start_ms || range.end_ms !== selected?.end_ms) {
+        setSimpleView(normalizeTimelineSection(duration, range, simpleView));
+        setViewCenter((range.start_ms + range.end_ms) / 2);
+        player.current?.pause(); seek(range.start_ms !== selected?.start_ms ? range.start_ms : range.end_ms);
+      }
     }
     return !!range;
   }
 
   function seek(ms: number) {
     pendingBoundary.current = null;
-    const value = Math.max(0, Math.min(duration, ms));
+    const value = Math.max(0, Math.min(duration, Math.round(ms)));
     restoredPosition.current = null;
     stopPreview();
     position.set(value); player.current?.seek(value);
@@ -774,7 +802,7 @@ export default function App() {
     const [start, end] = markBounds(selected, position.getSnapshot(), which, duration);
     const error = validateRange(start, end, duration, limits.max_range_ms);
     if (error) { setRangeError(error); return; }
-    changeBounds(start, end); seek(which === 'start' ? start : end); setViewCenter((start + end) / 2); setSimpleView(simpleRangeView(duration, { ...selected, start_ms: start, end_ms: end }));
+    changeBounds(start, end); seek(which === 'start' ? start : end); setViewCenter((start + end) / 2); setSimpleView(normalizeTimelineSection(duration, { ...selected, start_ms: start, end_ms: end }, simpleView));
   }
 
   const handleShortcut = useEffectEvent((event: KeyboardEvent) => {
@@ -908,10 +936,8 @@ export default function App() {
 
   function fitSelection() {
     if (!selected) return;
-    setPrecisionOpen(true);
     setViewCenter((selected.start_ms + selected.end_ms) / 2);
-    const needed = Math.min(duration, (selected.end_ms - selected.start_ms) * 1.2);
-    if (needed > span) setSpan([...zoomOptions].sort((a, b) => a - b).find(value => value >= needed) ?? duration);
+    setSpan(Math.min(simpleView[1] - simpleView[0], Math.max(1000, (selected.end_ms - selected.start_ms) * 1.5)));
   }
 
   function addRange() {
@@ -969,8 +995,10 @@ export default function App() {
 
   function nudgeBoundary(which: 'start' | 'end', delta: number) {
     const range = validateFields(true); if (!range) return;
-    const start = which === 'start' ? Math.max(0, Math.min(range.end_ms - 100, range.start_ms + delta)) : range.start_ms;
-    const end = which === 'end' ? Math.min(duration, Math.max(range.start_ms + 100, range.end_ms + delta)) : range.end_ms;
+    const [minimum, maximum] = trimBoundaryLimits(which, range, simpleView, limits.max_range_ms);
+    const value = Math.max(minimum, Math.min(maximum, (which === 'start' ? range.start_ms : range.end_ms) + delta));
+    const start = which === 'start' ? value : range.start_ms;
+    const end = which === 'end' ? value : range.end_ms;
     const error = validateRange(start, end, duration, limits.max_range_ms);
     if (error) { setRangeError(error); return; }
     changeBounds(start, end); seek(which === 'start' ? start : end); revealBoundary(which === 'start' ? start : end);
@@ -1243,8 +1271,8 @@ export default function App() {
           {output.crop && !cropOpen && cropContainer && <CropPreview crop={output.crop} container={cropContainer} />}
           {selected && <div ref={momentControls} className={`moment-controls${controlsOverflow ? ' controls-overflow' : ''}`}>
             <div className="moment-boundaries"><div><label htmlFor="range-start">{t('Начало')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время начала: {time}', { time: displayTimecode(selected.start_ms) })} onClick={() => editTime('start')}>{displayTimecode(selected.start_ms)}<Icon name="edit" size={14} /></button><input ref={startField} id="range-start" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span><span className="marker-text">{t('Начало здесь')}</span><kbd>I</kbd></button></div><div><label htmlFor="range-end">{t('Конец')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время конца: {time}', { time: displayTimecode(selected.end_ms) })} onClick={() => editTime('end')}>{displayTimecode(selected.end_ms)}<Icon name="edit" size={14} /></button><input ref={endField} id="range-end" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={endText} onChange={event => { setEndText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span><span className="marker-text">{t('Конец здесь')}</span><kbd>O</kbd></button></div><div className="moment-duration"><span>{t('Длительность')}</span><strong>{durationLabel(selected.end_ms - selected.start_ms, locale)}</strong></div></div>
-            <Timeline compact duration={duration} position={position} ranges={ranges} selected={selected} view={precisionOpen ? view : simpleView} showOverview={precisionOpen} onSeek={seek} onRange={changeBounds} onReveal={ms => { revealBoundary(ms); seek(ms); }} onBeginChange={beginHistory} onEndChange={finishBoundaryChange} audioTrack={previewAudioTrack} noAudio={output.no_audio} sourceID={source.id} active={workspaceVisible} />
-            <div className="workspace-toolstrip"><div className="moment-preview"><button className="button secondary" type="button" disabled={!playerAvailable} aria-label={t(previewing ? 'Остановить просмотр' : 'Посмотреть фрагмент')} title={t(previewing ? 'Остановить просмотр' : 'Посмотреть фрагмент')} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} /><span className="preview-button-label">{previewing ? t('Остановить просмотр') : t('Посмотреть фрагмент')}</span></button><button className="text-button precision-toggle" type="button" aria-expanded={precisionOpen} aria-controls="range-start range-end precision-controls" onClick={() => { if (precisionOpen && invalidDraft) { validateFields(true); return; } if (precisionOpen) setSimpleView(simpleRangeView(duration, selected)); setPrecisionOpen(!precisionOpen); setViewCenter((selected.start_ms + selected.end_ms) / 2); }}>{t('Точное время и шкала')}<Icon name="chevron" size={15} style={{ transform: precisionOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button></div>
+            <Timeline compact duration={duration} position={position} ranges={ranges} selected={selected} section={simpleView} view={view} maximumRange={limits.max_range_ms} showOverview={precisionOpen} onSection={changeTimelineSection} onView={changeTimelineView} onSeek={seek} onRange={changeBounds} onReveal={ms => { revealBoundary(ms); seek(ms); }} onBeginChange={beginHistory} onEndChange={finishBoundaryChange} audioTrack={previewAudioTrack} noAudio={output.no_audio} sourceID={source.id} active={workspaceVisible} />
+            <div className="workspace-toolstrip"><div className="moment-preview"><button className="button secondary" type="button" disabled={!playerAvailable} aria-label={t(previewing ? 'Остановить просмотр' : 'Посмотреть фрагмент')} title={t(previewing ? 'Остановить просмотр' : 'Посмотреть фрагмент')} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} /><span className="preview-button-label">{previewing ? t('Остановить просмотр') : t('Посмотреть фрагмент')}</span></button><button className="text-button precision-toggle" type="button" aria-expanded={precisionOpen} aria-controls="range-start range-end precision-controls" onClick={() => { if (precisionOpen && invalidDraft) { validateFields(true); return; } setPrecisionOpen(!precisionOpen); }}>{t('Точное время и шкала')}<Icon name="chevron" size={15} style={{ transform: precisionOpen ? 'rotate(-90deg)' : 'rotate(90deg)' }} /></button></div>
             <CropEditor key={source.id} value={output.crop} onChange={crop => setOutput(previous => ({ ...previous, crop }))}
               displayWidth={displayGeometry?.id === source.id ? displayGeometry.width : 0} displayHeight={displayGeometry?.id === source.id ? displayGeometry.height : 0}
               locale={locale} disabled={busy || output.format !== 'mp4' || output.cut_mode !== 'accurate'} previewContainer={cropContainer}
@@ -1252,11 +1280,11 @@ export default function App() {
             <button type="button" className="text-button editor-tools-toggle" onClick={() => setEditorToolsOpen(true)} aria-haspopup="dialog">{t('Инструменты')}<Icon name="chevron" size={15} /></button></div>
             {(exportRanges.length > 1 || sequenceIndex !== null) && <div className="sequence-preview"><button className="text-button" type="button" disabled={!playerAvailable || invalidDraft} onClick={previewSequence}><Icon name={sequenceIndex !== null ? 'pause' : 'play'} size={16} />{t(sequenceIndex !== null ? 'Остановить подборку' : 'Посмотреть подборку')}</button>{sequenceIndex !== null && <span role="status">{t('Сейчас: {name}', { name: sequence.current?.ranges[sequenceIndex]?.label || t('Фрагмент {index}', { index: ranges.findIndex(range => range.id === sequence.current?.ranges[sequenceIndex]?.id) + 1 }) })}</span>}{videoCopy && <p className="field-hint">{t('Проверяем выбранные моменты. При копировании фактические границы могут сдвинуться к ключевым кадрам.')}</p>}</div>}
             <WorkspaceDialog open={editorToolsOpen} onClose={() => setEditorToolsOpen(false)} title={t('Инструменты')}>
-            <div className="moment-selection-tools"><span>{t('Фрагмент до {limit}', { limit: durationLabel(limits.max_range_ms, locale) })}</span>{duration <= Math.min(limits.max_range_ms, limits.max_job_ms) && <button type="button" className="text-button" disabled={busy} onClick={() => { changeBounds(0, duration); setSimpleView([0, duration]); setViewCenter(duration / 2); }}>{t('Выбрать всё видео')}</button>}</div>
+            <div className="moment-selection-tools"><span>{t('Фрагмент до {limit}', { limit: durationLabel(limits.max_range_ms, locale) })}</span>{duration <= Math.min(limits.max_range_ms, limits.max_job_ms) && <button type="button" className="text-button" disabled={busy} onClick={() => { changeBounds(0, duration); setSimpleView([0, duration]); setSpan(duration); setViewCenter(duration / 2); }}>{t('Выбрать всё видео')}</button>}</div>
             <div className="boundary-audition" role="group" aria-label={t('Проверить границы')}><button type="button" className="text-button" disabled={!playerAvailable} onClick={() => { setEditorToolsOpen(false); audition('start'); }}><Icon name="play" size={13} />{t('Проверить начало')}</button><button type="button" className="text-button" disabled={!playerAvailable} onClick={() => { setEditorToolsOpen(false); audition('end'); }}><Icon name="play" size={13} />{t('Проверить конец')}</button><span>{t('По 1,5 с до и после границы')}</span></div>
             <div id="precision-controls" className="precision-controls">
               <p id="time-hint" className="field-hint">{t('Часы:минуты:секунды. Можно ввести 83:10 или 01:23:10.250.')}</p>
-              <div className="boundary-steps">{(['start', 'end'] as const).map(which => <div key={which} role="group" aria-label={t(which === 'start' ? 'Сдвиг начала' : 'Сдвиг конца')}><span>{t(which === 'start' ? 'Начало' : 'Конец')}</span><button type="button" aria-label={t(which === 'start' ? 'Начало на 0,1 с раньше' : 'Конец на 0,1 с раньше')} onClick={() => nudgeBoundary(which, -100)}>{locale === 'en' ? '−0.1' : '−0,1'} {t('с')}</button><button type="button" aria-label={t(which === 'start' ? 'Начало на 0,1 с позже' : 'Конец на 0,1 с позже')} onClick={() => nudgeBoundary(which, 100)}>{locale === 'en' ? '+0.1' : '+0,1'} {t('с')}</button></div>)}</div><div className="precision-zoom"><label htmlFor="zoom">{t('Масштаб шкалы')}</label><div className="zoom-controls"><button type="button" className="icon-button" aria-label={t('Предыдущий участок шкалы')} disabled={view[0] <= 0} onClick={() => setViewCenter(Math.max(0, viewCenter - span / 2))}><Icon name="chevron" size={16} style={{ transform: 'rotate(180deg)' }} /></button><SelectControl id="zoom" value={String(span)} label={t('Масштаб шкалы')} onChange={value => { setPrecisionOpen(true); setSpan(Number(value)); setViewCenter((selected.start_ms + selected.end_ms) / 2); }} options={zoomOptions.map(value => ({ value: String(value), label: value === duration ? t('Всё видео') : value === 300000 ? t('5 минут') : value === 60000 ? t('1 минута') : t('10 секунд') }))} /><button type="button" className="icon-button" aria-label={t('Следующий участок шкалы')} disabled={view[1] >= duration} onClick={() => setViewCenter(Math.min(duration, viewCenter + span / 2))}><Icon name="chevron" size={16} /></button></div><button className="text-button" type="button" onClick={fitSelection}>{t('Показать границы')}</button></div>
+              <div className="boundary-steps">{(['start', 'end'] as const).map(which => <div key={which} role="group" aria-label={t(which === 'start' ? 'Сдвиг начала' : 'Сдвиг конца')}><span>{t(which === 'start' ? 'Начало' : 'Конец')}</span><button type="button" aria-label={t(which === 'start' ? 'Начало на 0,1 с раньше' : 'Конец на 0,1 с раньше')} onClick={() => nudgeBoundary(which, -100)}>{locale === 'en' ? '−0.1' : '−0,1'} {t('с')}</button><button type="button" aria-label={t(which === 'start' ? 'Начало на 0,1 с позже' : 'Конец на 0,1 с позже')} onClick={() => nudgeBoundary(which, 100)}>{locale === 'en' ? '+0.1' : '+0,1'} {t('с')}</button></div>)}</div><div className="precision-zoom"><label htmlFor="zoom">{t('Масштаб шкалы')}</label><div className="zoom-controls"><button type="button" className="icon-button" aria-label={t('Предыдущий участок шкалы')} disabled={view[0] <= simpleView[0]} onClick={() => setViewCenter(viewCenter - (view[1] - view[0]) / 2)}><Icon name="chevron" size={16} style={{ transform: 'rotate(180deg)' }} /></button><SelectControl id="zoom" value={String(view[1] - view[0])} label={t('Масштаб шкалы')} onChange={value => chooseTimelineScale(Number(value))} options={zoomOptions.map(value => ({ value: String(value), label: value === duration ? t('Всё видео') : value === 300000 ? t('5 минут') : value === 60000 ? t('1 минута') : value === 10000 ? t('10 секунд') : durationLabel(value, locale) }))} /><button type="button" className="icon-button" aria-label={t('Следующий участок шкалы')} disabled={view[1] >= simpleView[1]} onClick={() => setViewCenter(viewCenter + (view[1] - view[0]) / 2)}><Icon name="chevron" size={16} /></button></div><button className="text-button" type="button" onClick={fitSelection}>{t('Показать границы')}</button></div>
             </div>
               <button className="text-button" type="button" onClick={() => setShowShortcuts(!showShortcuts)} aria-expanded={showShortcuts}>{t('Горячие клавиши')}</button>
               {showShortcuts && <div className="shortcut-guide"><span><kbd>I</kbd>{t('начало по позиции плеера')}</span><span><kbd>O</kbd>{t('конец')}</span><span><kbd>N</kbd>{t('сохранить и добавить следующий')}</span><span><kbd>[</kbd><kbd>]</kbd>{t('предыдущий / следующий фрагмент')}</span><span><kbd>{t('Пробел')}</kbd>{t('пауза / воспроизведение')}</span><p>{t('Клавиши I, O и пробел работают вне полей ввода. В плеере действуют его собственные клавиши.')}</p></div>}

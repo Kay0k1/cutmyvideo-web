@@ -1,21 +1,24 @@
 import { useLanguage } from './Language';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import type { ClipRange } from './types';
 import { formatTimecode } from './timecode';
-import { keyboardTrimValue, pointerSeekValue, pointerTrimValue } from './timelineControls';
+import { keyboardTrimValue, panTimelineView, pointerSeekValue, pointerTimelineTime, pointerTrimValue, trimBoundaryLimits, zoomTimelineView } from './timelineControls';
 import type { PlaybackPosition } from './playbackPosition';
 import { Waveform } from './Waveform';
 import { Storyboard } from './Storyboard';
 import { Icon } from './Icons';
+import { TimelineSection } from './TimelineSection';
 import './Timeline.css';
 
-export function Timeline({ duration, position, ranges, selected, view, showOverview = true, compact = false, sourceID, active, audioTrack, noAudio, onSeek, onRange, onReveal, onBeginChange, onEndChange }: {
+export function Timeline({ duration, position, ranges, selected, section, view, maximumRange = Infinity, showOverview = true, compact = false, sourceID, active, audioTrack, noAudio, onSeek, onRange, onReveal, onSection, onView, onBeginChange, onEndChange }: {
   duration: number;
   position: PlaybackPosition;
   ranges: ClipRange[];
   selected: ClipRange;
+  section: [number, number];
   view: [number, number];
+  maximumRange?: number;
   showOverview?: boolean;
   compact?: boolean;
   sourceID: string;
@@ -25,6 +28,8 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
   onSeek(ms: number): void;
   onRange(start: number, end: number): void;
   onReveal(ms: number): void;
+  onSection(start: number): void;
+  onView(view: [number, number]): void;
   onBeginChange?(): void;
   onEndChange?(): void;
 }) {
@@ -37,7 +42,58 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
   const [scrubbing, setScrubbing] = useState(false);
   const [trackWidth, setTrackWidth] = useState(0);
   const [mediaOpen, setMediaOpen] = useState(false);
+  const wheelView = useRef(view);
+  const gesture = useRef<{ view: [number, number]; anchor: number } | null>(null);
+  wheelView.current = view;
   const span = view[1] - view[0];
+  const sectionSpan = section[1] - section[0];
+  const zoomed = span < sectionSpan - 1;
+  const wheel = useEffectEvent((event: WheelEvent) => {
+    if (drag.current || scrub.current || gesture.current || event.altKey || event.metaKey) return;
+    const rect = track.current!.getBoundingClientRect();
+    if (rect.width <= 0 || !event.deltaX && !event.deltaY) return;
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.width : 1;
+    const currentView = wheelView.current;
+    const horizontal = !event.ctrlKey && (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY));
+    const next = horizontal
+      ? panTimelineView(section, currentView, (event.deltaX || event.deltaY) * unit / rect.width * (currentView[1] - currentView[0]))
+      : zoomTimelineView(section, currentView, pointerTimelineTime(event.clientX, rect.left, rect.width, currentView), Math.exp(Math.max(-1, Math.min(1, event.deltaY * unit * (event.ctrlKey ? .012 : .003)))));
+    event.preventDefault();
+    wheelView.current = next; onView(next);
+  });
+  useEffect(() => {
+    const node = track.current;
+    if (!node) return;
+    const listener = (event: WheelEvent) => wheel(event);
+    node.addEventListener('wheel', listener, { passive: false });
+    return () => node.removeEventListener('wheel', listener);
+  }, []);
+  // Safari reports trackpad pinches as GestureEvents rather than ctrl+wheel.
+  const pinch = useEffectEvent((event: Event) => {
+    const native = event as Event & { scale?: number; clientX?: number };
+    if (drag.current) return;
+    if (event.type === 'gesturestart') {
+      const rect = track.current!.getBoundingClientRect();
+      const currentView = wheelView.current;
+      const x = typeof native.clientX === 'number' && native.clientX >= rect.left && native.clientX <= rect.right ? native.clientX : rect.left + rect.width / 2;
+      gesture.current = { view: currentView, anchor: pointerTimelineTime(x, rect.left, rect.width, currentView) };
+      scrub.current = null; setScrubbing(false); event.preventDefault();
+    } else if (gesture.current) {
+      event.preventDefault();
+      if (event.type === 'gestureend') { gesture.current = null; return; }
+      if (typeof native.scale !== 'number' || !Number.isFinite(native.scale) || native.scale <= 0) return;
+      const next = zoomTimelineView(section, gesture.current.view, gesture.current.anchor, 1 / native.scale);
+      wheelView.current = next; onView(next);
+    }
+  });
+  useEffect(() => {
+    const node = track.current;
+    if (!node) return;
+    const listener = (event: Event) => pinch(event);
+    const events = ['gesturestart', 'gesturechange', 'gestureend'];
+    for (const name of events) node.addEventListener(name, listener, { passive: false });
+    return () => { for (const name of events) node.removeEventListener(name, listener); };
+  }, []);
   useEffect(() => { setMediaOpen(false); }, [sourceID]);
   useEffect(() => {
     const node = track.current;
@@ -53,14 +109,15 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
     return pointerSeekValue(event.clientX, rect.left, rect.width, view);
   };
   const move = (which: 'start' | 'end', value: number) => {
-    if (which === 'start') onRange(Math.max(0, Math.min(selected.end_ms - 100, value)), selected.end_ms);
-    else onRange(selected.start_ms, Math.min(duration, Math.max(selected.start_ms + 100, value)));
+    const [minimum, maximum] = trimBoundaryLimits(which, selected, section, maximumRange);
+    const next = Math.max(minimum, Math.min(maximum, value));
+    if (which === 'start') onRange(next, selected.end_ms);
+    else onRange(selected.start_ms, next);
   };
   const onKey = (event: KeyboardEvent, which: 'start' | 'end') => {
     if (event.nativeEvent.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
     const value = which === 'start' ? selected.start_ms : selected.end_ms;
-    const min = which === 'start' ? 0 : selected.start_ms + 100;
-    const max = which === 'start' ? selected.end_ms - 100 : duration;
+    const [min, max] = trimBoundaryLimits(which, selected, section, maximumRange);
     const next = keyboardTrimValue(event.key, value, min, max, event.shiftKey);
     if (next === null) return;
     event.preventDefault(); move(which, next); onReveal(next);
@@ -71,27 +128,35 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
   const endScrub = (pointer: number) => {
     if (scrub.current?.pointer === pointer) { scrub.current = null; setScrubbing(false); }
   };
-  const closeHandles = (pct(selected.end_ms) - pct(selected.start_ms)) / 100 * trackWidth < 18;
+  const closeHandles = selected.start_ms >= view[0] && selected.end_ms <= view[1] && (pct(selected.end_ms) - pct(selected.start_ms)) / 100 * trackWidth < 44;
+  const zoomAt = (factor: number) => onView(zoomTimelineView(section, view, (view[0] + view[1]) / 2, factor));
+  const fitBoundaries = () => {
+    const width = Math.min(sectionSpan, Math.max(1000, (selected.end_ms - selected.start_ms) * 2));
+    const center = (selected.start_ms + selected.end_ms) / 2;
+    onView(panTimelineView(section, [center - width / 2, center + width / 2], 0));
+  };
 
   const handle = (which: 'start' | 'end') => {
     const value = which === 'start' ? selected.start_ms : selected.end_ms;
     const visible = value >= view[0] && value <= view[1];
+    const [minimum, maximum] = trimBoundaryLimits(which, selected, section, maximumRange);
     return <button type="button" className={`trim-handle ${which}${!visible ? ' offscreen' : ''}${closeHandles ? ' close-handles' : ''}`} data-dragging={dragging === which || undefined}
       style={{ left: `${pct(value)}%` }} role="slider" aria-label={which === 'start' ? t("Начало фрагмента на шкале") : t("Конец фрагмента на шкале")}
-      aria-valuemin={which === 'start' ? 0 : selected.start_ms + 100}
-      aria-valuemax={which === 'start' ? selected.end_ms - 100 : duration}
+      aria-valuemin={minimum}
+      aria-valuemax={maximum}
       aria-valuenow={value} aria-valuetext={formatTimecode(value, true)} aria-orientation="horizontal" aria-describedby="trim-hint"
       onKeyDown={event => onKey(event, which)}
       onPointerDown={event => {
         if (event.button !== 0 || drag.current || scrub.current) return;
         event.stopPropagation(); event.currentTarget.focus({ preventScroll: true });
+        if (!visible) { onReveal(value); return; }
         onBeginChange?.();
         drag.current = { which, pointer: event.pointerId, x: event.clientX, value, width: track.current!.getBoundingClientRect().width, span };
         setDragging(which); event.currentTarget.setPointerCapture(event.pointerId);
       }}
       onPointerMove={event => {
         const original = drag.current;
-        if (original?.which === which && original.pointer === event.pointerId) move(which, pointerTrimValue(original.value, event.clientX - original.x, original.width, original.span));
+        if (original?.which === which && original.pointer === event.pointerId) move(which, Math.max(Math.ceil(view[0]), Math.min(Math.floor(view[1]), pointerTrimValue(original.value, event.clientX - original.x, original.width, original.span))));
       }}
       onPointerUp={event => endDrag(which, event.pointerId)} onPointerCancel={event => endDrag(which, event.pointerId)} onLostPointerCapture={event => endDrag(which, event.pointerId)}
     ><span className="trim-grip" aria-hidden="true" /><span className={`trim-tooltip ${pct(value) < 50 ? 'align-start' : 'align-end'}`} aria-hidden="true">{which === 'start' ? t('Начало') : t('Конец')}<strong>{formatTimecode(value, true)}</strong></span></button>;
@@ -102,12 +167,9 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
     <Storyboard sourceID={sourceID} duration={duration} current={current} active={active} onSeek={ms => { onSeek(ms); onReveal(ms); }} />
   </>;
 
-  return <div className={`timeline${compact ? ' timeline-compact' : ''}${showOverview ? ' timeline-overview' : ''}`}>
-    <div className="overview-label">{showOverview ? <label htmlFor="overview">{t("Всё видео")}</label> : <span>{t('Позиция плеера')}</span>}<span>{formatTimecode(current)} / {formatTimecode(duration)}</span></div>
-    {showOverview && <div className="overview-track">
-      <div className="overview-selections" aria-hidden="true">{ranges.map(range => <span key={range.id} style={{ left: `${range.start_ms / duration * 100}%`, width: `${Math.max(.3, (range.end_ms - range.start_ms) / duration * 100)}%` }} />)}</div>
-      <input id="overview" type="range" min={0} max={duration} step={100} value={current} aria-valuetext={formatTimecode(current, true)} onChange={event => onSeek(Number(event.target.value))} />
-    </div>}
+  return <div className={`timeline${compact ? ' timeline-compact' : ''}${showOverview ? ' timeline-overview' : ''}`} data-section-start={section[0]} data-section-end={section[1]} data-view-start={view[0]} data-view-end={view[1]}>
+    <TimelineSection duration={duration} section={section} ranges={ranges} selected={selected} current={current} onSeek={onSeek} showPlayback={showOverview} onChange={onSection} onBeginChange={onBeginChange} onEndChange={onEndChange} />
+    <div className="timeline-detail-label"><span>{t('Уточните границы')}</span><div className="timeline-zoom-buttons"><button type="button" aria-label={t('Отдалить шкалу')} title={t('Отдалить шкалу')} disabled={!zoomed} onClick={() => zoomAt(2)}>−</button><button type="button" aria-label={t('Приблизить шкалу')} title={t('Приблизить шкалу')} disabled={span <= Math.min(1000, sectionSpan) + 1} onClick={() => zoomAt(.5)}>+</button>{closeHandles && span > 1000 ? <button type="button" className="text-button" onClick={fitBoundaries}>{t('Приблизить границы')}</button> : <button type="button" className="text-button" aria-label={t('Показать весь участок')} disabled={!zoomed} onClick={() => onView(section)}>{t('Весь участок')}</button>}</div></div>
     <div className="trim-track" ref={track}>
       <div className="trim-ticks" aria-hidden="true">{Array.from({ length: 21 }, (_, i) => <i key={i} />)}</div>
       <div className="trim-selection" style={{ left: `${pct(selected.start_ms)}%`, width: `${Math.max(0, pct(selected.end_ms) - pct(selected.start_ms))}%` }} aria-hidden="true" />
@@ -148,7 +210,8 @@ export function Timeline({ duration, position, ranges, selected, view, showOverv
       {handle('start')}{handle('end')}
       {current >= view[0] && current <= view[1] && <div className="playhead" style={{ left: `${pct(current)}%` }} aria-hidden="true" />}
     </div>
-    <div className="tick-labels" aria-hidden="true"><span>{formatTimecode(view[0])}</span><span>{formatTimecode((view[0] + view[1]) / 2)}</span><span>{formatTimecode(view[1])}</span></div>
+    <div className="tick-labels" aria-hidden="true"><span>{formatTimecode(view[0], span < 10000)}</span><span>{formatTimecode((view[0] + view[1]) / 2, span < 10000)}</span><span>{formatTimecode(view[1], span < 10000)}</span></div>
+    <div className="timeline-zoom-hint"><span>{t('Колесо или жест сведения — масштаб; жест вбок — перемещение.')}</span></div>
     {compact ? <details className="timeline-media-disclosure" open={mediaOpen} onToggle={event => setMediaOpen(event.currentTarget.open)}>
       <summary>{t('Кадры и звук')}<Icon name="chevron" size={15} /></summary>
       {mediaOpen && <div className="timeline-media-content">{mediaTools}</div>}
