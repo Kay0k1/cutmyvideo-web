@@ -249,9 +249,12 @@ for (const editing of [false, true]) test(`an active export locks options and un
   } : job }))
   await page.reload()
   await goToExport(page)
+  // A running job takes the cutting form's place; its options stay locked underneath.
+  await expect(page.locator('#workspace-results .job-status')).toBeVisible()
+  await expect(page.locator('.export-panel')).toBeHidden()
+  await expect(page.locator('.format-picker button')).toHaveCount(2)
+  for (const button of await page.locator('.format-picker button').all()) await expect(button).toBeDisabled()
   const format = page.getByRole('group', { name: 'File format', exact: true })
-  await expect(format.getByRole('button', { name: 'MP4 Video', exact: true })).toBeDisabled()
-  await expect(format.getByRole('button', { name: 'MP3 Audio', exact: true })).toBeDisabled()
   await goToMoment(page)
   // Boundary editing creates real undo history while the existing export runs.
   const start = page.getByLabel('Start', { exact: true })
@@ -265,11 +268,9 @@ for (const editing of [false, true]) test(`an active export locks options and un
     await page.keyboard.press(key)
     await expect(page.locator('.trim-handle.start')).toHaveAttribute('aria-valuenow', '2000')
   }
-  await showExportSettings(page)
+  await expect(page.locator('.export-options-toggle')).toBeHidden()
   await expect(page.locator('#quality')).toBeDisabled()
   await expect(page.locator('#cut-mode')).toBeDisabled()
-
-  await closeExportSettings(page)
   await goToMoment(page)
   if (editing) {
     await start.focus()

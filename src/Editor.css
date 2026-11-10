@@ -108,11 +108,11 @@
 #editor .workspace-results .job-status .failed-items li { display: flex; flex-wrap: wrap; gap: 0 8px; }
 #editor .workspace-results .job-status .failed-items span, #editor .workspace-results .job-recovery-note { color: var(--muted); }
 #editor .workspace-results .job-status .button { width: auto; min-height: 44px; margin: 0; }
-#editor .workspace-results .job-status .background-source { min-height: 32px; font-size: .8125rem; color: var(--muted); }
+#editor .workspace-results .job-status .background-source { font-size: .8125rem; color: var(--muted); }
 #editor .workspace-results .results-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; margin: 0; padding: 0; border: 0; background: none; }
 #editor .workspace-results .results-heading { flex: 1 1 auto; padding: 0; border: 0; }
 #editor .workspace-results .results-heading h2 { color: var(--muted); font-size: .8125rem; font-weight: 450; }
-#editor .workspace-results .download-all { margin: 0; min-height: 36px; padding-block: 4px; font-size: .875rem; }
+#editor .workspace-results .download-all { margin: 0; padding-block: 4px; font-size: .875rem; }
 #editor .workspace-results .file-list { flex: 1 1 100%; max-height: none; margin: 0; padding: 0; overflow: visible; }
 #editor .workspace-results .file-list > li { flex-wrap: nowrap; align-items: center; gap: 16px; padding: 6px 0; border-bottom: 1px solid var(--line); }
 #editor .workspace-results .file-list > li:last-child { border-bottom: 0; }
@@ -121,7 +121,7 @@
 #editor .workspace-results .file-description > h3 { flex-basis: 100%; }
 #editor .workspace-results .file-description > span { margin-top: 2px; font-size: .8125rem; line-height: 1.4; }
 #editor .workspace-results .file-description .retention-notice, #editor .workspace-results .file-description .adjusted-note { margin-top: 2px; font-size: .8125rem; }
-#editor .workspace-results .file-description .artifact-details summary { min-height: 32px; font-size: .8125rem; }
+#editor .workspace-results .file-description .artifact-details summary { min-height: 44px; font-size: .8125rem; }
 #editor .workspace-results .download-button { min-height: 44px; padding: 9px 22px; font-size: .9375rem; }
 #editor .workspace-results .cut-again { min-height: 44px; }
 
@@ -198,6 +198,9 @@
   .editor-docked:not(.workspace-reflow) #editor .timeline-zoom-slot .timeline-zoom-buttons > button { min-height: 32px; height: 32px; }
   .editor-docked:not(.workspace-reflow) #editor .timeline-zoom-slot .timeline-zoom-buttons > button:not(.text-button) { width: 32px; }
   .editor-docked:not(.workspace-reflow) #editor > .page-footer { display: none; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-results .download-all { min-height: 36px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-results .file-description .artifact-details summary { min-height: 32px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-results .job-status .background-source { min-height: 32px; }
   .editor-docked:not(.workspace-reflow) .editor-dialog { position: fixed; inset: calc(var(--workspace-height, 100dvh) / 2) auto auto 50%; margin: 0; transform: translate(-50%, -50%); }
 }
 @media (min-width: 900px) and (max-height: 760px) and (hover: hover) and (pointer: fine) {
@@ -307,4 +310,8 @@
     #editor .clip-library.compact .clip-list .clip-compact-edit { padding-inline: 4px; font-size: .75rem; line-height: 1.15; }
     #editor .clip-library.compact .clip-row-times > span:first-child { max-width: 9ch; white-space: normal; text-align: left; }
   }
+}
+@media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  #editor .moment-boundaries .time-input { min-height: 44px; }
+  #editor .export-notes :is(.enhancement-export-blocker, .crop-export-conflict, .pending-export-recovery, .enhancement-export-summary) .text-button { min-height: 44px; }
 }
