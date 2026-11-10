@@ -161,12 +161,17 @@ export async function closeEditorTools(page: Page) {
   }
 }
 
-export async function showTimelineMedia(page: Page) {
-  await goToMoment(page)
-  const disclosure = page.locator('details.timeline-media-disclosure')
-  if (await disclosure.count() && !await disclosure.evaluate(node => (node as HTMLDetailsElement).open)) {
-    await disclosure.locator('summary').click()
-  }
+/** Storyboard frames drawn inside the timeline track; placeholders lack `data-ready`. */
+export function trackFrames(page: Page, { ready = true }: { ready?: boolean } = {}) {
+  return page.locator(ready ? '.trim-track .track-frame[data-ready]' : '.trim-track .track-frame')
+}
+
+/** Clicks through a frame cell at its left edge, where its own time begins. */
+export async function clickTrackAt(page: Page, ms: number) {
+  const track = page.locator('.trim-track')
+  const [start, end] = await page.locator('.timeline').evaluate(node => [Number(node.getAttribute('data-view-start')), Number(node.getAttribute('data-view-end'))])
+  const box = (await track.boundingBox())!
+  await page.mouse.click(box.x + (ms - start) / (end - start) * box.width + 1, box.y + box.height / 2)
 }
 
 export async function goToClips(page: Page) {

@@ -61,18 +61,7 @@
 .workspace-page .timeline-section-heading { font-size: .75rem; }
 .workspace-page .timeline-detail-label { font-size: .8125rem; }
 .workspace-page .timeline-detail-label > span { color: var(--ink); font-weight: 480; }
-.workspace-page .trim-track { height: 56px; margin-inline: 30px; }
-.workspace-page .trim-track::before { top: 20px; height: 12px; background: var(--soft); }
-.workspace-page .trim-selection { top: 20px; height: 12px; background: color-mix(in srgb, var(--trim) 45%, transparent); border-block: 1px solid var(--trim-line); border-radius: 0; }
-.workspace-page .timeline .trim-handle { height: 56px; }
-.workspace-page .timeline .trim-handle .trim-grip { top: 10px; height: 32px; width: 14px; background: var(--trim); border-color: var(--trim-line); }
-.workspace-page .trim-grip::after { left: 6px; background: var(--trim-ink); opacity: .9; }
-.workspace-page .trim-ticks { top: 40px; }
-.workspace-page .playhead { top: 14px; height: 26px; }
-.workspace-page .tick-labels { margin: 0 0 6px; }
 .workspace-page .timeline-zoom-hint { margin-top: 4px; font-size: .6875rem; }
-.workspace-page .timeline-media-disclosure { margin-block: 6px 0; border-top: 1px solid var(--line); }
-.workspace-page .timeline-media-content { padding-block: 8px 12px; }
 .workspace-toolstrip { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
 .workspace-toolstrip .moment-preview { display: contents; }
 .workspace-toolstrip .moment-preview > .button { background: var(--selection); border-color: transparent; color: var(--accent); font-size: .8125rem; }

@@ -22,16 +22,20 @@
 /* Timeline: titles stay for assistive technology only. */
 #editor .moment-controls { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; column-gap: 12px; min-width: 0; padding: 0; border: 0; background: none; }
 #editor .moment-controls > .timeline { min-width: 0; }
+/* Handle hit areas may reach past the column at the ends of the video;
+   clipping does not make a scroll container, so the pinned form still sticks. */
+#editor.workspace-page { overflow-x: clip; }
 #editor .timeline-zoom-slot { display: flex; align-items: flex-end; }
 #editor .timeline-zoom-slot .timeline-zoom-buttons > button:not(.text-button) { color: var(--ink); }
 #editor .timeline-zoom-slot .timeline-zoom-buttons > .text-button { font-size: .8125rem; color: var(--muted); }
 #editor .moment-controls .timeline-section-labels { display: none; }
 #editor .moment-controls .timeline-zoom-hint { display: none; }
 #editor .moment-controls:not([data-overview]) .timeline-section { display: none; }
-#editor .moment-controls .timeline-section { margin: 0 0 4px; padding: 0; border: 0; background: none; }
+#editor .moment-controls .timeline-section { margin: 0 22px 6px; padding: 0; border: 0; background: none; }
 #editor .moment-controls .timeline-section-heading { display: none; }
-#editor .moment-controls .trim-track { margin-inline: 32px; }
-#editor .moment-controls .tick-labels { margin: 2px 0 0; font-size: .75rem; line-height: 1.3; }
+#editor .moment-controls .trim-track { margin-inline: 22px; }
+#editor .moment-controls .trim-track::before { inset-inline: -22px; }
+#editor .moment-controls .timeline-footer { margin-top: 4px; }
 #editor .timeline-detail-label > span { display: none; }
 
 /* Action row */
@@ -124,24 +128,36 @@
 #editor .workspace-results .file-description .artifact-details summary { min-height: 44px; font-size: .8125rem; }
 #editor .workspace-results .download-button { min-height: 44px; padding: 9px 22px; font-size: .9375rem; }
 #editor .workspace-results .cut-again { min-height: 44px; }
+#editor .workspace-results:not(.several) .results-heading { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+#editor .workspace-results .file-list > li > .cut-again { flex: none; border-color: transparent; background: none; color: var(--muted); }
+#editor .workspace-results .file-list > li > .cut-again:hover { color: var(--ink); background: var(--hover); }
+#editor .workspace-results .file-description > span .meta-separator { margin: 0 .2em; }
+#editor .workspace-results .file-description > :is(.retention-note, .artifact-details)::before { content: '·'; margin-right: 10px; color: var(--muted); }
+#editor .workspace-results .file-description .artifact-details { display: flex; flex-wrap: wrap; align-items: baseline; }
+#editor .workspace-results .file-description .artifact-details[open] { flex-basis: 100%; }
 
 /* Clip strip and secondary tools */
 #editor .workspace-clipbar { position: relative; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 24px; min-width: 0; }
-#editor .workspace-clipbar > .clip-library { flex: 1 1 480px; padding: 0; border: 0; border-radius: 0; background: none; }
-#editor .workspace-toolstrip { display: flex; flex: 0 1 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 20px; margin: 0 0 0 auto; padding: 0; border: 0; }
-#editor .workspace-toolstrip :is(.text-button, .crop-editor > summary, .timeline-media-disclosure > summary) { min-height: 44px; color: var(--muted); font-size: .875rem; font-weight: 500; white-space: nowrap; }
-#editor .workspace-toolstrip :is(.text-button, .crop-editor > summary, .timeline-media-disclosure > summary):hover { color: var(--ink); }
+/* The strip keeps room for its controls and one whole chip; the secondary
+   tools move to their own row before they squeeze it. */
+#editor .workspace-clipbar > .clip-library { padding: 0; border: 0; border-radius: 0; background: none; }
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  #editor .workspace-clipbar > .clip-library { flex: 1 1 38rem; min-width: min(100%, 38rem); }
+  #editor .workspace-clipbar > .clip-library[data-several] { flex-basis: 46rem; min-width: min(100%, 46rem); }
+}
+#editor .clip-library.compact .clip-list { flex: 1 1 auto; min-width: 0; }
+#editor .workspace-toolstrip { display: flex; flex: 0 1 auto; max-width: 100%; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 20px; margin: 0 0 0 auto; padding: 0; border: 0; }
+#editor .workspace-toolstrip :is(.text-button, .crop-editor > summary) { min-height: 44px; color: var(--muted); font-size: .875rem; font-weight: 500; white-space: nowrap; }
+#editor .workspace-toolstrip :is(.text-button, .crop-editor > summary):hover { color: var(--ink); }
 #editor .workspace-toolstrip .text-button[aria-pressed='true'], #editor .workspace-toolstrip .precision-toggle[aria-expanded='true'] { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
 #editor .workspace-toolstrip .timeline-detail-label { gap: 0; }
 #editor .workspace-toolstrip .timeline-zoom-buttons > button:not(.text-button) { color: var(--muted); }
 #editor .workspace-toolstrip .timeline-zoom-buttons > .text-button { font-size: .875rem; }
-#editor .workspace-toolstrip .timeline-media-disclosure { position: static; margin: 0; border: 0; }
-#editor .workspace-toolstrip .timeline-media-disclosure > summary { gap: 6px; justify-content: flex-start; }
 #editor .workspace-toolstrip .crop-editor { position: static; margin: 0; padding: 0; border: 0; }
 #editor .workspace-toolstrip .crop-current { display: none; }
 #editor .workspace-toolstrip .sequence-preview { display: flex; align-items: center; gap: 8px; }
 #editor .workspace-toolstrip .results-toggle-count { margin-left: 6px; font-variant-numeric: tabular-nums; }
-#editor .workspace-toolstrip :is(.timeline-media-content, .crop-controls) {
+#editor .workspace-toolstrip .crop-controls {
   position: absolute; z-index: 20; inset: auto 0 calc(100% + 8px) auto; width: min(600px, calc(100vw - 32px));
   max-height: min(calc(var(--workspace-height, 100dvh) * .65), 600px); overflow: auto; padding: 16px;
   border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: var(--pop-shadow);
@@ -179,9 +195,20 @@
   .editor-docked:not(.workspace-reflow) #editor .moment-layout > .player-frame:has(> .window-player) { container-type: size; }
   .editor-docked:not(.workspace-reflow) #editor .moment-layout .window-player { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; }
   .editor-docked:not(.workspace-reflow) #editor .window-player-screen { justify-self: center; align-self: center; width: auto; height: 100%; min-height: 0; max-width: 100%; max-height: calc(100cqw * 9 / 16); aspect-ratio: 16 / 9; }
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls { flex: none; }
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls .trim-track { height: 44px; }
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline .trim-handle { height: 44px; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls { flex: none; margin-top: clamp(0px, calc((var(--workspace-height, 100dvh) - 560px) / 10), 4px); }
+  /* A thin overview strip; the fine pointer does not need a 44px row. */
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-section-track,
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls :is(.timeline-section-window, .timeline-section-playback) { height: 20px; min-height: 20px; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-section { margin-bottom: 4px; }
+  /* The track gives up height with the window: frames shrink first, then
+     the waveform band leaves short windows to the player. */
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .trim-track {
+    --track-frames: clamp(44px, calc((var(--workspace-height, 100dvh) - 320px) * .2), 84px);
+    --track-wave: clamp(0px, calc((var(--workspace-height, 100dvh) - 560px) * .4), 24px);
+  }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-footer { min-height: 20px; margin-top: clamp(2px, calc((var(--workspace-height, 100dvh) - 540px) / 10), 4px); }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .tick-labels { line-height: 20px; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .track-duration { line-height: 18px; }
   .editor-docked:not(.workspace-reflow) #editor .workspace-actions { flex: 0 1 auto; min-height: 44px; }
   /* Ready files sit below the moment controls and scroll within the space
      left after the player keeps its minimum height. */
@@ -194,7 +221,7 @@
   .editor-docked:not(.workspace-reflow) #editor .clip-library.compact { --clip-strip-height: 96px; max-height: 96px; }
   .editor-docked:not(.workspace-reflow) #editor .clip-library.compact { flex-wrap: nowrap; }
   .editor-docked:not(.workspace-reflow) #editor .clip-library.compact .clip-compact-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  .editor-docked:not(.workspace-reflow) #editor .workspace-toolstrip :is(.text-button, .crop-editor > summary, .timeline-media-disclosure > summary) { min-height: 36px; height: 36px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-toolstrip :is(.text-button, .crop-editor > summary) { min-height: 36px; height: 36px; }
   .editor-docked:not(.workspace-reflow) #editor .timeline-zoom-slot .timeline-zoom-buttons > button { min-height: 32px; height: 32px; }
   .editor-docked:not(.workspace-reflow) #editor .timeline-zoom-slot .timeline-zoom-buttons > button:not(.text-button) { width: 32px; }
   .editor-docked:not(.workspace-reflow) #editor > .page-footer { display: none; }
@@ -258,8 +285,8 @@
   #editor .workspace-toolstrip { justify-content: flex-start; gap: 0 20px; margin: 0; min-width: 0; }
   #editor .workspace-clipbar > .clip-library { min-width: 0; max-width: 100%; }
   #editor .clip-library.compact .clip-list { min-width: 0; }
-  #editor .workspace-toolstrip :is(.timeline-media-content, .crop-controls) { position: static; width: 100%; max-height: none; box-shadow: none; }
-  #editor .workspace-toolstrip :is(.crop-editor, .timeline-media-disclosure)[open] { flex-basis: 100%; }
+  #editor .workspace-toolstrip .crop-controls { position: static; width: 100%; max-height: none; box-shadow: none; }
+  #editor .workspace-toolstrip .crop-editor[open] { flex-basis: 100%; }
 }
 @media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
   @media (max-width: 699px) {
@@ -270,7 +297,12 @@
     #editor .moment-duration { display: none; }
     #editor .workspace-results { grid-template-columns: minmax(0, 1fr); }
     #editor .workspace-results > .cut-again { grid-column: 1; grid-row: auto; justify-self: start; }
-    #editor .workspace-results .file-list > li { flex-wrap: wrap; }
+    #editor .workspace-results .file-list > li { flex-wrap: wrap; row-gap: 4px; }
+    #editor .workspace-results .file-list > li > .file-description { flex-basis: 100%; }
+    #editor .workspace-results .file-list > li > :is(.cut-again, .download-button) { flex: 1 1 0; width: auto; }
+    #editor .workspace-results .file-description { display: grid; gap: 2px; }
+    #editor .workspace-results .file-description > :is(.retention-note, .artifact-details)::before { content: none; }
+    #editor .workspace-results .file-description .artifact-details { margin: 0; }
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -314,4 +346,23 @@
 @media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
   #editor .moment-boundaries .time-input { min-height: 44px; }
   #editor .export-notes :is(.enhancement-export-blocker, .crop-export-conflict, .pending-export-recovery, .enhancement-export-summary) .text-button { min-height: 44px; }
+}
+
+/* The short cut label replaces the full one on phones; the full label keeps
+   naming the button for assistive technology. */
+#editor .export-submit .export-label-short { display: none; }
+@media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  #editor .export-submit { white-space: nowrap; }
+  #editor .export-submit .export-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  #editor .export-submit .export-label-short { display: inline; }
+  /* Title, duration and edit actions share one row under the header. */
+  #editor .editor-title-row { flex-wrap: nowrap; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  #editor .editor-title-row .editor-heading { flex: 1 1 auto; min-width: 0; }
+  #editor .editor-title-row .source-title { flex: 0 1 auto; flex-basis: auto; width: auto; font-size: 1rem; }
+  #editor .editor-title-row .workspace-heading-actions { flex: none; flex-wrap: nowrap; gap: 0; }
+  #editor .editor-title-row .workspace-heading-actions .edit-history-actions { margin: 0; }
+  #editor .editor-title-row .change-source { min-height: 44px; padding-inline: 14px; font-size: .875rem; }
+}
+@media (max-width: 359px) {
+  #editor .editor-title-row { flex-wrap: wrap; }
 }

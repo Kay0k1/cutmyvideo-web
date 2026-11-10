@@ -258,7 +258,7 @@ test('the desktop editing canvas exposes its primary controls without scrolling 
       expect(panel.overflow, `${width}×${height}: ${panel.name} needs no scrolling`).toBeLessThanOrEqual(1)
       expect(panel.top).toBe(0)
     }
-    for (const selector of ['.trim-handle.start', '.trim-handle.end', '.time-value', '.precision-toggle', '.moment-preview > .button', '.timeline-media-disclosure > summary', '.editor-tools-toggle', '.format-picker', '.export-options-toggle', '.export-submit']) {
+    for (const selector of ['.trim-handle.start', '.trim-handle.end', '.time-value', '.precision-toggle', '.moment-preview > .button', '.editor-tools-toggle', '.format-picker', '.export-options-toggle', '.export-submit']) {
       for (const control of await page.locator(selector).all()) {
         const hit = await control.evaluate(node => {
           const r = node.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2
@@ -274,7 +274,7 @@ test('the desktop editing canvas exposes its primary controls without scrolling 
         }
       }
     }
-    for (const [trigger, panel] of [['.timeline-media-disclosure > summary', '.timeline-media-content'], ['.crop-editor > summary', '.crop-controls']]) {
+    for (const [trigger, panel] of [['.crop-editor > summary', '.crop-controls']]) {
       await page.locator(trigger).click()
       const box = (await page.locator(panel).boundingBox())!
       expect(box.y, `${panel} opens above the trim dock`).toBeGreaterThanOrEqual(0)

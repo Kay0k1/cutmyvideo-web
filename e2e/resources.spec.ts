@@ -387,9 +387,10 @@ test('resource policy: lowered count limits keep all saved clips and existing do
   } }] } }))
   await page.reload()
   await expect(page.locator('.clip-list > li')).toHaveCount(3)
+  // The restored download is shown on its own; the form explains the lowered limit.
+  await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
   await goToExport(page)
   await expect(page.getByRole('alert')).toContainText('Можно экспортировать не больше 2 фрагментов')
-  await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
   await goToClips(page); await expect(page.locator('.clip-list > li')).toHaveCount(3)
   await expect(page.getByRole('button', { name: 'Ещё фрагмент', exact: true })).toBeDisabled()
 })

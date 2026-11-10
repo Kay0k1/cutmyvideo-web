@@ -242,7 +242,8 @@ test('a completed job does not override the chosen moments or source step on rel
   await goToMoment(page)
   await showExactTimes(page)
   await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:02.000')
-  await goToExport(page)
+  // The restored result takes the place of the form without another click.
+  await expect(page.locator('#workspace-results')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toHaveAttribute('href', job.items[0].artifact.download_url)
   const probe = await probeDownloadedFile(page.request, job.items[0].artifact.download_url, 'restored-original-job.mp4', testInfo)
   expect(Math.abs(Number(probe.format.duration) - 2.5)).toBeLessThan(0.2)
