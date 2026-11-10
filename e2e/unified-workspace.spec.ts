@@ -32,7 +32,8 @@ async function workspaceFits(page: Page, collection = '.clip-library') {
   for (const [selector, description] of [
     ['video', 'Native player'], ['.trim-track', 'Timeline'],
     ['.trim-handle.start', 'Start handle'], ['.trim-handle.end', 'End handle'],
-    [collection, 'Clip collection or ready files'], [await page.locator('.workspace-export-toggle').isVisible() ? '.workspace-export-toggle' : '.export-submit', 'Export button'],
+    // Ready files replace the cutting form in the action row; "Cut another" returns to it.
+    [collection, 'Clip collection or ready files'], [await page.locator('#workspace-results').isVisible() ? '.cut-again' : '.export-submit', 'Cut button or Cut another'],
   ]) {
     // Short windows can scroll. The player keeps a usable size and every
     // action must be reachable without a clipped or locked document.
@@ -291,7 +292,7 @@ test('a long clip collection scrolls internally while editing and export remain 
     await page.goto('/')
     await uploadThroughUI(page)
     await readyWorkspace(page)
-    const add = page.locator('.clip-library').getByRole('button', { name: 'Добавить фрагмент', exact: true })
+    const add = page.locator('.clip-library').getByRole('button', { name: 'Ещё фрагмент', exact: true })
     for (let i = 0; i < 11; i++) await add.click()
     const list = page.locator('.clip-list')
     await expect(list.locator('> li')).toHaveCount(12)

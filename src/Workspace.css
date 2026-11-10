@@ -189,86 +189,8 @@ body:has(.editor-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-b
   .workspace-page .time-value { font-size: .8125rem; }
 }
 
-@media (max-width: 600px) {
-  .workspace-page .moment-mobile-markers { display: grid; margin-bottom: 16px; }
-  .workspace-page .moment-mobile-markers > .marker-button { flex-wrap: wrap; gap: 4px; }
-  .workspace-page .moment-mobile-markers .marker-text { display: inline; }
-  .workspace-page .moment-mobile-markers kbd { display: inline-grid; }
-}
-
-.workspace-export-toggle { display: none; }
 .timeline-tools { display: contents; }
-.workspace-export-dialog { position: fixed; inset: 50% auto auto 50%; margin: 0; transform: translate(-50%, -50%); z-index: 30; }
-.workspace-export-dialog .export-panel { padding: 0; border: 0; background: none; }
-.workspace-export-dialog .export-heading h2 { display: none; }
 
-@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
-  .editor-docked:not(.workspace-reflow) { position: fixed; inset: 0; display: flex; flex-direction: column; height: var(--workspace-height, 100dvh); min-height: 0; overflow: clip; }
-  .editor-docked:not(.workspace-reflow) .site-header { flex: none; }
-  .editor-docked:not(.workspace-reflow) .header-inner { flex-wrap: nowrap; }
-  .editor-docked:not(.workspace-reflow) .workspace-page { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0 auto; padding: 8px 12px; }
-  .editor-docked:not(.workspace-reflow) .editor-workspace { position: relative; flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) 304px; grid-template-rows: minmax(0, 1fr) auto; align-items: stretch; gap: 12px; }
-  .editor-docked:not(.workspace-reflow) :is(.moments-stage, .editing-panel, .moment-layout) { display: contents; }
-  .editor-docked:not(.workspace-reflow) .media-heading { display: none; }
-  .editor-docked:not(.workspace-reflow) .moment-layout > .player-frame { grid-column: 1; grid-row: 1; align-self: stretch; width: 100%; height: 100%; min-height: 0; max-height: none; aspect-ratio: auto; border: 0; border-radius: 14px; container-type: size; }
-  .editor-docked:not(.workspace-reflow) .moment-layout .youtube-player { width: min(100cqw, calc(100cqh * 16 / 9)); height: min(100cqh, calc(100cqw * 9 / 16)); max-width: none; }
-  .editor-docked:not(.workspace-reflow) .moment-layout .window-player { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; }
-  .editor-docked:not(.workspace-reflow) .window-player-screen { justify-self: center; align-self: center; width: auto; height: 100%; min-height: 0; max-width: 100%; max-height: calc(100cqw * 9 / 16); aspect-ratio: 16 / 9; }
-  .editor-docked:not(.workspace-reflow) .moment-controls { position: relative; grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 24px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
-  .editor-docked:not(.workspace-reflow) .trim-heading { display: none; }
-  .editor-docked:not(.workspace-reflow) .moment-boundaries { grid-column: 2; grid-row: 1; grid-template-columns: max-content max-content auto; margin: 0; gap: 8px; }
-  .editor-docked:not(.workspace-reflow) .moment-boundaries > div:not(.moment-duration) { grid-template-columns: max-content auto; padding: 4px 8px; }
-  .editor-docked:not(.workspace-reflow) .moment-duration { padding: 0; }
-  .editor-docked:not(.workspace-reflow) .timeline { grid-column: 1; grid-row: 1; display: grid; grid-template-columns: minmax(80px, .4fr) minmax(0, 1fr); align-items: center; gap: 0 20px; min-width: 0; position: relative; }
-  .editor-docked:not(.workspace-reflow) .timeline-section { grid-column: 1; grid-row: 1; margin: 0; padding: 0; border: 0; background: none; }
-  .editor-docked:not(.workspace-reflow) :is(.timeline-section-heading, .timeline-section-labels, .timeline-detail-label > span, .timeline-zoom-hint) { display: none; }
-  .editor-docked:not(.workspace-reflow) .timeline-detail-label { grid-column: 2; grid-row: 1; }
-  .editor-docked:not(.workspace-reflow) .trim-track { grid-column: 2; grid-row: 1; height: 44px; margin-inline: 30px; }
-  .editor-docked:not(.workspace-reflow) .timeline .trim-handle { height: 44px; }
-  .editor-docked:not(.workspace-reflow) .tick-labels { grid-column: 2; grid-row: 2; margin: 0; font-size: .6875rem; line-height: 1.2; }
-  .editor-docked:not(.workspace-reflow) .workspace-toolstrip { grid-column: 1 / -1; grid-row: 2; gap: 4px 12px; margin: 4px 0 0; padding-top: 4px; flex-wrap: nowrap; }
-  .editor-docked:not(.workspace-reflow) .timeline-media-disclosure { grid-column: 1 / -1; grid-row: 4; position: static; margin: 0; border: 0; inset: auto; order: 2; }
-  .editor-docked:not(.workspace-reflow) .timeline-media-disclosure > summary { min-width: 112px; gap: 8px; }
-  .editor-docked:not(.workspace-reflow) :is(.timeline-media-content, .crop-controls) { position: absolute; z-index: 20; inset: auto auto calc(100% + 12px) 12px; width: min(600px, calc(100vw - 48px)); max-height: min(calc(var(--workspace-height, 100dvh) * .65), 600px); overflow: auto; padding: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 40px #0003; }
-  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .crop-editor[open] { flex-basis: auto; order: 0; }
-  .editor-docked:not(.workspace-reflow) .workspace-sidebar { grid-column: 2; grid-row: 1; position: static; display: flex; flex-direction: column; min-height: 0; gap: 0; }
-  .editor-docked:not(.workspace-reflow) .workspace-collection-tabs { flex: none; margin-bottom: 8px; }
-  .editor-docked:not(.workspace-reflow) .workspace-clips { display: flex; flex: 1; min-height: 0; }
-  .editor-docked:not(.workspace-reflow) .clip-library.compact { flex: 1; min-width: 0; min-height: 0; padding: 8px; }
-  .editor-docked:not(.workspace-reflow) .clip-library.compact .clip-library-heading { margin-bottom: 0; }
-  .editor-docked:not(.workspace-reflow) .clip-library.compact .clip-bulkbar { margin-bottom: 4px; }
-  .editor-docked:not(.workspace-reflow) .clip-library.compact .clip-list { flex: 1; min-height: 0; max-height: none; }
-  .editor-docked:not(.workspace-reflow) .workspace-results { flex: 1; min-height: 0; max-height: none; }
-  .editor-docked:not(.workspace-reflow) .page-footer { display: none; }
-  .editor-docked .workspace-export-toggle { display: inline-flex; margin-left: 4px; }
-  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .moment-preview { order: 0; }
-  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .crop-editor { order: 3; }
-  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .editor-tools-toggle { order: 4; }
-  .editor-docked .workspace-export-dialog :is(.export-panel,.export-scroll,.export-actions) { height: auto; overflow: visible; }
-  .editor-docked .workspace-export-dialog .export-panel { padding: 0; }
-  .editor-docked .workspace-export-dialog .export-settings-summary { display: grid; }
-  .editor-docked .workspace-export-dialog .export-empty-hint { display: block; }
-  .editor-docked .workspace-export-dialog .export-options-toggle { min-height: 44px; }
-  .editor-docked:not(.workspace-reflow) .timeline-tools .timeline-detail-label { order: 1; }
-  .editor-docked:not(.workspace-reflow) .clip-library.compact .clip-list .clip-compact-edit { min-height: 44px; padding: 4px 8px; }
-  .editor-docked:not(.workspace-reflow) .clip-compact-edit .clip-row-times > span:last-child, .editor-docked:not(.workspace-reflow) .clip-edit-label { display: none; }
-  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .preview-button-label { display: none; }
-  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .moment-preview > .button { width: 44px; min-width: 44px; padding: 0; justify-content: center; }
-  .editor-docked:not(.workspace-reflow) .clip-library[data-at-limit] .clip-compact-hint { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); border: 0; }
-  .editor-docked:not(.workspace-reflow) .time-value { flex-wrap: nowrap; white-space: nowrap; font-size: 1rem; }
-  .editor-docked:not(.workspace-reflow) .sequence-preview { display: contents; }
-  .editor-docked:not(.workspace-reflow) .sequence-preview > button { width: 44px; min-width: 44px; padding: 0; justify-content: center; order: 0; }
-  .editor-docked:not(.workspace-reflow) .sequence-label { display: none; }
-  .editor-docked:not(.workspace-reflow) .sequence-preview > span { position: fixed; top: 124px; left: 24px; max-width: 40ch; padding: 6px 10px; border-radius: 6px; background: var(--surface); z-index: 5; }
-
-  .editor-docked .editor-dialog { position: fixed; inset: calc(var(--workspace-height, 100dvh) / 2) auto auto 50%; margin: 0; transform: translate(-50%, -50%); }
-
-  .editor-docked:not(.workspace-reflow) .workspace-toolstrip .crop-editor { position: static; }
-  .editor-docked:not(.workspace-reflow) .crop-controls { left: auto; right: 12px; width: min(320px, calc(100vw - 48px)); }
-
-  .editor-docked:not(.workspace-reflow) .time-input { width: 13ch; min-width: 13ch; }
-
-}
 .enhancement-export-summary { margin: 10px 0; padding: 10px 0; border-top: 1px solid var(--line); font-size: .875rem; }
 .enhancement-export-summary > p:first-child { font-weight: 480; }
 .enhancement-export-blocker { margin: 10px 0; padding: 12px; border: 1px solid var(--error); border-radius: 12px; color: var(--error); background: var(--error-bg); font-size: .875rem; }

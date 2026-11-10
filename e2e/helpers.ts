@@ -79,14 +79,14 @@ export async function goToMoment(page: Page) {
 }
 
 export async function goToExport(page: Page) {
-  if (await page.locator('.workspace-export-dialog').isVisible() && !await page.locator('.export-settings-dialog').isVisible()) return
   await closeWorkspaceDialogs(page)
   if (await unifiedWorkspace(page) || await page.locator('.export-panel').isVisible()) {
-    const files = page.getByRole('tab', { name: /^(Готовые файлы|Ready files)$/ })
-    if (await files.isVisible() && await files.isEnabled()) await files.click()
-    const review = page.locator('.workspace-export-toggle')
-    if (await review.isVisible()) await review.click()
-    await expect(page.locator('.export-panel').first()).toBeVisible()
+    // The action row holds either the cutting form or the latest result;
+    // "Cut another" returns to the form. A running job keeps its progress there.
+    const form = page.locator('.export-panel').first()
+    const again = page.getByRole('button', { name: /^(Вырезать ещё|Cut another)$/ })
+    if (!await form.isVisible() && await again.isVisible()) await again.click()
+    await expect(page.locator('.export-panel:visible, #workspace-results:visible').first()).toBeVisible()
     return
   } else {
     const downloads = page.getByRole('button', { name: /^(Вернуться к скачиванию|Return to downloads)$/ })
@@ -106,6 +106,23 @@ export async function goToExport(page: Page) {
   if (await advanced.count() && !await advanced.evaluate(element => (element as HTMLDetailsElement).open)) {
     await advanced.locator('summary').click()
   }
+}
+
+/** Shows the ready files (or the running job) in place of the cutting form. */
+export async function showResults(page: Page) {
+  await closeWorkspaceDialogs(page)
+  const results = page.locator('#workspace-results')
+  if (!await unifiedWorkspace(page)) {
+    await expect(page.locator('.output-stage')).toBeVisible()
+    return
+  }
+  if (!await results.isVisible()) {
+    const toggle = page.getByRole('button', { name: /^(Готовые файлы|Ready files)$/ })
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  }
+  await expect(results).toBeVisible()
 }
 
 export async function showExportSettings(page: Page) {
@@ -155,8 +172,6 @@ export async function showTimelineMedia(page: Page) {
 export async function goToClips(page: Page) {
   await closeWorkspaceDialogs(page)
   if (await unifiedWorkspace(page)) {
-    const clips = page.getByRole('tab', { name: /^(Фрагменты|Clips)$/ })
-    if (await clips.isVisible()) await clips.click()
     await expect(page.locator('.clip-library')).toBeVisible()
     return
   }
@@ -192,7 +207,7 @@ export async function saveClip(page: Page) {
 
 export async function addClip(page: Page) {
   await goToClips(page)
-  await page.getByRole('button', { name: /^(Добавить фрагмент|Add a clip)$/ }).click()
+  await page.getByRole('button', { name: /^(Ещё фрагмент|Another clip)$/ }).click()
   if (await page.locator('.editor-workspace').isVisible()) {
     await expect(page.locator('.moments-stage')).toBeVisible()
     return

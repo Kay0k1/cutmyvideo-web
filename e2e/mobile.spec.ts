@@ -18,7 +18,7 @@ test('mobile source and range controls remain usable at 360 and 390 px', async (
   await page.getByLabel('Конец', { exact: true }).fill('00:00:04.000')
   await page.getByLabel('Конец', { exact: true }).press('Tab')
   await goToClips(page)
-  await page.getByRole('button', { name: 'Добавить фрагмент', exact: true }).tap()
+  await page.getByRole('button', { name: 'Ещё фрагмент', exact: true }).tap()
   await expect(page.locator('.editor-workspace')).toBeVisible()
   await showExactTimes(page)
   await expect.poll(() => page.locator('video').evaluate(element => (element as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2)

@@ -163,9 +163,8 @@ async function workspace(page: Page, youtube = false, touch = false) {
   for (const selector of ['.trim-handle.start', '.trim-handle.end', '.precision-toggle', '.editor-tools-toggle']) {
     await reachable(page.locator(selector), selector)
   }
-  await reachable(page.locator('.clip-library').getByRole('button', { name: /^(Добавить фрагмент|Add a clip)$/ }), 'Add a clip')
-  const exportControl = await page.locator('.workspace-export-toggle').isVisible() ? '.workspace-export-toggle' : '.export-submit'
-  await reachable(page.locator(exportControl), 'Open export')
+  await reachable(page.locator('.clip-library').getByRole('button', { name: /^(Ещё фрагмент|Another clip)$/ }), 'Add a clip')
+  await reachable(page.locator('.export-submit'), 'Cut button')
   // A long collection must leave the final clip reachable as well.
   await reachable(page.locator('.clip-list > li').last().locator('.clip-edit'), 'Last clip')
 }
@@ -173,7 +172,7 @@ async function workspace(page: Page, youtube = false, touch = false) {
 async function capture(page: Page, testInfo: TestInfo, name: string) {
   await page.evaluate(() => {
     document.querySelector('.clip-list')?.scrollTo(0, 0)
-    for (const node of document.querySelectorAll('.moment-controls,.editing-panel,.workspace-sidebar,.workspace-clips,.export-panel,.export-scroll')) node.scrollTo(0, 0)
+    for (const node of document.querySelectorAll('.moment-controls,.editing-panel,.workspace-results,.export-panel')) node.scrollTo(0, 0)
     scrollTo(0, 0)
   })
   const path = testInfo.outputPath(`${name}.png`)
@@ -199,7 +198,7 @@ test('desktop panels track tab-bar height changes and restored Safari viewports 
       const firstRow = (await page.locator('.clip-list > li').first().boundingBox())!
       expect(list.height, 'The clip list must retain enough room for a complete clip').toBeGreaterThanOrEqual(firstRow.height)
       await goToExport(page)
-      await reachable(page.locator('.export-submit'), 'Export in the review dialog')
+      await reachable(page.locator('.export-submit'), 'Cut button in the action row')
       await page.locator('.format-picker button').first().click({ trial: true })
       await goToExport(page)
       await page.locator('.export-submit').click({ trial: true })
@@ -220,8 +219,8 @@ test('desktop panels track tab-bar height changes and restored Safari viewports 
     })
     await expect.poll(() => page.locator('.workspace-shell').evaluate(node => node.getBoundingClientRect().height)).toBe(628)
     await goToExport(page)
-    const review = (await page.locator('.workspace-export-dialog').boundingBox())!
-    expect(review.y, 'Export review fits the visible Safari viewport').toBeGreaterThanOrEqual(0)
+    const review = (await page.locator('.export-panel').boundingBox())!
+    expect(review.y, 'The cutting form fits the visible Safari viewport').toBeGreaterThanOrEqual(0)
     expect(review.y + review.height).toBeLessThanOrEqual(628)
     await goToMoment(page)
     const anotherTab = await page.context().newPage()
@@ -229,7 +228,7 @@ test('desktop panels track tab-bar height changes and restored Safari viewports 
     await anotherTab.bringToFront()
     await page.bringToFront()
     await anotherTab.close()
-    await reachable(page.locator('.workspace-export-toggle'), 'Export after returning from another tab')
+    await reachable(page.locator('.export-submit'), 'Cut button after returning from another tab')
     expect(await page.evaluate(() => scrollY)).toBe(0)
     await page.evaluate(() => { Reflect.deleteProperty(visualViewport!, 'height') })
     await page.setViewportSize({ width: 1440, height: 678 })
@@ -252,14 +251,14 @@ test('the desktop editing canvas exposes its primary controls without scrolling 
   for (const [width, height] of [[900, 500], [1280, 600], [1440, 706], [1920, 1080]]) {
     await page.setViewportSize({ width, height })
     await settle(page)
-    const panels = await page.locator('.workspace-page,.editor-workspace,.moment-controls,.workspace-sidebar').evaluateAll(nodes => nodes.map(node => ({
+    const panels = await page.locator('.workspace-page,.editor-workspace,.moment-controls,.workspace-actions,.workspace-clipbar').evaluateAll(nodes => nodes.map(node => ({
       name: node.className, overflow: node.scrollHeight - node.clientHeight, top: node.scrollTop,
     })))
     for (const panel of panels) {
       expect(panel.overflow, `${width}×${height}: ${panel.name} needs no scrolling`).toBeLessThanOrEqual(1)
       expect(panel.top).toBe(0)
     }
-    for (const selector of ['.trim-handle.start', '.trim-handle.end', '.time-value', '.precision-toggle', '.moment-preview > .button', '.timeline-media-disclosure > summary', '.editor-tools-toggle', '.workspace-export-toggle']) {
+    for (const selector of ['.trim-handle.start', '.trim-handle.end', '.time-value', '.precision-toggle', '.moment-preview > .button', '.timeline-media-disclosure > summary', '.editor-tools-toggle', '.format-picker', '.export-options-toggle', '.export-submit']) {
       for (const control of await page.locator(selector).all()) {
         const hit = await control.evaluate(node => {
           const r = node.getBoundingClientRect(), x = r.x + r.width / 2, y = r.y + r.height / 2
@@ -294,7 +293,7 @@ test('the desktop editing canvas exposes its primary controls without scrolling 
   await expect(page.locator('.export-settings-dialog')).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.locator('.export-settings-dialog')).not.toBeVisible()
-  await expect(page.locator('.workspace-export-dialog')).toBeVisible()
+  await expect(page.locator('.export-panel')).toBeVisible()
   await expect(settings).toBeFocused()
 })
 

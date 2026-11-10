@@ -12,7 +12,7 @@ import { Icon } from './Icons';
 import { TimelineSection } from './TimelineSection';
 import './Timeline.css';
 
-export function Timeline({ duration, position, ranges, selected, section, view, maximumRange = Infinity, showOverview = true, compact = false, toolsContainer, sourceID, active, audioTrack, noAudio, onSeek, onRange, onReveal, onSection, onView, onBeginChange, onEndChange }: {
+export function Timeline({ duration, position, ranges, selected, section, view, maximumRange = Infinity, showOverview = true, compact = false, toolsContainer, mediaContainer, sourceID, active, audioTrack, noAudio, onSeek, onRange, onReveal, onSection, onView, onBeginChange, onEndChange }: {
   duration: number;
   position: PlaybackPosition;
   ranges: ClipRange[];
@@ -23,6 +23,8 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
   showOverview?: boolean;
   compact?: boolean;
   toolsContainer?: HTMLElement | null;
+  /** Where the compact media disclosure renders; defaults to the tools container. */
+  mediaContainer?: HTMLElement | null;
   sourceID: string;
   active: boolean;
   audioTrack?: number;
@@ -221,7 +223,7 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
     </div>
     <div className="tick-labels" aria-hidden="true"><span>{formatTimecode(view[0], span < 10000)}</span><span>{formatTimecode((view[0] + view[1]) / 2, span < 10000)}</span><span>{formatTimecode(view[1], span < 10000)}</span></div>
     <div className="timeline-zoom-hint"><span>{t('Колесо или жест сведения — масштаб; жест вбок — перемещение.')}</span></div>
-    {compact ? (toolsContainer ? createPortal(mediaDisclosure, toolsContainer) : mediaDisclosure) : mediaTools}
+    {compact ? (mediaContainer ?? toolsContainer ? createPortal(mediaDisclosure, (mediaContainer ?? toolsContainer)!) : mediaDisclosure) : mediaTools}
     <p id="trim-hint" className="sr-only">{t('Двигайте ручки начала и конца. Стрелки меняют время на 0,1 секунды, Shift — на секунду.')}</p>
     <p id="seek-hint" className="sr-only">{t('Нажмите на шкалу или двигайте указатель, чтобы перемотать. Стрелки — 0,1 секунды, Shift — секунда; Home и End — начало и конец видео.')}</p>
   </div>;

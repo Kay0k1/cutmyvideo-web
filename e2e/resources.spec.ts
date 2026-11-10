@@ -391,7 +391,7 @@ test('resource policy: lowered count limits keep all saved clips and existing do
   await expect(page.getByRole('alert')).toContainText('Можно экспортировать не больше 2 фрагментов')
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toBeVisible()
   await goToClips(page); await expect(page.locator('.clip-list > li')).toHaveCount(3)
-  await expect(page.getByRole('button', { name: 'Добавить фрагмент', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Ещё фрагмент', exact: true })).toBeDisabled()
 })
 
 test('long recordings: 42-minute and full-stream selections, fast export, and a second source during processing', async ({ page }, testInfo) => {
