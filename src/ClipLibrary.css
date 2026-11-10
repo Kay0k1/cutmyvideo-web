@@ -71,7 +71,8 @@
 }
 .clip-library.compact .clip-list > li.editing { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 
-.clip-library.compact .clip-row-body { display: flex; flex: 0 1 auto; min-width: 3em; }
+.clip-library.compact .clip-row-body { display: flex; flex: 0 1 auto; min-width: 2.5em; }
+.clip-library.compact .clip-list .clip-compact-edit { flex: none; }
 .clip-library.compact .clip-row-title { display: flex; min-width: 0; }
 .clip-library.compact .clip-row-name {
   min-width: 0;
@@ -110,7 +111,8 @@
 .clip-library.compact .clip-row-times > span:last-child,
 .clip-library.compact .clip-edit-label { display: none; }
 
-.clip-library.compact .clip-row-menu { display: flex; align-items: center; min-width: 0; }
+.clip-library.compact .clip-row-menu { display: flex; flex: none; align-items: center; }
+.clip-library.compact .clip-list > li > .clip-checkbox { flex: none; }
 .clip-library.compact .clip-row-menu > summary { width: 40px; min-height: 40px; }
 .clip-library.compact .clip-row-actions { display: flex; align-items: center; gap: 0; }
 .clip-library.compact .clip-row-actions .icon-button { width: 40px; min-height: 40px; }
@@ -138,3 +140,5 @@
   .clip-library.compact .clip-list > li,
   .clip-library.compact .clip-bulkbar { height: 48px; }
 }
+
+.clip-library.compact details:not([open]) > :not(summary) { display: none; }

@@ -113,7 +113,9 @@ test('phone controls fit 320 and 360 pixels and retain the compact frame disclos
     for (const name of ['Начало по позиции плеера', 'Конец по позиции плеера']) {
       const marker = page.getByRole('button', { name, exact: true }); await expect(marker).toHaveCount(1);
       const bounds = await marker.boundingBox(); expect(bounds).toBeTruthy(); expect(bounds!.height).toBeGreaterThanOrEqual(44);
-      expect(bounds!.y - (frame!.y + frame!.height)).toBeLessThanOrEqual(100);
+      // Boundary buttons follow the timeline directly, which sits under the player.
+      const track = await page.locator('.trim-track').boundingBox(); expect(track!.y).toBeGreaterThan(frame!.y + frame!.height);
+      expect(bounds!.y - (track!.y + track!.height)).toBeLessThanOrEqual(100);
       await expect(marker.locator('kbd')).toHaveText(name.startsWith('Начало') ? 'I' : 'O');
     }
     await expect(page.locator('.page-heading h1')).toContainText(source.title);
