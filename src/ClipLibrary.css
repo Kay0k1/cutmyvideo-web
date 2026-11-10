@@ -69,6 +69,8 @@
   list-style: none;
   overflow: auto;
   overscroll-behavior: contain;
+  /* No reserved gutter: one row of chips keeps its full width. */
+  scrollbar-gutter: auto;
 }
 
 .clip-library.compact .clip-list > li {
