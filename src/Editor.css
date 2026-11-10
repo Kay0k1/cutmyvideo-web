@@ -19,15 +19,21 @@
   max-height: none; aspect-ratio: auto; object-fit: contain; border-radius: 14px; background: #000;
 }
 
-/* Timeline: titles stay for assistive technology only. */
-#editor .moment-controls { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; column-gap: 12px; min-width: 0; padding: 0; border: 0; background: none; }
+/* Timeline: the track spans the column; edge times, the selection length and
+   zoom share the row under it. Titles stay for assistive technology only. */
+#editor .moment-controls { position: relative; display: block; min-width: 0; padding: 0; border: 0; background: none; }
 #editor .moment-controls > .timeline { min-width: 0; }
 /* Handle hit areas may reach past the column at the ends of the video;
    clipping does not make a scroll container, so the pinned form still sticks. */
 #editor.workspace-page { overflow-x: clip; }
-#editor .timeline-zoom-slot { display: flex; align-items: flex-end; }
-#editor .timeline-zoom-slot .timeline-zoom-buttons > button:not(.text-button) { color: var(--ink); }
-#editor .timeline-zoom-slot .timeline-zoom-buttons > .text-button { font-size: .8125rem; color: var(--muted); }
+#editor .moment-controls .timeline-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 0 16px; }
+/* Line heights follow the text so larger text still resizes the controls. */
+#editor .moment-controls .tick-labels { flex: 1 1 10rem; min-width: 0; line-height: 2; }
+#editor .moment-controls .timeline-detail-label { flex: none; margin-left: auto; }
+#editor .moment-controls .timeline-zoom-buttons > button { min-height: 24px; height: 24px; padding-block: 0; line-height: 1; }
+#editor .moment-controls .timeline-zoom-buttons > button:not(.text-button) { width: 32px; color: var(--ink); font-size: 1.125rem; }
+#editor .moment-controls .timeline-zoom-buttons > .text-button { padding-inline: 4px; color: var(--muted); font-size: .8125rem; }
+#editor .moment-controls .timeline-zoom-buttons > .text-button:hover:not(:disabled) { color: var(--ink); }
 #editor .moment-controls .timeline-section-labels { display: none; }
 #editor .moment-controls .timeline-zoom-hint { display: none; }
 #editor .moment-controls:not([data-overview]) .timeline-section { display: none; }
@@ -77,7 +83,8 @@
 #editor .format-picker strong { font-size: .9375rem; font-weight: 500; }
 #editor .format-picker span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 #editor .export-options-toggle { min-height: 44px; border: 1px solid var(--strong-line); background: var(--surface); }
-#editor .export-submit { width: auto; min-height: 44px; margin: 0; padding-inline: 24px; white-space: nowrap; }
+#editor .export-submit { width: auto; min-height: 44px; margin: 0; padding-inline: 24px; column-gap: 0; white-space: nowrap; }
+#editor .export-submit .spinner { margin-right: 8px; }
 #editor .export-submit .export-summary { display: inline; margin: 0; padding: 0; border: 0; color: inherit; font-size: inherit; }
 #editor .export-submit .export-summary > :not([hidden])::before { content: '·'; margin: 0 .4em; }
 #editor .export-submit .export-summary strong { color: inherit; font-weight: inherit; }
@@ -124,7 +131,7 @@
 #editor .workspace-results .file-description { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 10px; }
 #editor .workspace-results .file-description > h3 { flex-basis: 100%; }
 #editor .workspace-results .file-description > span { margin-top: 2px; font-size: .8125rem; line-height: 1.4; }
-#editor .workspace-results .file-description .retention-notice, #editor .workspace-results .file-description .adjusted-note { margin-top: 2px; font-size: .8125rem; }
+#editor .workspace-results .file-description .retention-note, #editor .workspace-results .file-description .adjusted-note { margin-top: 2px; font-size: .8125rem; }
 #editor .workspace-results .file-description .artifact-details summary { min-height: 44px; font-size: .8125rem; }
 #editor .workspace-results .download-button { min-height: 44px; padding: 9px 22px; font-size: .9375rem; }
 #editor .workspace-results .cut-again { min-height: 44px; }
@@ -148,7 +155,15 @@
 #editor .workspace-clipbar > .clip-library { padding: 0; border: 0; border-radius: 0; background: none; }
 @media (min-width: 900px) and (hover: hover) and (pointer: fine) {
   #editor .workspace-clipbar > .clip-library { flex: 1 1 36rem; min-width: min(100%, 24rem); }
-  #editor .workspace-toolstrip { column-gap: 16px; }
+  #editor .workspace-clipbar { column-gap: 16px; }
+  #editor .workspace-clipbar > .workspace-toolstrip { column-gap: 16px; }
+  #editor .clip-library.compact .clip-bulk-menu > summary { padding-inline: 8px; }
+}
+/* Below the full column width the tools always take their own row, so the
+   Ready files button that appears after a job cannot wrap them and shrink
+   the player. */
+@media (min-width: 900px) and (max-width: 1167px) and (hover: hover) and (pointer: fine) {
+  #editor .workspace-clipbar > .clip-library { flex-basis: 100%; }
 }
 /* With several clips and room to spare, the tools take their own row so the
    chips keep their width; short windows keep one row for the player. */
@@ -197,7 +212,7 @@
   .editor-docked:not(.workspace-reflow) .site-header { flex: none; }
   .editor-docked:not(.workspace-reflow) .header-inner { flex-wrap: nowrap; }
   .editor-docked:not(.workspace-reflow) #editor.workspace-page { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; margin: 0 auto; padding: 4px 24px 8px; }
-  .editor-docked:not(.workspace-reflow) #editor .editor-workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .editor-docked:not(.workspace-reflow) #editor .editor-workspace { display: flex; flex-direction: column; align-items: stretch; flex: 1; min-height: 0; }
   .editor-docked:not(.workspace-reflow) #editor .editing-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
   .editor-docked:not(.workspace-reflow) #editor .moment-layout { flex: 1; min-height: 0; gap: 6px; }
   .editor-docked:not(.workspace-reflow) #editor .moment-layout > .player-frame { container-type: size; flex: 1 1 0; width: 100%; height: auto; min-height: min(240px, calc(var(--workspace-height, 100dvh) * .42)); max-height: none; aspect-ratio: auto; }
@@ -217,8 +232,7 @@
     --track-wave: clamp(0px, calc((var(--workspace-height, 100dvh) - 560px) * .4), 24px);
   }
   /* Line heights follow the text so larger text still resizes the controls. */
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-footer { min-height: 1.6667em; margin-top: clamp(2px, calc((var(--workspace-height, 100dvh) - 540px) / 10), 4px); font-size: .75rem; }
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls .tick-labels { line-height: 1.6667; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-footer { min-height: 0; margin-top: clamp(2px, calc((var(--workspace-height, 100dvh) - 540px) / 10), 4px); font-size: .75rem; }
   .editor-docked:not(.workspace-reflow) #editor .moment-controls .track-duration { line-height: 1.5; }
   /* Long outcomes under the form scroll inside the row instead of running
      under the clip strip; the padding keeps focus rings unclipped. */
@@ -228,6 +242,38 @@
   .editor-docked:not(.workspace-reflow) #editor .workspace-actions.showing-results { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 6px; min-height: 112px; }
   .editor-docked:not(.workspace-reflow) #editor .workspace-actions.showing-results > .moment-actions { flex: none; }
   .editor-docked:not(.workspace-reflow) #editor .workspace-results { flex: 1 1 auto; min-height: 52px; max-height: 40vh; overflow: auto; overscroll-behavior: contain; }
+  /* The cutting form, a running job and one ready file share one footprint:
+     a 44px row beside the moment controls and a quiet line under it. The
+     outcome lies under the moment controls and starts after their width. */
+  .editor-docked:not(.workspace-reflow) #editor .export-notes { min-height: 24px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; min-height: 52px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results > .moment-actions { grid-area: 1 / 1; position: relative; z-index: 1; justify-self: start; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results > .workspace-results { grid-area: 1 / 1; display: block; min-height: 0; max-height: none; overflow: visible; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results :is(.results-panel, .file-list) { display: block; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results :is(.file-list > li, .job-status:not(.succeeded)) {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 8px; min-width: 0; padding: 0; border: 0;
+  }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results :is(.file-list > li, .job-status:not(.succeeded))::before {
+    content: ''; flex: 0 0 calc(var(--moment-actions-width, 0px) + 8px); height: 44px; margin-right: auto;
+  }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .file-list > li > .cut-again { order: 1; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .file-list > li > .download-button { order: 2; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .file-description { order: 3; flex: 1 1 100%; justify-content: flex-end; align-items: center; gap: 0 10px; min-height: 24px; text-align: right; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .file-description > h3 { flex-basis: auto; font-size: .875rem; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .file-description > span { margin-top: 0; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .file-description > :is(h3, span, .retention-note, .adjusted-note, .artifact-details) { margin: 0; line-height: 24px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .file-description .artifact-details summary { min-height: 24px; height: 24px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .file-description .artifact-details:not([open]) { align-items: center; height: 24px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .file-description .artifact-details[open] { text-align: left; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .job-status:not(.succeeded) { row-gap: 0; column-gap: 14px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .job-status:not(.succeeded)::after { content: ''; order: 4; flex-basis: 100%; height: 0; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .job-status > .job-status-heading { order: 1; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .job-status > :is(.cancel-button, .retry-unfinished) { order: 2; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .job-status > :is(p, .export-encoding-progress, .background-source) { order: 5; margin-top: 4px; line-height: 24px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .job-status > .export-encoding-progress { display: flex; flex: 0 1 22rem; align-items: center; gap: 10px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .export-encoding-progress-label { flex: none; gap: 8px; margin: 0; line-height: 24px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .export-encoding-progress progress { flex: 1 1 6rem; min-width: 4rem; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .job-status > .background-source { min-height: 24px; height: 24px; }
   .editor-docked:not(.workspace-reflow) #editor .workspace-clipbar { flex: 0 1 auto; min-height: 44px; }
   .editor-docked:not(.workspace-reflow) #editor .workspace-clipbar > .clip-library { align-self: stretch; }
   .editor-docked:not(.workspace-reflow) #editor .clip-library.compact .clip-list { max-height: 100%; }
@@ -235,8 +281,6 @@
   .editor-docked:not(.workspace-reflow) #editor .clip-library.compact { flex-wrap: nowrap; }
   .editor-docked:not(.workspace-reflow) #editor .clip-library.compact .clip-compact-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .editor-docked:not(.workspace-reflow) #editor .workspace-toolstrip :is(.text-button, .crop-editor > summary) { min-height: 36px; height: 36px; }
-  .editor-docked:not(.workspace-reflow) #editor .timeline-zoom-slot .timeline-zoom-buttons > button { min-height: 32px; height: 32px; }
-  .editor-docked:not(.workspace-reflow) #editor .timeline-zoom-slot .timeline-zoom-buttons > button:not(.text-button) { width: 32px; }
   .editor-docked:not(.workspace-reflow) #editor > .page-footer { display: none; }
   .editor-docked:not(.workspace-reflow) #editor .workspace-results .download-all { min-height: 36px; }
   .editor-docked:not(.workspace-reflow) #editor .workspace-results .file-description .artifact-details summary { min-height: 32px; }
@@ -247,14 +291,16 @@
   .editor-docked:not(.workspace-reflow) #editor .clip-library.compact { max-height: 44px; }
 }
 @media (min-width: 900px) and (max-height: 560px) and (hover: hover) and (pointer: fine) {
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-footer { min-height: 1.5em; }
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls .tick-labels { line-height: 1.5; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .tick-labels { line-height: 1.6667; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-zoom-buttons > button { min-height: 20px; height: 20px; }
   .editor-docked:not(.workspace-reflow) #editor .moment-controls .track-duration { line-height: 1.3333; }
   .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-section-track,
   .editor-docked:not(.workspace-reflow) #editor .moment-controls :is(.timeline-section-window, .timeline-section-playback) { height: 18px; min-height: 18px; }
   .editor-docked:not(.workspace-reflow) #editor.workspace-page { padding-block: 2px 4px; }
   .editor-docked:not(.workspace-reflow) #editor .moment-layout { gap: 4px; }
   .editor-docked:not(.workspace-reflow) #editor .export-notes { margin-top: 2px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .results-panel .file-list > li { row-gap: 2px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.compact-results .job-status > :is(p, .export-encoding-progress, .background-source) { margin-top: 2px; }
   .editor-docked:not(.workspace-reflow) #editor .export-hint { line-height: 1.25; }
   .editor-docked:not(.workspace-reflow) #editor .workspace-clipbar { row-gap: 2px; }
 }
@@ -271,7 +317,7 @@
   #editor .workspace-clipbar { order: 5; }
   #editor .workspace-results { order: 6; flex: none; }
   #editor .export-panel {
-    order: 7; position: sticky; bottom: 0; z-index: 6; margin: 0 -12px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    order: 7; position: sticky; bottom: 0; z-index: 6; margin: 12px -12px 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--line); background: var(--page);
   }
   #editor .export-row { justify-content: stretch; flex-wrap: wrap; }
@@ -298,8 +344,12 @@
   #editor .workspace-clipbar { flex-direction: column; align-items: stretch; gap: 4px; }
   #editor .workspace-clipbar > .clip-library { flex: none; }
   #editor .clip-library.compact .clip-list { flex: 1 1 100%; order: -1; max-height: 104px; }
-  #editor .clip-library.compact .clip-list > li { flex-wrap: wrap; height: auto; min-height: 48px; border-radius: 24px; }
-  #editor .clip-library.compact .clip-list .clip-compact-edit { white-space: normal; text-align: left; }
+  /* A chip spans the strip; the name takes the room left by the times. */
+  #editor .clip-library.compact .clip-list > li { flex: 1 1 100%; flex-wrap: wrap; height: auto; min-height: 48px; border-radius: 24px; }
+  #editor .clip-library.compact .clip-list > li > .clip-row-body { flex: 1 1 0; }
+  #editor .clip-library.compact .clip-list .clip-row-title { flex: 1 1 auto; }
+  #editor .clip-library.compact .clip-list .clip-row-name { width: 100%; max-width: none; }
+  #editor .clip-library.compact .clip-list .clip-compact-edit { white-space: nowrap; text-align: left; }
   #editor .workspace-toolstrip { justify-content: flex-start; gap: 0 20px; margin: 0; min-width: 0; }
   #editor .workspace-clipbar > .clip-library { min-width: 0; max-width: 100%; }
   #editor .clip-library.compact .clip-list { min-width: 0; }
@@ -345,8 +395,8 @@
   #editor .export-notes .failed-items li { justify-content: flex-start; }
 }
 @media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
-  #editor .moment-controls { grid-template-columns: minmax(0, 1fr); }
-  #editor .timeline-zoom-slot { justify-content: flex-end; }
+  #editor .moment-controls .timeline-zoom-buttons > button { min-height: 44px; height: 44px; }
+  #editor .moment-controls .timeline-zoom-buttons > button:not(.text-button) { width: 44px; }
   #editor .export-submit .export-summary-count { display: none; }
   #editor .format-picker button { padding-inline: 10px; }
 }
@@ -357,8 +407,7 @@
     #editor .preview-button-label { display: none; }
     #editor .moment-boundaries .time-value { font-size: .8125rem; padding-inline: 0; }
     #editor .moment-boundaries > div:not(.moment-duration) { gap: 0; padding-left: 6px; }
-    #editor .clip-library.compact .clip-list .clip-compact-edit { padding-inline: 4px; font-size: .75rem; line-height: 1.15; }
-    #editor .clip-library.compact .clip-row-times > span:first-child { max-width: 9ch; white-space: normal; text-align: left; }
+    #editor .clip-library.compact .clip-list .clip-compact-edit { padding-inline: 4px; font-size: .75rem; }
   }
 }
 @media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {

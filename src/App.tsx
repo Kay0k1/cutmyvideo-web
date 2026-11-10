@@ -118,7 +118,16 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
   const [selectedRangeIds, setSelectedRangeIds] = useState<string[]>([]);
   const [revealId, setRevealId] = useState('');
   const desktopWorkspace = useDesktopWorkspace();
-  const [timelineTools, setTimelineTools] = useState<HTMLDivElement | null>(null);
+  // The ready file and the running job line up beside the moment controls,
+  // which publish their width to the action row.
+  const [momentActions, setMomentActions] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const row = momentActions?.parentElement;
+    if (!momentActions || !row) return;
+    const observer = new ResizeObserver(() => row.style.setProperty('--moment-actions-width', `${momentActions.offsetWidth}px`));
+    observer.observe(momentActions);
+    return () => { observer.disconnect(); row.style.removeProperty('--moment-actions-width'); };
+  }, [momentActions]);
   const [precisionOpen, setPrecisionOpen] = useState(false);
   const [startText, setStartText] = useState('');
   const [endText, setEndText] = useState('');
@@ -1240,6 +1249,9 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
 
   // One ready file is one row: its description, "Cut another" and "Download".
   const singleResultInWorkspace = workspaceVisible && resultFiles.length === 1 && !activeJob(job);
+  // A running job or one ready file keeps the form's footprint, so the player
+  // keeps its size; lists, failures and errors take the full row.
+  const compactResults = resultsVisible && (activeJob(job) ? !failedItems.length : singleResultInWorkspace && (!job || job.status === 'succeeded') && !jobError);
   const cutAgain = <button type="button" className="button secondary cut-again" onClick={() => setResultsOpen(false)}>{t('Вырезать ещё')}</button>;
   const resultsPanel = resultFiles.length > 0 && <section className="results-panel" aria-labelledby="results-heading"><div className="results-heading"><div><h2 id="results-heading" tabIndex={-1}>{t("Файлы последнего экспорта")}</h2><p>{t(resultFiles.some(value => value.item.artifact?.segments?.length) ? 'Скачайте объединённый файл. Порядок и границы фрагментов указаны ниже.' : "Скачайте каждый фрагмент отдельно.")}</p></div><span className="result-count">{countLabel(resultFiles.length, 'file', locale)}</span></div>{archiveURL && resultFiles.length > 1 && <a className="button secondary download-all" href={archiveURL} download><Icon name="download" size={17} />{t('Скачать всё ZIP')}</a>}<ul className="file-list">{resultFiles.map(({ item, number: itemNumber }) => {
         const artifact = item.artifact!;
@@ -1345,12 +1357,11 @@ export default function App({ onCollectionOpen }: { onCollectionOpen?(document?:
           {output.crop && !cropOpen && cropContainer && <CropPreview crop={output.crop} container={cropContainer} />}
           {selected && <div className="moment-controls" data-overview={precisionOpen || simpleView[1] - simpleView[0] < duration || undefined}>
             <div className="trim-heading sr-only"><h2>{t('Обрезка фрагмента')}</h2><p>{selected.label || t('Фрагмент {index}', { index: ranges.findIndex(range => range.id === selected.id) + 1 })}</p></div>
-            <Timeline compact toolsContainer={timelineTools} cutting={activeJob(job) ? { percent: encodingProgress(job)?.percent } : null} onSelectRange={id => { const range = ranges.find(value => value.id === id); if (range) pickRange(range); }} duration={duration} position={position} ranges={ranges} selected={selected} section={simpleView} view={view} maximumRange={limits.max_range_ms} showOverview={precisionOpen} onSection={changeTimelineSection} onView={changeTimelineView} onSeek={seek} onRange={changeBounds} onReveal={ms => { revealBoundary(ms); seek(ms); }} onBeginChange={beginHistory} onEndChange={finishBoundaryChange} audioTrack={previewAudioTrack} noAudio={output.no_audio} sourceID={source.id} active={workspaceVisible && !editorToolsOpen && !advancedOutputOpen && !panel} />
-            <div className="timeline-tools timeline-zoom-slot" ref={setTimelineTools} />
+            <Timeline compact zoomInFooter cutting={activeJob(job) ? { percent: encodingProgress(job)?.percent } : null} onSelectRange={id => { const range = ranges.find(value => value.id === id); if (range) pickRange(range); }} duration={duration} position={position} ranges={ranges} selected={selected} section={simpleView} view={view} maximumRange={limits.max_range_ms} showOverview={precisionOpen} onSection={changeTimelineSection} onView={changeTimelineView} onSeek={seek} onRange={changeBounds} onReveal={ms => { revealBoundary(ms); seek(ms); }} onBeginChange={beginHistory} onEndChange={finishBoundaryChange} audioTrack={previewAudioTrack} noAudio={output.no_audio} sourceID={source.id} active={workspaceVisible && !editorToolsOpen && !advancedOutputOpen && !panel} />
           </div>}
           {!selected && <div className="workspace-empty-editor"><p>{t('Добавьте момент, который хотите сохранить.')}</p></div>}
-          <div className={`workspace-actions${resultsVisible ? ' showing-results' : ''}`}>
-            {selected && <div className="moment-actions">
+          <div className={`workspace-actions${resultsVisible ? ' showing-results' : ''}${compactResults ? ' compact-results' : ''}`}>
+            {selected && <div className="moment-actions" ref={setMomentActions}>
               <div className="moment-preview"><button className="button secondary" type="button" disabled={!playerAvailable} aria-label={t(previewing ? 'Остановить просмотр' : 'Посмотреть фрагмент')} title={t(previewing ? 'Остановить просмотр' : 'Посмотреть фрагмент')} onClick={preview}><Icon name={previewing ? 'pause' : 'play'} size={17} /><span className="preview-button-label" aria-hidden="true">{t(previewing ? 'Стоп' : 'Фрагмент')}</span></button></div>
               <div className="moment-boundaries"><div><label htmlFor="range-start">{t('Начало')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время начала: {time}', { time: displayTimecode(selected.start_ms) })} onClick={() => editTime('start')}>{displayTimecode(selected.start_ms)}<Icon name="edit" size={14} /></button><input ref={startField} id="range-start" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={startText} onChange={event => { setStartText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Начало по позиции плеера')} onClick={() => marker('start')}><span className="marker-bracket">[</span><kbd>I</kbd></button></div><div><label htmlFor="range-end">{t('Конец')}</label><button type="button" className="time-value" hidden={precisionOpen} aria-label={t('Изменить время конца: {time}', { time: displayTimecode(selected.end_ms) })} onClick={() => editTime('end')}>{displayTimecode(selected.end_ms)}<Icon name="edit" size={14} /></button><input ref={endField} id="range-end" className="time-input" hidden={!precisionOpen} type="text" inputMode="text" enterKeyHint="done" autoComplete="off" autoCapitalize="none" value={endText} onChange={event => { setEndText(event.target.value); setRangeError(''); }} onBlur={commitFields} onKeyDown={timeFieldKey} aria-invalid={!!rangeError} aria-describedby={rangeError ? 'range-error' : 'time-hint'} spellCheck={false} /><button className="marker-button" type="button" disabled={!playerAvailable} aria-label={t('Конец по позиции плеера')} onClick={() => marker('end')}><span className="marker-bracket">]</span><kbd>O</kbd></button></div><div className="moment-duration"><span className="sr-only">{t('Длительность')}</span><strong>{durationLabel(selected.end_ms - selected.start_ms, locale)}</strong></div></div>
             </div>}

@@ -1,4 +1,3 @@
-import { createPortal } from 'react-dom';
 import { useLanguage } from './Language';
 import { useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
@@ -14,7 +13,7 @@ import { useSourceBase } from './SourceAccess';
 import { TimelineSection } from './TimelineSection';
 import './Timeline.css';
 
-export function Timeline({ duration, position, ranges, selected, section, view, maximumRange = Infinity, showOverview = true, compact = false, toolsContainer, sourceID, active, audioTrack, noAudio, cutting, onSeek, onRange, onReveal, onSection, onView, onSelectRange, onBeginChange, onEndChange }: {
+export function Timeline({ duration, position, ranges, selected, section, view, maximumRange = Infinity, showOverview = true, compact = false, zoomInFooter = false, sourceID, active, audioTrack, noAudio, cutting, onSeek, onRange, onReveal, onSection, onView, onSelectRange, onBeginChange, onEndChange }: {
   duration: number;
   position: PlaybackPosition;
   ranges: ClipRange[];
@@ -24,7 +23,8 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
   maximumRange?: number;
   showOverview?: boolean;
   compact?: boolean;
-  toolsContainer?: HTMLElement | null;
+  /** Puts the zoom buttons in the label row under the track instead of above it. */
+  zoomInFooter?: boolean;
   sourceID: string;
   active: boolean;
   audioTrack?: number;
@@ -104,12 +104,23 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
     for (const name of events) node.addEventListener(name, listener, { passive: false });
     return () => { for (const name of events) node.removeEventListener(name, listener); };
   }, []);
+  const footer = useRef<HTMLDivElement>(null);
+  const labels = useRef<HTMLDivElement>(null);
+  const durationPill = useRef<HTMLSpanElement>(null);
+  const [footerBox, setFooterBox] = useState<{ trackLeft: number; first: number; last: number; top: number; height: number; pill: number; pillHeight: number } | null>(null);
   useEffect(() => {
-    const node = track.current, frames = framesLayer.current;
-    if (!node || !frames) return;
-    const measure = () => { setTrackWidth(node.getBoundingClientRect().width); setFrameHeight(frames.getBoundingClientRect().height); };
+    const node = track.current, frames = framesLayer.current, row = footer.current, ticks = labels.current;
+    if (!node || !frames || !row || !ticks) return;
+    const measure = () => {
+      const trackBox = node.getBoundingClientRect(), rowBox = row.getBoundingClientRect(), ticksBox = ticks.getBoundingClientRect();
+      const [first, last] = [ticks.firstElementChild, ticks.lastElementChild].map(label => label?.getBoundingClientRect());
+      setTrackWidth(trackBox.width); setFrameHeight(frames.getBoundingClientRect().height);
+      setFooterBox(first && last ? { trackLeft: trackBox.left - rowBox.left, first: first.right - rowBox.left, last: last.left - rowBox.left, top: ticksBox.top - rowBox.top, height: ticksBox.height, pill: durationPill.current?.offsetWidth ?? 0, pillHeight: durationPill.current?.offsetHeight ?? 0 } : null);
+    };
     measure();
-    const observer = new ResizeObserver(measure); observer.observe(node); observer.observe(frames);
+    const observer = new ResizeObserver(measure);
+    for (const target of [node, frames, row, ticks, ...ticks.children]) observer.observe(target);
+    if (durationPill.current) observer.observe(durationPill.current);
     return () => observer.disconnect();
   }, []);
 
@@ -213,13 +224,22 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
     </span>;
   }), [framesShown, view[0], view[1], duration, storyboards.ready, frameHeight, trackWidth]);
   const selectionLeft = pct(selected.start_ms), selectionRight = pct(selected.end_ms);
+  // The duration sits under the middle of the selection, between the edge
+  // times, so it never covers them or the zoom buttons.
+  const durationCenter = (selectionLeft + selectionRight) / 2;
+  const durationStyle = (() => {
+    if (!footerBox) return { left: `${Math.max(8, Math.min(92, durationCenter))}%` };
+    const half = footerBox.pill / 2, low = footerBox.first + 6 + half, high = footerBox.last - 6 - half;
+    const center = footerBox.trackLeft + durationCenter / 100 * trackWidth;
+    return { left: `${low <= high ? Math.max(low, Math.min(high, center)) : (footerBox.first + footerBox.last) / 2}px`, top: `${footerBox.top + (footerBox.height - footerBox.pillHeight) / 2}px` };
+  })();
   const others = ranges.filter(range => range.id !== selected.id && range.end_ms > view[0] && range.start_ms < view[1]);
 
   const zoomTools = <div className="timeline-detail-label"><span>{t('Уточните границы')}</span><div className="timeline-zoom-buttons"><button type="button" aria-label={t('Отдалить шкалу')} title={t('Отдалить шкалу')} disabled={!zoomed} onClick={() => zoomAt(2)}>−</button><button type="button" aria-label={t('Приблизить шкалу')} title={t('Приблизить шкалу')} disabled={span <= Math.min(1000, sectionSpan) + 1} onClick={() => zoomAt(.5)}>+</button>{closeHandles && span > 1000 ? <button type="button" className="text-button" onClick={fitBoundaries}>{t('Приблизить границы')}</button> : <button type="button" className="text-button" aria-label={t('Показать весь участок')} disabled={!zoomed} onClick={() => onView(section)}>{t('Весь участок')}</button>}</div></div>;
 
   return <div className={`timeline${compact ? ' timeline-compact' : ''}${showOverview ? ' timeline-overview' : ''}`} data-section-start={section[0]} data-section-end={section[1]} data-view-start={view[0]} data-view-end={view[1]}>
     <TimelineSection duration={duration} section={section} ranges={ranges} selected={selected} current={current} onSeek={onSeek} showPlayback={showOverview} onChange={onSection} onBeginChange={onBeginChange} onEndChange={onEndChange} />
-    {toolsContainer ? createPortal(zoomTools, toolsContainer) : zoomTools}
+    {!zoomInFooter && zoomTools}
     <div className="trim-track" ref={track} data-frames={framesShown || undefined}>
       <div className="track-media">
         <div className="track-frames" ref={framesLayer} aria-hidden="true">{frames}</div>
@@ -272,9 +292,10 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
       {handle('start')}{handle('end')}
       {current >= view[0] && current <= view[1] && <div className="playhead" style={{ left: `${pct(current)}%` }} aria-hidden="true" />}
     </div>
-    <div className="timeline-footer">
-      <div className="tick-labels" aria-hidden="true"><span>{formatTimecode(view[0], span < 10000)}</span><span>{formatTimecode(view[1], span < 10000)}</span></div>
-      {selected.end_ms > view[0] && selected.start_ms < view[1] && <span className="track-duration" style={{ left: `${Math.max(8, Math.min(92, (selectionLeft + selectionRight) / 2))}%` }} aria-hidden="true">{durationLabel(selected.end_ms - selected.start_ms, locale)}</span>}
+    <div className="timeline-footer" ref={footer}>
+      <div className="tick-labels" ref={labels} aria-hidden="true"><span>{formatTimecode(view[0], span < 10000)}</span><span>{formatTimecode(view[1], span < 10000)}</span></div>
+      <span className="track-duration" ref={durationPill} hidden={!(selected.end_ms > view[0] && selected.start_ms < view[1])} style={durationStyle} aria-hidden="true">{durationLabel(selected.end_ms - selected.start_ms, locale)}</span>
+      {zoomInFooter && zoomTools}
     </div>
     <div className="timeline-zoom-hint"><span>{t('Колесо или жест сведения — масштаб; жест вбок — перемещение.')}</span></div>
     <p id="trim-hint" className="sr-only">{t('Двигайте ручки начала и конца. Стрелки меняют время на 0,1 секунды, Shift — на секунду.')}</p>
