@@ -143,7 +143,8 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
    yellow with grips outside it, the playhead across its full height. */
 .trim-track { --track-frames: 84px; --track-wave: 24px; position: relative; height: calc(var(--track-frames) + var(--track-wave)); margin: 0 44px; cursor: crosshair; touch-action: pan-y pinch-zoom; user-select: none; -webkit-user-select: none; }
 .trim-track::before { content: ''; position: absolute; inset: 0 -16px; border-radius: 14px; background: var(--soft); pointer-events: none; }
-.track-media { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+/* Frames and waveform paint on their own layer, so the moving playhead does not repaint them. */
+.track-media { position: absolute; inset: 0; overflow: hidden; pointer-events: none; will-change: transform; }
 .track-frames { position: absolute; top: 0; left: 0; right: 0; height: var(--track-frames); }
 .trim-track:not([data-frames]) .track-frames { visibility: hidden; }
 .track-frame { position: absolute; top: 0; bottom: 0; overflow: hidden; background: var(--cell); box-shadow: inset -1px 0 0 var(--soft); }
@@ -189,7 +190,7 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 .trim-handle.close-handles.end .trim-tooltip.align-end { right: 28px; }
 .trim-tooltip strong { color: inherit; font-weight: 500; font-variant-numeric: tabular-nums; }
 .trim-handle:hover .trim-tooltip, .trim-handle:focus-visible .trim-tooltip, .trim-handle[data-dragging] .trim-tooltip { opacity: 1; }
-.playhead { position: absolute; z-index: 2; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: #fff; box-shadow: 0 0 0 1px var(--playhead-edge); pointer-events: none; }
+.playhead { position: absolute; z-index: 2; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: #fff; box-shadow: 0 0 0 1px var(--playhead-edge); pointer-events: none; will-change: left; }
 .timeline-footer { position: relative; min-height: 24px; margin-top: 6px; }
 .tick-labels { display: flex; justify-content: space-between; gap: 8px; margin: 0; color: var(--muted); font-size: .75rem; line-height: 24px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .tick-labels span { min-width: 0; overflow-wrap: anywhere; }

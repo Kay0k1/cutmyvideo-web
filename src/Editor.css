@@ -149,8 +149,11 @@
 @media (min-width: 900px) and (hover: hover) and (pointer: fine) {
   #editor .workspace-clipbar > .clip-library { flex: 1 1 36rem; min-width: min(100%, 24rem); }
   #editor .workspace-toolstrip { column-gap: 16px; }
-  /* The checkbox keeps its name; the visible words give their room to the chips. */
-  #editor .clip-library.compact .clip-select-all > label:not(.clip-checkbox) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+/* With several clips and room to spare, the tools take their own row so the
+   chips keep their width; short windows keep one row for the player. */
+@media (min-width: 900px) and (min-height: 641px) and (hover: hover) and (pointer: fine) {
+  #editor .workspace-clipbar > .clip-library[data-several] { flex-basis: 46rem; min-width: min(100%, 46rem); }
 }
 #editor .clip-library.compact .clip-list { flex: 1 1 auto; min-width: 0; }
 #editor .workspace-toolstrip { display: flex; flex: 0 1 auto; max-width: 100%; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 20px; margin: 0 0 0 auto; padding: 0; border: 0; }
@@ -213,13 +216,16 @@
     --track-frames: clamp(44px, calc((var(--workspace-height, 100dvh) - 320px) * .2), 84px);
     --track-wave: clamp(0px, calc((var(--workspace-height, 100dvh) - 560px) * .4), 24px);
   }
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-footer { min-height: 20px; margin-top: clamp(2px, calc((var(--workspace-height, 100dvh) - 540px) / 10), 4px); }
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls .tick-labels { line-height: 20px; }
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls .track-duration { line-height: 18px; }
-  .editor-docked:not(.workspace-reflow) #editor .workspace-actions { flex: 0 1 auto; min-height: 44px; }
+  /* Line heights follow the text so larger text still resizes the controls. */
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-footer { min-height: 1.6667em; margin-top: clamp(2px, calc((var(--workspace-height, 100dvh) - 540px) / 10), 4px); font-size: .75rem; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .tick-labels { line-height: 1.6667; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .track-duration { line-height: 1.5; }
+  /* Long outcomes under the form scroll inside the row instead of running
+     under the clip strip; the padding keeps focus rings unclipped. */
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions { flex: 0 1 auto; min-height: 52px; margin: -4px; padding: 4px; overflow: hidden auto; overscroll-behavior: contain; }
   /* Ready files sit below the moment controls and scroll within the space
      left after the player keeps its minimum height. */
-  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.showing-results { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 6px; min-height: 104px; }
+  .editor-docked:not(.workspace-reflow) #editor .workspace-actions.showing-results { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 6px; min-height: 112px; }
   .editor-docked:not(.workspace-reflow) #editor .workspace-actions.showing-results > .moment-actions { flex: none; }
   .editor-docked:not(.workspace-reflow) #editor .workspace-results { flex: 1 1 auto; min-height: 52px; max-height: 40vh; overflow: auto; overscroll-behavior: contain; }
   .editor-docked:not(.workspace-reflow) #editor .workspace-clipbar { flex: 0 1 auto; min-height: 44px; }
@@ -241,9 +247,9 @@
   .editor-docked:not(.workspace-reflow) #editor .clip-library.compact { max-height: 44px; }
 }
 @media (min-width: 900px) and (max-height: 560px) and (hover: hover) and (pointer: fine) {
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-footer { min-height: 18px; }
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls .tick-labels { line-height: 18px; }
-  .editor-docked:not(.workspace-reflow) #editor .moment-controls .track-duration { line-height: 16px; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-footer { min-height: 1.5em; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .tick-labels { line-height: 1.5; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .track-duration { line-height: 1.3333; }
   .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-section-track,
   .editor-docked:not(.workspace-reflow) #editor .moment-controls :is(.timeline-section-window, .timeline-section-playback) { height: 18px; min-height: 18px; }
   .editor-docked:not(.workspace-reflow) #editor.workspace-page { padding-block: 2px 4px; }

@@ -151,10 +151,28 @@ export function useMediaWindows<T>(options: MediaWindowOptions<T>): { ready: Rea
   return { ready, failed: failed.key === cacheKey ? failed.starts : new Set(), saveData };
 }
 
+// Frames and waveform share one lane: the server admits one background
+// preparation at a time, so a second request would only be refused.
+let laneTail: Promise<unknown> = Promise.resolve();
+async function inMediaLane<T>(signal: AbortSignal, task: () => Promise<T>): Promise<T> {
+  const previous = laneTail;
+  let release!: () => void;
+  laneTail = new Promise<void>(resolve => { release = resolve; });
+  try {
+    await previous;
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    return await task();
+  } finally { release(); }
+}
+
 export type FrameStrip = { url: string; start: number; end: number; frames: number; aspect: number };
 
 /** A sprite of up to six frames, five seconds apart, for one window. */
-export async function loadStoryboard(sourceBase: string, start: number, duration: number, signal: AbortSignal): Promise<WindowResult<FrameStrip>> {
+export function loadStoryboard(sourceBase: string, start: number, duration: number, signal: AbortSignal): Promise<WindowResult<FrameStrip>> {
+  return inMediaLane(signal, () => fetchStoryboard(sourceBase, start, duration, signal));
+}
+
+async function fetchStoryboard(sourceBase: string, start: number, duration: number, signal: AbortSignal): Promise<WindowResult<FrameStrip>> {
   const response = await fetch(`${sourceBase}/storyboard?start_ms=${start}&priority=background`, { credentials: 'same-origin', signal });
   if (!response.ok) return [429, 503].includes(response.status) ? { status: 'busy' } : { status: 'failed' };
   const frames = Number(response.headers.get('X-Storyboard-Frames'));
@@ -179,7 +197,11 @@ export async function loadStoryboard(sourceBase: string, start: number, duration
   return { status: 'ready', value: { url, start, end: actualEnd, frames, aspect: image.naturalWidth / 6 / image.naturalHeight }, bytes: blob.size };
 }
 
-export async function loadWaveform(sourceBase: string, start: number, duration: number, audioTrack: number | undefined, signal: AbortSignal): Promise<WindowResult<WaveformWindow>> {
+export function loadWaveform(sourceBase: string, start: number, duration: number, audioTrack: number | undefined, signal: AbortSignal): Promise<WindowResult<WaveformWindow>> {
+  return inMediaLane(signal, () => fetchWaveform(sourceBase, start, duration, audioTrack, signal));
+}
+
+async function fetchWaveform(sourceBase: string, start: number, duration: number, audioTrack: number | undefined, signal: AbortSignal): Promise<WindowResult<WaveformWindow>> {
   const response = await fetch(`${sourceBase}/waveform?start_ms=${start}${audioTrack !== undefined ? `&audio_track=${audioTrack}` : ''}&priority=background`, { credentials: 'same-origin', signal });
   if (!response.ok) return [429, 503].includes(response.status) ? { status: 'busy' } : { status: 'failed' };
   const raw = await response.text();

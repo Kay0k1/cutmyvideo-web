@@ -163,3 +163,7 @@
   .clip-library.compact :is(.clip-bulkbar, .clip-list > li) .clip-checkbox,
   .clip-library.compact :is(.clip-bulkbar, .clip-list > li) .clip-checkbox input { height: 42px; min-height: 42px; }
 }
+@media (hover: hover) and (pointer: fine) and (min-width: 900px) {
+  .clip-library.compact .clip-bulkbar { max-height: 44px; }
+  .clip-library.compact .clip-select-all, .clip-library.compact .clip-select-all > label { min-height: 0; max-height: 42px; }
+}
