@@ -300,7 +300,6 @@ test('platform failures are actionable in both languages and preserve the existi
   for (const language of ['ru', 'en'] as const) {
     await page.getByRole('button', { name: language === 'ru' ? 'Русский' : 'English', exact: true }).click()
     await goToSource(page)
-    await page.getByRole('button', { name: language === 'ru' ? 'Ссылка' : 'Link', exact: true }).click()
     for (const entry of cases) {
       failure = entry
       const field = page.getByLabel(language === 'ru' ? 'Ссылка на видео' : 'Video link', { exact: true })

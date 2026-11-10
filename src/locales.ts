@@ -730,6 +730,14 @@ export const english: Record<string, string> = {
   'Адрес {network} скопирован.': '{network} address copied.',
   'Не удалось скопировать. Выделите адрес и скопируйте его вручную.': 'Copy failed. Select the address and copy it manually.',
   'Спасибо за поддержку.': 'Thank you for your support.',
+  'Меню': 'Menu',
+  'Вырежьте момент из видео': 'Cut a moment from a video',
+  'Ссылка или файл. Без регистрации и водяных знаков.': 'A link or a file. No sign-up, no watermarks.',
+  'Вставьте ссылку на видео': 'Paste a video link',
+  'или {button}, его можно перетащить в окно': 'or {button}, or drop it anywhere in the window',
+  'выберите файл': 'choose a file',
+  'Проверяем видео…': 'Checking the video…',
+  'Отпустите файл, чтобы открыть': 'Drop the file to open it',
 };
 
 export function translate(text: string, locale: Locale, values?: Record<string, string | number>): string {

@@ -1,17 +1,22 @@
 /* Small and touch screens use the document. Desktop editing fills the window. */
 .app-shell { min-height: 100dvh; }
-.site-header { background: var(--surface); }
-.header-inner { max-width: 1600px; min-height: 72px; padding-inline: 28px; gap: 8px 20px; }
-.brand-symbol { width: 34px; height: 34px; border-radius: 10px; background: var(--selection); }
-.workspace-nav button[aria-current] { background: var(--soft); }
-.workspace-page { width: 100%; max-width: 1600px; padding: 24px 28px 0; }
-.workspace-page .page-heading { margin-bottom: 22px; flex-wrap: wrap; }
-.workspace-page .page-heading > div:first-child { min-width: 0; max-width: 100%; }
-.workspace-page .page-heading h1 { font-size: 1.5rem; letter-spacing: -.6px; }
-.workspace-page .page-heading h1 + p { margin-top: 5px; font-size: .875rem; }
-.workspace-heading-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-.workspace-heading-actions .edit-history-actions { display: flex; gap: 2px; margin: 0; padding-right: 12px; border-right: 1px solid var(--line); }
-.workspace-heading-actions .change-source { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.workspace-shell .header-inner { max-width: 1600px; padding-inline: 20px; }
+.workspace-page { width: 100%; max-width: 1600px; padding: 12px 20px 0; }
+/* The video title and edit actions: in the header row on desktop, a row of
+   their own below it on phones and touch screens. */
+.editor-heading { display: flex; flex-wrap: nowrap; align-items: baseline; justify-content: flex-start; gap: 8px; min-width: 0; margin: 0; }
+.editor-heading h1 { min-width: 0; overflow: hidden; font-size: 1.0625rem; line-height: 1.4; font-weight: 500; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+.editor-heading h1 > span { overflow: hidden; text-overflow: ellipsis; }
+.editor-duration { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+.workspace-heading-actions { display: flex; align-items: center; flex: none; gap: 4px; }
+.workspace-heading-actions .edit-history-actions { display: flex; gap: 0; margin: 0 4px 0 0; }
+.workspace-heading-actions .edit-history-actions .icon-button { color: var(--ink); }
+.editor-title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 12px; margin-bottom: 12px; }
+.editor-title-row .editor-heading { flex: 1 1 0; min-width: min(100%, 7em); }
+.editor-title-row .workspace-heading-actions { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+.site-header .editor-heading { flex: 1 1 auto; align-self: center; height: 24px; align-items: center; margin-left: 16px; padding-left: 24px; border-left: 1px solid var(--line); }
+.site-header .editor-heading h1 { font-size: .9375rem; }
+.site-header .workspace-heading-actions { margin-left: auto; }
 .editor-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 328px; align-items: start; gap: 24px; }
 .moments-stage, .workspace-sidebar { min-width: 0; }
 .workspace-page .editing-panel { overflow: visible; border-radius: 14px; background: var(--surface); }
@@ -41,27 +46,27 @@
 .trim-heading p { color: var(--muted); font-size: .8125rem; margin-top: 2px; overflow-wrap: anywhere; }
 .trim-instruction { max-width: 38ch; color: var(--muted); font-size: .75rem; }
 .workspace-page .moment-boundaries { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: stretch; gap: 12px; margin-bottom: 20px; }
-.workspace-page .moment-boundaries > div:not(.moment-duration) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 6px; align-items: center; min-width: 0; padding: 9px 10px 4px; background: var(--page); border: 1px solid var(--line); border-radius: 9px; }
+.workspace-page .moment-boundaries > div:not(.moment-duration) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 6px; align-items: center; min-width: 0; padding: 9px 10px 4px; background: var(--page); border: 1px solid var(--line); border-radius: 12px; }
 .workspace-page .moment-boundaries > div > label { grid-column: 1 / -1; font-size: .75rem; margin: 0; }
 .workspace-page .time-value { min-width: 0; min-height: 44px; margin: 0; padding: 4px 0; font-size: 1.125rem; letter-spacing: -.3px; gap: 6px; }
 .workspace-page .time-value > svg { width: 13px; }
 .workspace-page .time-input { min-height: 44px; padding: 5px 6px; font-size: 1rem; margin-block: 2px; }
-.workspace-page .moment-boundaries .marker-button { width: 44px; min-height: 44px; justify-content: center; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.workspace-page .moment-boundaries .marker-button { width: 44px; min-height: 44px; justify-content: center; padding: 0; border: 1px solid var(--strong-line); border-radius: 999px; background: var(--surface); }
 .workspace-page .marker-button .marker-text, .workspace-page .marker-button kbd { display: none; }
-.workspace-page .marker-bracket { color: var(--accent); font-size: 1.25rem; }
+.workspace-page .marker-bracket { color: var(--ink); font-size: 1.25rem; }
 .workspace-page .moment-duration { grid-column: auto; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 5px; padding: 10px 0 10px 8px; border: 0; text-align: right; }
 .workspace-page .moment-duration > span { margin: 0; font-size: .75rem; }
 .workspace-page .moment-duration > strong { font-size: 1.125rem; font-weight: 500; }
-.workspace-page .timeline-section { padding: 12px 14px; margin: 0 0 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--page); }
+.workspace-page .timeline-section { padding: 12px 14px; margin: 0 0 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--page); }
 .workspace-page .timeline-section-heading { font-size: .75rem; }
 .workspace-page .timeline-detail-label { font-size: .8125rem; }
 .workspace-page .timeline-detail-label > span { color: var(--ink); font-weight: 480; }
 .workspace-page .trim-track { height: 56px; margin-inline: 30px; }
 .workspace-page .trim-track::before { top: 20px; height: 12px; background: var(--soft); }
-.workspace-page .trim-selection { top: 20px; height: 12px; background: var(--selection); border-block: 1px solid var(--accent); border-radius: 0; }
+.workspace-page .trim-selection { top: 20px; height: 12px; background: color-mix(in srgb, var(--trim) 45%, transparent); border-block: 1px solid var(--trim-line); border-radius: 0; }
 .workspace-page .timeline .trim-handle { height: 56px; }
-.workspace-page .timeline .trim-handle .trim-grip { top: 10px; height: 32px; width: 14px; background: var(--accent); border-color: var(--accent); }
-.workspace-page .trim-grip::after { left: 6px; background: var(--on-accent); opacity: .9; }
+.workspace-page .timeline .trim-handle .trim-grip { top: 10px; height: 32px; width: 14px; background: var(--trim); border-color: var(--trim-line); }
+.workspace-page .trim-grip::after { left: 6px; background: var(--trim-ink); opacity: .9; }
 .workspace-page .trim-ticks { top: 40px; }
 .workspace-page .playhead { top: 14px; height: 26px; }
 .workspace-page .tick-labels { margin: 0 0 6px; }
@@ -86,8 +91,8 @@
 .workspace-sidebar .export-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 8px; margin-bottom: 12px; }
 .workspace-sidebar .export-heading h2 { font-size: 1rem; font-weight: 520; }
 .workspace-sidebar .export-options-toggle { font-size: .75rem; }
-.workspace-sidebar .format-picker { gap: 4px; padding: 4px; background: var(--page); border-radius: 8px; }
-.workspace-sidebar .format-picker button { min-height: 48px; gap: 8px; padding: 8px; border-radius: 5px; }
+.workspace-sidebar .format-picker { gap: 4px; padding: 4px; background: var(--soft); border-radius: 999px; }
+.workspace-sidebar .format-picker button { min-height: 44px; gap: 8px; padding: 8px; border-radius: 999px; }
 .workspace-sidebar .format-picker button.active { border-color: var(--line); background: var(--surface); box-shadow: 0 1px 3px #00000008; }
 .export-settings-summary { display: grid; gap: 10px; margin: 18px 0 0; font-size: .75rem; }
 .export-settings-summary > div { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 2px 12px; }
@@ -98,9 +103,9 @@
 .workspace-sidebar .export-submit { min-height: 48px; margin-top: 16px; font-size: .875rem; }
 .workspace-sidebar .export-empty-hint { margin-top: 10px; font-size: .75rem; }
 .export-source-notice { margin-top: 6px; color: var(--muted); text-align: center; font-size: .6875rem; }
-.workspace-collection-tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
-.workspace-collection-tabs > button { flex: 1; min-width: 0; min-height: 44px; padding: 8px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: .8125rem; overflow-wrap: anywhere; }
-.workspace-collection-tabs > button[aria-selected='true'] { background: var(--selection); color: var(--accent); font-weight: 500; }
+.workspace-collection-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--soft); }
+.workspace-collection-tabs > button { flex: 1; min-width: 0; min-height: 44px; padding: 8px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: .8125rem; overflow-wrap: anywhere; }
+.workspace-collection-tabs > button[aria-selected='true'] { background: var(--surface); color: var(--ink); font-weight: 500; }
 .workspace-collection-tabs span { margin-left: 8px; }
 .workspace-results { min-width: 0; max-height: 520px; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .workspace-results .job-status { margin: 0; padding: 16px; border: 0; border-radius: 0; }
@@ -128,9 +133,6 @@
 .editor-dialog .boundary-audition { flex-wrap: wrap; }
 .workspace-page .page-footer { margin-top: 24px; }
 /* Source selection falls back to document flow on narrow screens. */
-.source-shell .stage-1 { max-width: 860px; padding-top: clamp(24px, 6dvh, 64px); }
-.source-shell .page-heading { margin-bottom: 28px; }
-.source-shell .project-library, .source-shell .source-library, .source-shell .job-library { margin-top: 18px; }
 /* Lock the document itself while the editing canvas owns the viewport.
    Reflow and collection pages release this automatically. */
 html:has(.editor-docked:not(.workspace-reflow)),
@@ -143,8 +145,7 @@ body:has(.editor-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-b
   .workspace-sidebar { position: sticky; top: 20px; }
 }
 @media (max-width: 1099px) {
-  .header-inner { padding-inline: 20px; gap: 6px 12px; }
-  .workspace-page { padding: 20px 20px 0; }
+  .workspace-page { padding: 12px 20px 0; }
   .editor-workspace { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .workspace-sidebar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
   .workspace-collection-tabs { grid-column: 1; }
@@ -153,20 +154,10 @@ body:has(.editor-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-b
   .workspace-page .trim-tooltip { display: none; }
 }
 @media (max-width: 699px) {
-  .header-inner { min-height: 64px; padding: 8px 16px; gap: 4px 8px; }
-  .header-actions { gap: 2px; }
+  .workspace-shell .header-inner { padding-inline: 16px; }
   .header-actions > .text-button { font-size: .75rem; }
-  .language-switch button { min-width: 44px; padding-inline: 8px; }
-  .header-actions > .icon-button { width: 44px; }
-  .brand { font-size: 1.25rem; gap: 6px; }
-  .brand-symbol { width: 28px; height: 28px; border-radius: 8px; }
-  .workspace-nav { gap: 0; }
-  .workspace-nav button { padding-inline: 5px; }
-  .workspace-page { padding: 20px 12px 0; }
-  .workspace-page .page-heading { align-items: start; gap: 12px; margin-bottom: 16px; }
-  .workspace-page .page-heading > div:first-child { flex-basis: 100%; }
-  .workspace-page .page-heading h1 { font-size: 1.375rem; }
-  .workspace-heading-actions { width: 100%; justify-content: space-between; }
+  .workspace-page { padding: 4px 12px 0; }
+  .editor-title-row { gap: 4px 8px; }
   .workspace-page .media-heading { padding: 12px; gap: 5px; }
   .workspace-page .source-title { width: 100%; flex-basis: 100%; }
   .workspace-page .source-meta { padding-left: 27px; }
@@ -191,12 +182,9 @@ body:has(.editor-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-b
   .workspace-results { max-height: 420px; }
   .editor-dialog-content { padding: 16px; }
   .editor-dialog .export-option-fields { grid-template-columns: minmax(0, 1fr); }
-  .source-shell .stage-1 { padding-top: 24px; }
 }
 @media (max-width: 359px) {
-  .header-inner { padding-inline: 12px; }
-  .brand { font-size: 1.125rem; }
-  .brand-symbol { width: 24px; }
+  .workspace-shell .header-inner { padding-inline: 12px; }
   .header-actions > .text-button { font-size: .6875rem; }
   .workspace-page .time-value { font-size: .8125rem; }
 }
@@ -217,21 +205,16 @@ body:has(.editor-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-b
 @media (min-width: 900px) and (hover: hover) and (pointer: fine) {
   .editor-docked:not(.workspace-reflow) { position: fixed; inset: 0; display: flex; flex-direction: column; height: var(--workspace-height, 100dvh); min-height: 0; overflow: clip; }
   .editor-docked:not(.workspace-reflow) .site-header { flex: none; }
-  .editor-docked:not(.workspace-reflow) .header-inner { min-height: 56px; padding-block: 4px; }
+  .editor-docked:not(.workspace-reflow) .header-inner { flex-wrap: nowrap; }
   .editor-docked:not(.workspace-reflow) .workspace-page { display: flex; flex-direction: column; flex: 1; min-height: 0; margin: 0 auto; padding: 8px 12px; }
-  .editor-docked:not(.workspace-reflow) .page-heading { flex: none; min-height: 44px; margin-bottom: 8px; gap: 16px; flex-wrap: nowrap; }
-  .editor-docked:not(.workspace-reflow) .page-heading > div:first-child { min-width: 0; }
-  .editor-docked:not(.workspace-reflow) .page-heading h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1rem; letter-spacing: -.2px; }
-  .editor-docked:not(.workspace-reflow) .page-heading h1 + p { display: none; }
-  .editor-docked:not(.workspace-reflow) .workspace-heading-actions { flex: none; flex-wrap: nowrap; }
   .editor-docked:not(.workspace-reflow) .editor-workspace { position: relative; flex: 1; min-height: 0; grid-template-columns: minmax(0, 1fr) 304px; grid-template-rows: minmax(0, 1fr) auto; align-items: stretch; gap: 12px; }
   .editor-docked:not(.workspace-reflow) :is(.moments-stage, .editing-panel, .moment-layout) { display: contents; }
   .editor-docked:not(.workspace-reflow) .media-heading { display: none; }
-  .editor-docked:not(.workspace-reflow) .moment-layout > .player-frame { grid-column: 1; grid-row: 1; align-self: stretch; width: 100%; height: 100%; min-height: 0; max-height: none; aspect-ratio: auto; border: 1px solid var(--line); border-radius: 10px; container-type: size; }
+  .editor-docked:not(.workspace-reflow) .moment-layout > .player-frame { grid-column: 1; grid-row: 1; align-self: stretch; width: 100%; height: 100%; min-height: 0; max-height: none; aspect-ratio: auto; border: 0; border-radius: 14px; container-type: size; }
   .editor-docked:not(.workspace-reflow) .moment-layout .youtube-player { width: min(100cqw, calc(100cqh * 16 / 9)); height: min(100cqh, calc(100cqw * 9 / 16)); max-width: none; }
   .editor-docked:not(.workspace-reflow) .moment-layout .window-player { display: grid; grid-template-rows: minmax(0, 1fr) auto; height: 100%; min-height: 0; }
   .editor-docked:not(.workspace-reflow) .window-player-screen { justify-self: center; align-self: center; width: auto; height: 100%; min-height: 0; max-width: 100%; max-height: calc(100cqw * 9 / 16); aspect-ratio: 16 / 9; }
-  .editor-docked:not(.workspace-reflow) .moment-controls { position: relative; grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 24px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+  .editor-docked:not(.workspace-reflow) .moment-controls { position: relative; grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 24px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
   .editor-docked:not(.workspace-reflow) .trim-heading { display: none; }
   .editor-docked:not(.workspace-reflow) .moment-boundaries { grid-column: 2; grid-row: 1; grid-template-columns: max-content max-content auto; margin: 0; gap: 8px; }
   .editor-docked:not(.workspace-reflow) .moment-boundaries > div:not(.moment-duration) { grid-template-columns: max-content auto; padding: 4px 8px; }
@@ -257,7 +240,7 @@ body:has(.editor-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-b
   .editor-docked:not(.workspace-reflow) .clip-library.compact .clip-list { flex: 1; min-height: 0; max-height: none; }
   .editor-docked:not(.workspace-reflow) .workspace-results { flex: 1; min-height: 0; max-height: none; }
   .editor-docked:not(.workspace-reflow) .page-footer { display: none; }
-  .editor-docked .workspace-export-toggle { display: inline-flex; order: 3; }
+  .editor-docked .workspace-export-toggle { display: inline-flex; margin-left: 4px; }
   .editor-docked:not(.workspace-reflow) .workspace-toolstrip .moment-preview { order: 0; }
   .editor-docked:not(.workspace-reflow) .workspace-toolstrip .crop-editor { order: 3; }
   .editor-docked:not(.workspace-reflow) .workspace-toolstrip .editor-tools-toggle { order: 4; }
@@ -272,16 +255,11 @@ body:has(.editor-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-b
   .editor-docked:not(.workspace-reflow) .workspace-toolstrip .preview-button-label { display: none; }
   .editor-docked:not(.workspace-reflow) .workspace-toolstrip .moment-preview > .button { width: 44px; min-width: 44px; padding: 0; justify-content: center; }
   .editor-docked:not(.workspace-reflow) .clip-library[data-at-limit] .clip-compact-hint { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); border: 0; }
-  .editor-docked:not(.workspace-reflow) .workspace-nav { order: 0; width: auto; margin-left: auto; }
-  .editor-docked:not(.workspace-reflow) .workspace-nav button { padding-inline: 8px; font-size: .75rem; }
-  .editor-docked:not(.workspace-reflow) .brand { font-size: 1.25rem; }
   .editor-docked:not(.workspace-reflow) .time-value { flex-wrap: nowrap; white-space: nowrap; font-size: 1rem; }
   .editor-docked:not(.workspace-reflow) .sequence-preview { display: contents; }
   .editor-docked:not(.workspace-reflow) .sequence-preview > button { width: 44px; min-width: 44px; padding: 0; justify-content: center; order: 0; }
   .editor-docked:not(.workspace-reflow) .sequence-label { display: none; }
   .editor-docked:not(.workspace-reflow) .sequence-preview > span { position: fixed; top: 124px; left: 24px; max-width: 40ch; padding: 6px 10px; border-radius: 6px; background: var(--surface); z-index: 5; }
-
-  .editor-docked .page-heading h1 > span { overflow: hidden; text-overflow: ellipsis; }
 
   .editor-docked .editor-dialog { position: fixed; inset: calc(var(--workspace-height, 100dvh) / 2) auto auto 50%; margin: 0; transform: translate(-50%, -50%); }
 
@@ -293,5 +271,5 @@ body:has(.editor-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-b
 }
 .enhancement-export-summary { margin: 10px 0; padding: 10px 0; border-top: 1px solid var(--line); font-size: .875rem; }
 .enhancement-export-summary > p:first-child { font-weight: 480; }
-.enhancement-export-blocker { margin: 10px 0; padding: 12px; border: 1px solid var(--error); border-radius: 8px; color: var(--error); background: var(--error-bg); font-size: .875rem; }
+.enhancement-export-blocker { margin: 10px 0; padding: 12px; border: 1px solid var(--error); border-radius: 12px; color: var(--error); background: var(--error-bg); font-size: .875rem; }
 .result-chapters { margin-block: 8px; }

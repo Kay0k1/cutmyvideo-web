@@ -178,7 +178,6 @@ test('the website rejects unsupported files and unsafe URLs before an API mutati
     await expect(page.getByLabel('Video link', { exact: true })).toHaveValue(url)
   }
   await goToSource(page)
-  await page.getByRole('button', { name: 'File', exact: true }).click()
   const wav = await readFile(process.env.CUTMY_E2E_AUDIO!)
   for (const file of [process.env.CUTMY_E2E_AUDIO!, { name: 'renamed.mp4', mimeType: 'video/webm', buffer: wav }, { name: 'renamed.mp4', mimeType: 'video/mp4', buffer: wav }]) {
     const chooser = page.waitForEvent('filechooser')

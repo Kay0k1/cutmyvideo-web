@@ -1,11 +1,10 @@
 import { expect, test } from '@playwright/test'
-import { chooseOption, goToExport, goToMoment, showExactTimes, uploadThroughUI, showExportSettings, closeExportSettings, showEditorTools, closeEditorTools } from './helpers'
+import { chooseOption, openMenuItem, goToExport, goToMoment, showExactTimes, uploadThroughUI, showExportSettings, closeExportSettings, showEditorTools, closeEditorTools } from './helpers'
 
 test('custom selectors support keyboard choice, typeahead, Escape and native-dialog focus', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'English', exact: true }).click()
-  const settings = page.getByRole('button', { name: 'Settings', exact: true })
-  await settings.click()
+  const settings = await openMenuItem(page, 'Settings')
   const dialog = page.getByRole('dialog')
   const theme = dialog.getByRole('combobox', { name: 'Appearance', exact: true })
   await theme.focus()
@@ -79,7 +78,7 @@ test('custom selectors support keyboard choice, typeahead, Escape and native-dia
     await expect(zoom).toBeFocused()
   }
   await closeEditorTools(page)
-  await settings.click()
+  await openMenuItem(page, 'Settings')
   await theme.focus()
   await theme.press('Enter')
   await expect(dialog.getByRole('listbox')).toBeVisible()
@@ -137,17 +136,35 @@ test('dismissed export menus keep the chosen value and do not create a job', asy
   expect(jobs).toEqual([])
 })
 
-test('source mode activation focuses the relevant native control without stealing initial focus', async ({ page }) => {
+test('link and file sources are both offered and a pasted link fills the field without stealing initial focus', async ({ page }) => {
   await page.goto('/')
+  await expect(page.locator('main#editor')).toHaveAttribute('data-bootstrap-state', 'ready')
   const url = page.getByLabel('Ссылка на видео', { exact: true })
   await expect(url).not.toBeFocused()
   await expect(url).toHaveAttribute('inputmode', 'url')
   await expect(url).toHaveAttribute('enterkeyhint', 'go')
   await expect(url).toHaveAttribute('autocapitalize', 'none')
-  await page.getByRole('button', { name: 'Файл', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'Выбрать видео', exact: true })).toBeFocused()
-  await page.getByRole('button', { name: 'Ссылка', exact: true }).click()
+  const file = page.getByRole('button', { name: 'выберите файл', exact: true })
+  await expect(file).toBeVisible()
+  await expect(file).toHaveAttribute('aria-describedby', 'source-file-hint')
+  await url.focus(); await page.keyboard.press('Tab'); await page.keyboard.press('Tab')
+  await expect(file).toBeFocused()
+  const created: string[] = []
+  page.on('request', request => { if (request.method() === 'POST' && request.url().endsWith('/api/v1/sources')) created.push(request.url()) })
+  const paste = (text: string) => page.evaluate(text => {
+    const data = new DataTransfer(); data.setData('text/plain', text)
+    document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+  }, text)
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  await paste('just some notes')
+  await expect(url).toHaveValue('')
+  await expect(url).not.toBeFocused()
+  await paste('  https://www.youtube.com/watch?v=aqz-KE-bpKQ ')
+  await expect(url).toHaveValue('https://www.youtube.com/watch?v=aqz-KE-bpKQ')
   await expect(url).toBeFocused()
+  await expect(page.getByRole('status').filter({ hasText: 'YouTube' })).toBeVisible()
+  await page.waitForTimeout(300)
+  expect(created, 'A pasted link is never opened automatically').toEqual([])
 })
 
 test('native player keyboard behavior stays local to the video control', async ({ page }) => {

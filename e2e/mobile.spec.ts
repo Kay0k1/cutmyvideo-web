@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { api, goToClips, goToExport, setTheme, showExactTimes, stepButton, uploadThroughUI, waitJob, showExportSettings } from './helpers'
+import { api, openMenuItem, goToClips, goToExport, setTheme, showExactTimes, stepButton, uploadThroughUI, waitJob, showExportSettings } from './helpers'
 
 test('mobile source and range controls remain usable at 360 and 390 px', async ({ page }, testInfo) => {
   await page.goto('/')
@@ -64,7 +64,7 @@ test('mobile English navigation and donation dialog fit the screen', async ({ pa
   await page.goto('/')
   await page.getByRole('button', { name: 'English', exact: true }).tap()
   for (const name of ['Examples', 'Settings', 'Support']) {
-    await page.getByRole('button', { name, exact: true }).tap()
+    const trigger = await openMenuItem(page, name, { tap: true })
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1)
@@ -76,6 +76,7 @@ test('mobile English navigation and donation dialog fit the screen', async ({ pa
     }
     await dialog.getByRole('button', { name: 'Close', exact: true }).tap()
     await expect(dialog).not.toBeVisible()
+    await expect(trigger).toBeFocused()
   }
 })
 

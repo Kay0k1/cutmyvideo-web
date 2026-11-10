@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { api, assertFirstFrameMatchesSource, chooseOption, goToExport, goToMoment, goToSource, probeDownloadedFile, showExactTimes, uploadThroughUI, waitJob, showExportSettings, closeExportSettings, showEditorTools, closeEditorTools } from './helpers'
+import { api, assertFirstFrameMatchesSource, chooseOption, goToExport, goToMoment, goToSource, probeDownloadedFile, showExactTimes, uploadThroughUI, waitJob, showExportSettings, closeExportSettings, showEditorTools, closeEditorTools, openMenuItem } from './helpers'
 
 // Exact addresses supplied by the owner, independent of the app catalog.
 const wallets = [
@@ -31,7 +31,6 @@ test('language switching preserves the real source, ranges and export', async ({
   await expect(page.getByLabel('End', { exact: true })).toHaveValue('00:00:04.000')
   await expect(page.locator('video')).toBeVisible()
   await goToSource(page)
-  await page.getByRole('button', { name: 'Link', exact: true }).click()
   const sourceMutations: string[] = []
   page.on('request', request => {
     if (request.method() === 'POST' && request.url().endsWith(`${api}/sources`)) sourceMutations.push(request.url())
@@ -87,8 +86,8 @@ test('navigation dialogs support Escape, trapped keyboard focus and focus return
   await page.goto('/')
   await page.getByRole('button', { name: 'English', exact: true }).click()
   for (const name of ['Examples', 'Settings', 'Support']) {
-    const trigger = page.getByRole('button', { name, exact: true })
-    await trigger.click()
+    // Dialogs open from the header menu; closing one returns focus to its menu button.
+    const trigger = await openMenuItem(page, name)
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
     await expectEnglishCopy(page)
@@ -106,7 +105,7 @@ test('donation copy returns every exact owner address once', async ({ page, cont
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(baseURL!).origin })
   await page.goto('/')
   await page.getByRole('button', { name: 'English', exact: true }).click()
-  await page.getByRole('button', { name: 'Support', exact: true }).click()
+  await openMenuItem(page, 'Support')
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
   for (const wallet of wallets) {
@@ -125,7 +124,7 @@ test('saved defaults survive reload and are applied without changing clip bounda
   await page.getByLabel('Начало', { exact: true }).fill('00:00:02.000')
   await page.getByLabel('Начало', { exact: true }).press('Tab')
   await page.getByRole('button', { name: 'English', exact: true }).click()
-  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await openMenuItem(page, 'Settings')
   const dialog = page.getByRole('dialog')
   await chooseOption(page, dialog.locator('#default-format'), /MP3.*Audio/)
   await expect(dialog.locator('#default-cut')).toContainText('Exact boundaries')
@@ -160,7 +159,7 @@ test('saved defaults survive reload and are applied without changing clip bounda
   await showEditorTools(page)
   await expect(page.getByRole('combobox', { name: 'Timeline zoom', exact: true })).toContainText('10 seconds')
   await closeEditorTools(page)
-  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await openMenuItem(page, 'Settings')
   await expect(dialog.locator('#default-format')).toContainText('MP3')
   await expect(dialog.locator('#default-zoom')).toContainText('10 seconds')
   await page.keyboard.press('Escape')

@@ -369,9 +369,7 @@ test('source, exact editing, export settings and download remain reachable at 20
     await noHorizontalClipping(page)
     await reachable(page.locator('.source-form input'), 'Video link')
     await reachable(page.locator('.source-open'), 'Open video')
-    await page.locator('.source-choice button').nth(1).click()
     await reachable(page.locator('.upload-button'), 'Choose a video file')
-    await page.locator('.source-choice button').nth(0).click()
   }
   await page.setViewportSize({ width: 1280, height: 600 })
   await page.locator('.source-form input').fill('https://www.youtube.com/watch?v=aqz-KE-bpKQ')
@@ -436,16 +434,15 @@ for (const language of ['ru', 'en']) {
       expect(await page.evaluate(() => scrollY)).toBe(0);
       await noHorizontalClipping(page);
       await inView(page.locator('.page-footer'));
-      await inView(page.locator('.source-choice'));
-      await inView(page.locator('.source-open, .upload-button'));
+      await inView(page.locator('.source-form input'));
+      await inView(page.locator('.source-open'));
+      await inView(page.locator('.upload-button'));
     };
     for (const [width, height] of [[1280, 800], [1280, 762], [1280, 620], [1280, 582], [1280, 540], [1280, 500], [900, 500], [1440, 900], [1920, 1080], [2560, 1440]]) {
       await page.setViewportSize({ width, height });
-      for (const mode of [0, 1]) {
-        await page.locator('.source-choice button').nth(mode).click();
-        await fits();
-        expect(await page.locator('.source-entry').evaluate(node => node.scrollHeight - node.clientHeight), 'Default form fits without internal scrolling').toBeLessThanOrEqual(1);
-      }
+      // Link and file actions are on one form, so a single check covers both.
+      await fits();
+      expect(await page.locator('.source-entry').evaluate(node => node.scrollHeight - node.clientHeight), 'Default form fits without internal scrolling').toBeLessThanOrEqual(1);
     }
     await page.setViewportSize({ width: 1280, height: 600 });
     for (const selector of ['.project-library > button', '.source-library > button', '.job-library > button']) await page.locator(selector).click();

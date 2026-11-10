@@ -36,6 +36,13 @@ function providerForHost(hostname: string): VideoProvider | null {
   return videoProviders.find(provider => provider.hosts.some(domain => host === domain || host.endsWith(`.${domain}`))) ?? null;
 }
 
+/** Clipboard text worth placing into the link field; it is never opened automatically. */
+export function looksLikeLink(value: string): boolean {
+  const trimmed = value.trim();
+  if (/\s/.test(trimmed) || !pastedURL(trimmed)) return false;
+  return /^https?:\/\//i.test(trimmed) || videoProvider(trimmed) !== null;
+}
+
 /** Recognition is a display hint. The core validates and resolves the real video. */
 export function videoProvider(value: string): VideoProvider | null {
   const parsed = pastedURL(value);

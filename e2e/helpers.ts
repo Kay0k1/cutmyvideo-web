@@ -214,9 +214,26 @@ export async function chooseOption(page: Page, control: Locator, name: string | 
   await expect(control).toHaveAttribute('aria-expanded', 'false')
 }
 
+export function menuButton(page: Page) {
+  return page.getByRole('button', { name: /^(Меню|Menu)$/ })
+}
+
+/** Opens a header menu item and returns the menu button that receives focus back. */
+export async function openMenuItem(page: Page, name: string | RegExp, options: { tap?: boolean } = {}) {
+  const button = menuButton(page)
+  if (await button.getAttribute('aria-expanded') !== 'true') {
+    if (options.tap) await button.tap(); else await button.click()
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+  }
+  const item = page.getByRole('menu').getByRole('menuitem', typeof name === 'string' ? { name, exact: true } : { name })
+  if (options.tap) await item.tap(); else await item.click()
+  await expect(page.getByRole('menu')).toHaveCount(0)
+  return button
+}
+
 export async function setTheme(page: Page, theme: 'light' | 'dark' | 'system') {
   await closeWorkspaceDialogs(page)
-  await page.getByRole('button', { name: /^(Настройки|Settings)$/ }).click()
+  await openMenuItem(page, /^(Настройки|Settings)$/)
   const dialog = page.getByRole('dialog')
   const labels = { system: /^(Как в системе|System)$/, light: /^(Светлая|Light)$/, dark: /^(Тёмная|Dark)$/ }
   await chooseOption(page, dialog.getByRole('combobox', { name: /^(Тема оформления|Appearance)$/ }), labels[theme])
@@ -227,7 +244,6 @@ export async function setTheme(page: Page, theme: 'light' | 'dark' | 'system') {
 
 export async function uploadThroughUI(page: Page, filename = process.env.CUTMY_E2E_MEDIA!) {
   await goToSource(page)
-  await page.getByRole('button', { name: /^(Файл|File)$/ }).click()
   const button = page.locator('button.upload-button')
   await expect(button).toBeEnabled()
   const chooser = page.waitForEvent('filechooser')

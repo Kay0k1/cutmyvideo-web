@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { api, chooseOption, goToSource, goToMoment, goToClips, goToExport, showExportSettings, closeExportSettings } from './helpers'
+import { api, chooseOption, goToSource, goToMoment, goToClips, goToExport, showExportSettings, closeExportSettings, openMenuItem, menuButton } from './helpers'
 import type { Job } from '../src/types'
 
 const source = {
@@ -34,9 +34,9 @@ test('all settings stay in the draft until Save, and Reset restores the system t
   await page.emulateMedia({ colorScheme: 'light' })
   await page.route(`**${api}/session`, route => route.fulfill({ json: { ok: true } }))
   await page.goto('/?lang=en')
-  const settings = page.getByRole('button', { name: 'Settings', exact: true })
+  const settings = menuButton(page)
   const dialog = page.getByRole('dialog')
-  await settings.click()
+  await openMenuItem(page, 'Settings')
   await chooseOption(page, dialog.locator('#theme-preference'), 'Dark')
   await chooseOption(page, dialog.locator('#default-format'), 'MP3 — Audio')
   await chooseOption(page, dialog.locator('#default-zoom'), '10 seconds')
@@ -45,7 +45,7 @@ test('all settings stay in the draft until Save, and Reset restores the system t
   await dialog.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(settings).toBeFocused()
 
-  await settings.click()
+  await openMenuItem(page, 'Settings')
   await expect(dialog.locator('#theme-preference')).toHaveText('System')
   await expect(dialog.locator('#default-format')).toContainText('MP4')
   await expect(dialog.locator('#default-zoom')).toHaveText('1 minute')
@@ -56,11 +56,11 @@ test('all settings stay in the draft until Save, and Reset restores the system t
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('cutmyvideo.preferences')!).output.format)).toBe('mp3')
   await page.keyboard.press('Escape')
 
-  await settings.click()
+  await openMenuItem(page, 'Settings')
   await dialog.getByRole('button', { name: 'Reset defaults', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
-  await settings.click()
+  await openMenuItem(page, 'Settings')
   await expect(dialog.locator('#default-format')).toContainText('MP3')
   await dialog.getByRole('button', { name: 'Reset defaults', exact: true }).click()
   await dialog.getByRole('button', { name: 'Save settings', exact: true }).click()
@@ -378,8 +378,8 @@ test('browser Back dismisses a settings popup first, restores focus and discards
   await prepare(page, { step: 2 })
   await page.reload()
   await expect(page.locator('.editor-workspace').first()).toBeVisible()
-  const settings = page.getByRole('button', { name: 'Settings', exact: true })
-  await settings.click()
+  const settings = menuButton(page)
+  await openMenuItem(page, 'Settings')
   const dialog = page.getByRole('dialog')
   await chooseOption(page, dialog.locator('#theme-preference'), 'Dark')
   const theme = dialog.getByRole('combobox', { name: 'Appearance', exact: true })
@@ -454,7 +454,7 @@ test('reload preserves the workspace and a refreshed settings dialog closes in p
   await expect(page.locator('.source-chooser')).toBeVisible()
   await page.goForward()
   await expect(page.locator('.editor-workspace')).toBeVisible()
-  await page.getByRole('button', { name: 'Settings', exact: true }).click()
+  await openMenuItem(page, 'Settings')
   await page.reload()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
@@ -529,7 +529,7 @@ test('opening an example awaits closing its dialog before entering the new sourc
   })
   await page.reload()
   await expect(page.locator('.editor-workspace').first()).toBeVisible()
-  await page.getByRole('button', { name: 'Examples', exact: true }).click()
+  await openMenuItem(page, 'Examples')
   const request = page.waitForRequest(request => request.method() === 'POST' && request.url().endsWith(`${api}/sources`))
   await page.getByRole('dialog').getByRole('button', { name: 'Open sample', exact: true }).click()
   expect((await request).postDataJSON()).toEqual({ url: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ' })
@@ -572,9 +572,9 @@ test('native skip-link history keeps Settings Close, Back and Forward dismissibl
   await skip.focus(); await skip.press('Enter')
   await expect(page).toHaveURL(/#editor$/)
   await expect.poll(() => page.evaluate(() => history.state?.cutmyWorkflow?.index)).toBe(1)
-  const settings = page.getByRole('button', { name: 'Settings', exact: true })
+  const settings = menuButton(page)
   const dialog = page.getByRole('dialog')
-  await settings.click()
+  await openMenuItem(page, 'Settings')
   await dialog.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(dialog).not.toBeVisible()
   await expect(settings).toBeFocused()

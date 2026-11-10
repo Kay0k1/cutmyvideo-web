@@ -117,7 +117,7 @@ async function checkLayout(page: Page, state: LayoutState, touch: boolean, descr
     expect(video!.height, `${description}: readable native controls`).toBeGreaterThanOrEqual(140)
   }
   if (state === 'source') {
-    for (const selector of ['.source-choice', '.source-form input', '.source-open']) {
+    for (const selector of ['.source-form input', '.source-open', '.upload-button']) {
       await reachableByScrolling(page.locator(selector), `${description}: ${selector}`)
     }
   } else if (state === 'workspace' || state === 'files') {
@@ -234,7 +234,6 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
       for (const state of ['source', 'workspace', 'tools', 'export-settings', 'files'] as const) {
         if (state === 'source') {
           await goToSource(target)
-          await target.getByRole('button', { name: /^(Ссылка|Link)$/ }).click()
         } else {
           await goToMoment(target)
           const precision = target.getByRole('button', { name: labels.precision })
@@ -248,13 +247,17 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
         const key = `${browserName}-${size.width}x${size.height}-${locale}-${theme}-${state}`
         evidence.push({ key, state, locale, theme, touch, ...await checkLayout(target, state, touch, key) })
         if (state === 'source') {
-          await target.getByRole('button', { name: /^(Файл|File)$/ }).click()
+          // Link and file share one screen; the header menu is the other source-screen surface.
+          await target.getByRole('button', { name: /^(Меню|Menu)$/ }).click()
+          await expect(target.getByRole('menu')).toBeVisible()
           await settle(target)
-          const uploadLayout = await collectLayout(target, touch)
-          expect(uploadLayout.overflow, `${key}: file chooser overflow`).toBeLessThanOrEqual(1)
-          expect(uploadLayout.controls.filter(control => control.clippedHorizontally || control.smallTouchTarget), `${key}: file controls`).toEqual([])
-          await reachableByScrolling(target.locator('.upload-button'), `${key}: choose video`)
-          evidence.push({ key: `${key}-upload`, ...uploadLayout })
+          const menuLayout = await collectLayout(target, touch)
+          expect(menuLayout.overflow, `${key}: header menu overflow`).toBeLessThanOrEqual(1)
+          expect(menuLayout.controls.filter(control => control.clippedHorizontally || control.smallTouchTarget), `${key}: header menu controls`).toEqual([])
+          for (const item of await target.getByRole('menuitem').all()) await reachableByScrolling(item, `${key}: header menu item`)
+          await target.keyboard.press('Escape')
+          await expect(target.getByRole('menu')).toHaveCount(0)
+          evidence.push({ key: `${key}-menu`, ...menuLayout })
         }
         if (state === 'workspace' || size.width === 1280 && size.height === 720 || size.width === 320) {
           await screen(target, testInfo, key)

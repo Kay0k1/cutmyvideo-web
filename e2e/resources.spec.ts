@@ -1,6 +1,6 @@
 import { readBrowserDraft } from './browserProjectStorage';
 import { expect, test, type Page } from '@playwright/test'
-import { api, closeEditorTools, closeExportSettings, goToClips, goToExport, goToSource, showEditorTools, showExactTimes, showExportSettings, uploadThroughUI } from './helpers'
+import { api, closeEditorTools, closeExportSettings, goToClips, goToExport, goToSource, showEditorTools, showExactTimes, showExportSettings, uploadThroughUI, openMenuItem } from './helpers'
 
 const source = {
   id: 'src_resources', title: 'Resource lifecycle fixture', kind: 'upload', duration_ms: 12000,
@@ -19,11 +19,11 @@ test('resource lifecycle: selector code is downloaded only when a selector is fi
   await page.goto('/')
   await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled()
   expect(selectorRequests).toEqual([])
-  await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+  await openMenuItem(page, 'Настройки')
   await expect(page.locator('button#theme-preference')).toBeVisible()
   expect(selectorRequests).toHaveLength(1)
   await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+  await openMenuItem(page, 'Настройки')
   await expect(page.locator('button#theme-preference')).toBeVisible()
   expect(selectorRequests).toHaveLength(1)
 })
@@ -39,7 +39,7 @@ for (const action of ['Enter', 'pointer', 'focus', 'Tab', 'Escape'] as const) {
     })
     try {
       await page.goto('/?lang=en')
-      await page.getByRole('button', { name: 'Settings', exact: true }).click()
+      await openMenuItem(page, 'Settings')
       await intercepted
       const dialog = page.getByRole('dialog')
       const theme = dialog.getByRole('combobox', { name: 'Appearance', exact: true })
@@ -72,7 +72,7 @@ test('resource lifecycle: a missing lazy selector chunk keeps native settings us
   await page.route(/\/RadixSelectControl(?:-[^/]+)?\.(?:js|tsx)(?:\?.*)?$/, route => { rejected++; return route.abort('failed') })
   await page.goto('/')
   await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeEnabled()
-  await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+  await openMenuItem(page, 'Настройки')
   await expect.poll(() => rejected).toBe(1)
   await page.locator('select#theme-preference').selectOption('dark')
   await page.locator('select#default-format').selectOption('mp3')
@@ -83,7 +83,7 @@ test('resource lifecycle: a missing lazy selector chunk keeps native settings us
   await page.keyboard.press('Escape')
   await expect(page.getByRole('button', { name: 'Открыть видео', exact: true })).toBeVisible()
   await page.reload()
-  await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+  await openMenuItem(page, 'Настройки')
   await expect(page.locator('select#default-format')).toHaveValue('mp3')
   await expect(page.locator('select#theme-preference')).toHaveValue('dark')
 })
@@ -244,7 +244,7 @@ test('resource lifecycle: upload displays measured bytes before server inspectio
     File.prototype.arrayBuffer = () => { throw new Error('Whole-file JS read is forbidden') }
   }, source)
   await page.goto('/')
-  await page.getByRole('button', { name: 'Файл', exact: true }).click()
+  const field = await page.locator('.source-field').boundingBox()
   const chooser = page.waitForEvent('filechooser')
   await page.locator('button.upload-button').click()
   await (await chooser).setFiles(process.env.CUTMY_E2E_MEDIA!)
@@ -252,6 +252,8 @@ test('resource lifecycle: upload displays measured bytes before server inspectio
   await page.evaluate(() => (window as UploadFixtureWindow).uploadFixture!.progress(524288, 1048576))
   await expect(page.getByRole('progressbar', { name: 'Загрузка видео', exact: true })).toBeVisible()
   await expect(page.locator('.upload-progress')).toContainText('Передано')
+  await expect(page.locator('.source-field .upload-progress')).toContainText('50 %')
+  expect(await page.locator('.source-field').boundingBox(), 'Upload progress replaces the field in place').toEqual(field)
   await page.evaluate(() => (window as UploadFixtureWindow).uploadFixture!.progress(1048576, 1048576))
   await expect(page.locator('.source-progress')).toContainText('Проверяем видео')
   await page.evaluate(() => (window as UploadFixtureWindow).uploadFixture!.finish())

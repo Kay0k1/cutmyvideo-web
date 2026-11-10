@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { readBrowserDraft } from './browserProjectStorage'
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { api, chooseOption, closeEditorTools, closeExportSettings, goToExport, goToSource, probeDownloadedFile, showEditorTools, showExactTimes, showExportSettings, uploadThroughUI, waitJob } from './helpers'
+import { api, chooseOption, closeEditorTools, closeExportSettings, goToExport, goToSource, probeDownloadedFile, showEditorTools, showExactTimes, showExportSettings, uploadThroughUI, waitJob, openMenuItem } from './helpers'
 import { downloadedText, encodedLoudness, frequency, mediaToolsFixtures, openMediaToolsFixture, pcmAudio, removeOwnedSources, rms, savedMediaDraft, uploadOwnedAudio, type MediaToolsFixtures } from './support/media-tools'
 
 let fixtures: MediaToolsFixtures
@@ -334,7 +334,7 @@ test('effects survive draft reload, incompatible format choices are explicit, an
   expect(plan.options.canvas).toEqual(before.canvas)
   expect(plan.options.audio_replace).toBeUndefined()
   expect(planDownload.text).not.toContain(replacement.id)
-  await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+  await openMenuItem(page, 'Настройки')
   await page.getByRole('button', { name: 'Сохранить настройки', exact: true }).click()
   await page.keyboard.press('Escape')
   const globalDefaults = await page.evaluate(() => localStorage.getItem('cutmyvideo.preferences'))

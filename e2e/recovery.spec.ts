@@ -46,7 +46,7 @@ for (const input of ['link', 'upload'] as const) {
       await page.getByLabel('Ссылка на видео', { exact: true }).fill('https://video.example/recording.mp4')
       await page.getByRole('button', { name: 'Открыть видео', exact: true }).click()
     } else {
-      await page.getByRole('button', { name: 'Файл', exact: true }).click()
+      await expect(page.getByRole('button', { name: 'выберите файл', exact: true })).toBeEnabled()
       // Only the small accepted MP4 header is needed; preview stays unavailable.
       await page.locator('#source-file').setInputFiles({ name: 'recovery.mp4', mimeType: 'video/mp4', buffer: Buffer.from([0, 0, 0, 16, 102, 116, 121, 112, 105, 115, 111, 109, 0, 0, 0, 0]) })
     }

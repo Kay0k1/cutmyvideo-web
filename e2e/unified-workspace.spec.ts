@@ -75,7 +75,6 @@ for (const language of ['ru', 'en']) {
     for (const height of [800, 762, 620, 582, 540, 500]) {
       await page.setViewportSize({ width: 1280, height });
       for (const mode of ['link', 'file']) {
-        await page.locator('.source-choice button').nth(mode === 'link' ? 0 : 1).click();
         await page.locator(mode === 'link' ? '.source-open' : '.upload-button').scrollIntoViewIfNeeded();
         await fullyInViewport(page.locator(mode === 'link' ? '.source-open' : '.upload-button'), 'Open/upload action');
         await page.locator('.page-footer').scrollIntoViewIfNeeded();
@@ -312,4 +311,28 @@ test('a long clip collection scrolls internally while editing and export remain 
     await workspaceFits(page)
     await screenshot(page, testInfo, 'twelve-clips-1280x720')
   })
+})
+
+test('a file dropped anywhere on the start screen uploads the real video', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('main#editor')).toHaveAttribute('data-bootstrap-state', 'ready')
+  const bytes = (await readFile(process.env.CUTMY_E2E_MEDIA!)).toString('base64')
+  const transfer = await page.evaluateHandle(bytes => {
+    const data = new DataTransfer()
+    data.items.add(new File([Uint8Array.from(atob(bytes), char => char.charCodeAt(0))], 'dropped.mp4', { type: 'video/mp4' }))
+    return data
+  }, bytes)
+  // The drop target is the page heading, outside the link field and file button.
+  const heading = page.locator('.page-heading h1')
+  await heading.dispatchEvent('dragenter', { dataTransfer: transfer })
+  await expect(page.getByText(/^(Отпустите файл, чтобы открыть|Drop the file to open it)$/)).toBeVisible()
+  await heading.dispatchEvent('dragleave', { dataTransfer: transfer })
+  await expect(page.locator('.source-drop-overlay')).toHaveCount(0)
+  await heading.dispatchEvent('dragenter', { dataTransfer: transfer })
+  const uploaded = page.waitForResponse(response => response.url().endsWith(`${api}/uploads`) && response.request().method() === 'POST')
+  await heading.dispatchEvent('drop', { dataTransfer: transfer })
+  expect((await uploaded).ok()).toBe(true)
+  await expect(page.locator('.source-drop-overlay')).toHaveCount(0)
+  await expect(page.locator('.editor-workspace')).toBeVisible()
+  await expect(page.locator('.source-title')).toContainText('dropped')
 })
