@@ -268,7 +268,7 @@ test('a hidden tab prepares no frames or waveform until it is shown', async ({ p
   await page.evaluate(() => (window as Window & { showTab?: () => void }).showTab!());
   await expect(trackFrames(page)).toHaveCount(3);
   expect(requests.filter(url => url.includes('/storyboard?'))).toEqual([expect.stringContaining('/storyboard?start_ms=0&')]);
-  expect(requests.filter(url => url.includes('/waveform?'))).toEqual([expect.stringContaining('/waveform?start_ms=0')]);
+  await expect.poll(() => requests.filter(url => url.includes('/waveform?'))).toEqual([expect.stringContaining('/waveform?start_ms=0')]);
 });
 
 test('foreground preview retries brief contention promptly with bounded attempts', async ({ page }) => {
