@@ -12,7 +12,7 @@
 .workspace-heading-actions .edit-history-actions { display: flex; gap: 0; margin: 0 4px 0 0; }
 .workspace-heading-actions .edit-history-actions .icon-button { color: var(--ink); }
 .editor-title-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 12px; margin-bottom: 12px; }
-.editor-title-row .editor-heading { flex: 1 1 0; min-width: min(100%, 7em); }
+.editor-title-row .editor-heading { flex: 1 1 0; min-width: min(100%, 12em); }
 .editor-title-row .workspace-heading-actions { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
 .site-header .editor-heading { flex: 1 1 auto; align-self: center; height: 24px; align-items: center; margin-left: 16px; padding-left: 24px; border-left: 1px solid var(--line); }
 .site-header .editor-heading h1 { font-size: .9375rem; }
