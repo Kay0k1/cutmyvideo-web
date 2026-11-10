@@ -14,7 +14,7 @@
         @upload path /api/v1/uploads
         request_body @upload {
             # Source maximum + 2 MiB multipart metadata, matching the API.
-            max_size {$MAX_UPLOAD_BODY_BYTES:1075838976}
+            max_size {$MAX_UPLOAD_BODY_BYTES:34361835520}
         }
         @metadata not path /api/v1/uploads
         request_body @metadata {

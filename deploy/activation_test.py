@@ -1,6 +1,7 @@
 """Exercise release success and partial failures without Docker or production data."""
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import unittest
@@ -10,6 +11,15 @@ CORE = "a" * 40
 WEB = "b" * 40
 NEW = CORE[:12] + "-" + WEB[:12]
 OLD = "1" * 12 + "-" + "2" * 12
+
+
+class UploadLimitDefaultsTest(unittest.TestCase):
+    def test_edge_default_matches_source_default_plus_multipart_metadata(self):
+        compose = ACTIVATE.with_name("compose.yaml").read_text()
+        source = int(re.search(r'MAX_SOURCE_BYTES: "\$\{MAX_SOURCE_BYTES:-(\d+)\}"', compose)[1])
+        expected = source + 2**21
+        self.assertIn(f'MAX_UPLOAD_BODY_BYTES: "${{MAX_UPLOAD_BODY_BYTES:-{expected}}}"', compose)
+        self.assertIn(f"{{$MAX_UPLOAD_BODY_BYTES:{expected}}}", ACTIVATE.with_name("Caddyfile").read_text())
 
 
 class ActivationTest(unittest.TestCase):
