@@ -162,13 +162,18 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 @keyframes track-progress { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 .track-scrubber { position: absolute; inset: 0; z-index: 1; border-radius: 6px; touch-action: pan-y pinch-zoom; }
 .track-scrubber:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
-/* Each 44px hit area lies outside the cut; its 16px grip touches the cut. */
+/* The 16px grips stand outside the cut; each 44px hit area is centred on its
+   grip. Close boundaries move both hit areas fully outside so they never overlap. */
 .trim-handle { position: absolute; top: 0; left: 0; width: 44px; height: 100%; z-index: 3; border: 0; border-radius: 14px; background: transparent; color: var(--ink); cursor: ew-resize; touch-action: none; padding: 0; }
-.trim-handle.start { margin-left: -44px; }
-.trim-handle.end { margin-left: 0; }
+.trim-handle.start { margin-left: -30px; }
+.trim-handle.end { margin-left: -14px; }
+.trim-handle.close-handles.start { margin-left: -44px; }
+.trim-handle.close-handles.end { margin-left: 0; }
 .trim-grip { position: absolute; top: 0; bottom: 0; width: 16px; border: 1px solid var(--trim-line); background: var(--trim); }
-.trim-handle.start .trim-grip { right: 0; border-right: 0; border-radius: 14px 0 0 14px; }
-.trim-handle.end .trim-grip { left: 0; border-left: 0; border-radius: 0 14px 14px 0; }
+.trim-handle.start .trim-grip { right: 14px; border-right: 0; border-radius: 14px 0 0 14px; }
+.trim-handle.end .trim-grip { left: 14px; border-left: 0; border-radius: 0 14px 14px 0; }
+.trim-handle.close-handles.start .trim-grip { right: 0; }
+.trim-handle.close-handles.end .trim-grip { left: 0; }
 .trim-grip::after { content: ''; position: absolute; top: 50%; left: 50%; width: 2px; height: 24px; margin: -12px 0 0 -1px; border-radius: 1px; background: var(--trim-ink); transition: height .12s, margin-top .12s; }
 .trim-handle:hover .trim-grip::after, .trim-handle:focus-visible .trim-grip::after, .trim-handle[data-dragging] .trim-grip::after { height: 34px; margin-top: -17px; }
 .trim-handle.offscreen .trim-grip { border-style: dashed; opacity: .7; }
@@ -176,10 +181,12 @@ kbd, .keycap { display: inline-grid; place-items: center; border: 1px solid var(
 .trim-handle:focus-visible { outline: 0; }
 .trim-handle:focus-visible .trim-grip { box-shadow: 0 0 0 2px var(--page), 0 0 0 5px var(--focus); }
 .trim-tooltip { position: absolute; top: -32px; display: flex; align-items: baseline; gap: 7px; padding: 3px 8px; border-radius: 8px; color: var(--page); background: var(--ink); white-space: nowrap; font-size: .75rem; line-height: 1.5; font-weight: 500; opacity: 0; pointer-events: none; transition: opacity .12s; }
-.trim-tooltip.align-start { left: 0; }
-.trim-tooltip.align-end { right: 0; }
-.trim-handle.start .trim-tooltip.align-start { left: 28px; }
-.trim-handle.end .trim-tooltip.align-end { right: 28px; }
+.trim-tooltip.align-start { left: 14px; }
+.trim-tooltip.align-end { right: 14px; }
+.trim-handle.close-handles.start .trim-tooltip.align-start { left: 28px; }
+.trim-handle.close-handles.start .trim-tooltip.align-end { right: 0; }
+.trim-handle.close-handles.end .trim-tooltip.align-start { left: 0; }
+.trim-handle.close-handles.end .trim-tooltip.align-end { right: 28px; }
 .trim-tooltip strong { color: inherit; font-weight: 500; font-variant-numeric: tabular-nums; }
 .trim-handle:hover .trim-tooltip, .trim-handle:focus-visible .trim-tooltip, .trim-handle[data-dragging] .trim-tooltip { opacity: 1; }
 .playhead { position: absolute; z-index: 2; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; border-radius: 1px; background: #fff; box-shadow: 0 0 0 1px var(--playhead-edge); pointer-events: none; }

@@ -157,9 +157,13 @@ test('the server clip limit prevents partial bulk duplication and still permits 
   await expect(duplicate).toBeDisabled()
   await expect(page.locator('.clip-compact-hint')).toContainText(String(maximum))
   await selectFirst(maximum - target)
+  // Choosing clips closes the actions panel; it is opened again before acting.
+  await openBulkActions(page)
   await duplicate.click()
   await expect(page.locator('.range-list > li')).toHaveCount(maximum)
   await expect(page.getByRole('button', { name: 'Ещё фрагмент', exact: true })).toBeDisabled()
+  // The actions panel closes after an action; reopened, it shows duplication blocked at the limit.
+  await openBulkActions(page)
   await expect(duplicate).toBeDisabled()
   await all.check()
   await bulkAction(page, 'Удалить выбранные')

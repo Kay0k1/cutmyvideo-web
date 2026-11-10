@@ -49,6 +49,20 @@ export function ClipLibrary({ limit, ranges, selectedIds, editedId, revealId, on
       (row?.querySelector('input[type="checkbox"]') as HTMLElement | null ?? section.current?.querySelector<HTMLButtonElement>('.clip-empty .button'))?.focus({ preventScroll: true });
     });
   };
+  // Bulk actions are a small panel: it closes after an action, on Escape and
+  // on a press elsewhere.
+  const bulkMenu = useRef<HTMLDetailsElement>(null);
+  const closeBulk = (focus = true) => {
+    const menu = bulkMenu.current;
+    if (!menu?.open) return;
+    menu.open = false;
+    if (focus) menu.querySelector('summary')?.focus({ preventScroll: true });
+  };
+  useEffect(() => {
+    const outside = (event: PointerEvent) => { const menu = bulkMenu.current; if (menu?.open && !menu.contains(event.target as Node)) menu.open = false; };
+    document.addEventListener('pointerdown', outside);
+    return () => document.removeEventListener('pointerdown', outside);
+  }, []);
   const deleteIncluded = () => {
     onDelete();
     window.requestAnimationFrame(() => section.current?.querySelector<HTMLElement>('.clip-empty .button, .clip-select-all input')?.focus({ preventScroll: true }));
@@ -58,7 +72,7 @@ export function ClipLibrary({ limit, ranges, selectedIds, editedId, revealId, on
     return <section ref={section} className="clip-library compact" data-several={ranges.length > 1 || undefined} data-at-limit={ranges.length >= limit || undefined} aria-label={t('Фрагменты')}>
       <h2 className="sr-only">{t('Фрагменты')}<span className="clip-total">{ranges.length}</span></h2>
       {ranges.length > 0 ? <>
-        <div className="clip-bulkbar">{ranges.length > 1 && <><div className="clip-select-all"><ClipCheckbox id={selectAllID} checked={included.length === ranges.length} mixed={included.length > 0 && included.length < ranges.length} label={t('Выбрать все фрагменты')} onChange={onSelectAll} disabled={disabled} /><label htmlFor={selectAllID}>{t('Выбрать все')}</label></div><span className="clip-selected-count" role="status" aria-label={t('Выбрано: {count} из {total}', { count: included.length, total: ranges.length })}>{included.length}/{ranges.length}</span></>}<details className="clip-bulk-menu"><summary className="clip-bulk-toggle" aria-label={t('Действия с выбранными')} aria-disabled={disabled} tabIndex={disabled ? -1 : 0} onClick={event => { if (disabled) event.preventDefault(); }}><span className="clip-bulk-label" aria-hidden="true">{t('С выбранными')}</span><Icon name="chevron" size={14} /></summary><div className="clip-bulk-actions"><button className="text-button" type="button" onClick={onDuplicate} disabled={disabled || !included.length || duplicateLimit} aria-describedby={duplicateLimit ? hintID : undefined}><Icon name="duplicate" size={17} />{t('Дублировать выбранные')}</button><button className="text-button danger-button" type="button" onClick={deleteIncluded} disabled={disabled || !included.length}><Icon name="trash" size={17} />{t('Удалить выбранные')}</button></div></details></div>
+        <div className="clip-bulkbar">{ranges.length > 1 && <><div className="clip-select-all"><ClipCheckbox id={selectAllID} checked={included.length === ranges.length} mixed={included.length > 0 && included.length < ranges.length} label={t('Выбрать все фрагменты')} onChange={onSelectAll} disabled={disabled} /><label htmlFor={selectAllID}>{t('Выбрать все')}</label></div><span className="clip-selected-count" role="status" aria-label={t('Выбрано: {count} из {total}', { count: included.length, total: ranges.length })}>{included.length}/{ranges.length}</span></>}<details ref={bulkMenu} className="clip-bulk-menu" onKeyDown={event => { if (event.key === 'Escape' && event.currentTarget.open) { event.preventDefault(); event.stopPropagation(); closeBulk(); } }}><summary className="clip-bulk-toggle" aria-label={t('Действия с выбранными')} aria-disabled={disabled} tabIndex={disabled ? -1 : 0} onClick={event => { if (disabled) event.preventDefault(); }}><span className="clip-bulk-label" aria-hidden="true">{t('С выбранными')}</span><Icon name="chevron" size={14} /></summary><div className="clip-bulk-actions"><button className="text-button" type="button" onClick={() => { onDuplicate(); closeBulk(); }} disabled={disabled || !included.length || duplicateLimit} aria-describedby={duplicateLimit ? hintID : undefined}><Icon name="duplicate" size={17} />{t('Дублировать выбранные')}</button><button className="text-button danger-button" type="button" onClick={() => { closeBulk(false); deleteIncluded(); }} disabled={disabled || !included.length}><Icon name="trash" size={17} />{t('Удалить выбранные')}</button></div></details></div>
         <ol ref={list} className="range-list clip-list">{ranges.map((range, index) => <li key={range.id} data-range-id={range.id} className={range.id === editedId ? 'editing' : ''}>
           <ClipCheckbox checked={selected.has(range.id)} label={t('Выбрать фрагмент {index}', { index: index + 1 })} onChange={() => onSelect(range.id)} disabled={disabled} />
           <div className="clip-row-body"><label className="clip-row-title"><input className="clip-row-name" type="text" value={range.label} maxLength={50} size={Math.max(6, Math.min(22, (range.label || `${t('Фрагмент')} ${index + 1}`).length + 1))} placeholder={`${t('Фрагмент')} ${index + 1}`} aria-label={t('Название фрагмента {index}', { index: index + 1 })} disabled={disabled} onFocus={() => onBeginChange?.()} onBlur={() => onEndChange?.()} onChange={event => onLabel(range.id, event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }} /></label></div>

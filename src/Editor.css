@@ -31,10 +31,10 @@
 #editor .moment-controls .timeline-section-labels { display: none; }
 #editor .moment-controls .timeline-zoom-hint { display: none; }
 #editor .moment-controls:not([data-overview]) .timeline-section { display: none; }
-#editor .moment-controls .timeline-section { margin: 0 22px 6px; padding: 0; border: 0; background: none; }
+#editor .moment-controls .timeline-section { margin: 0 18px 6px; padding: 0; border: 0; background: none; }
 #editor .moment-controls .timeline-section-heading { display: none; }
-#editor .moment-controls .trim-track { margin-inline: 22px; }
-#editor .moment-controls .trim-track::before { inset-inline: -22px; }
+#editor .moment-controls .trim-track { margin-inline: 18px; }
+#editor .moment-controls .trim-track::before { inset-inline: -18px; }
 #editor .moment-controls .timeline-footer { margin-top: 4px; }
 #editor .timeline-detail-label > span { display: none; }
 
@@ -128,7 +128,12 @@
 #editor .workspace-results .file-description .artifact-details summary { min-height: 44px; font-size: .8125rem; }
 #editor .workspace-results .download-button { min-height: 44px; padding: 9px 22px; font-size: .9375rem; }
 #editor .workspace-results .cut-again { min-height: 44px; }
-#editor .workspace-results:not(.several) .results-heading { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* With one file the row speaks for itself; the heading stays for assistive
+   technology and still receives focus where the file is shown. */
+#editor .workspace-results .results-panel { position: relative; }
+#editor .workspace-results:not(.several) .results-heading { position: absolute; inset: 0 0 auto; padding: 0; border: 0; opacity: 0; pointer-events: none; }
+#editor .workspace-results:not(.several) .results-heading > :not(div), #editor .workspace-results:not(.several) .results-heading p { display: none; }
+#editor .workspace-results .file-list > li > .download-button { order: 2; }
 #editor .workspace-results .file-list > li > .cut-again { flex: none; border-color: transparent; background: none; color: var(--muted); }
 #editor .workspace-results .file-list > li > .cut-again:hover { color: var(--ink); background: var(--hover); }
 #editor .workspace-results .file-description > span .meta-separator { margin: 0 .2em; }
@@ -142,8 +147,10 @@
    tools move to their own row before they squeeze it. */
 #editor .workspace-clipbar > .clip-library { padding: 0; border: 0; border-radius: 0; background: none; }
 @media (min-width: 900px) and (hover: hover) and (pointer: fine) {
-  #editor .workspace-clipbar > .clip-library { flex: 1 1 38rem; min-width: min(100%, 38rem); }
-  #editor .workspace-clipbar > .clip-library[data-several] { flex-basis: 46rem; min-width: min(100%, 46rem); }
+  #editor .workspace-clipbar > .clip-library { flex: 1 1 36rem; min-width: min(100%, 24rem); }
+  #editor .workspace-toolstrip { column-gap: 16px; }
+  /* The checkbox keeps its name; the visible words give their room to the chips. */
+  #editor .clip-library.compact .clip-select-all > label:not(.clip-checkbox) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 #editor .clip-library.compact .clip-list { flex: 1 1 auto; min-width: 0; }
 #editor .workspace-toolstrip { display: flex; flex: 0 1 auto; max-width: 100%; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0 20px; margin: 0 0 0 auto; padding: 0; border: 0; }
@@ -234,6 +241,11 @@
   .editor-docked:not(.workspace-reflow) #editor .clip-library.compact { max-height: 44px; }
 }
 @media (min-width: 900px) and (max-height: 560px) and (hover: hover) and (pointer: fine) {
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-footer { min-height: 18px; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .tick-labels { line-height: 18px; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .track-duration { line-height: 16px; }
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls .timeline-section-track,
+  .editor-docked:not(.workspace-reflow) #editor .moment-controls :is(.timeline-section-window, .timeline-section-playback) { height: 18px; min-height: 18px; }
   .editor-docked:not(.workspace-reflow) #editor.workspace-page { padding-block: 2px 4px; }
   .editor-docked:not(.workspace-reflow) #editor .moment-layout { gap: 4px; }
   .editor-docked:not(.workspace-reflow) #editor .export-notes { margin-top: 2px; }
@@ -356,13 +368,11 @@
   #editor .export-submit .export-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   #editor .export-submit .export-label-short { display: inline; }
   /* Title, duration and edit actions share one row under the header. */
-  #editor .editor-title-row { flex-wrap: nowrap; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
-  #editor .editor-title-row .editor-heading { flex: 1 1 auto; min-width: 0; }
+  #editor .editor-title-row { flex-wrap: wrap; justify-content: space-between; gap: 4px 8px; margin-bottom: 10px; }
+  #editor .editor-title-row .editor-heading { flex: 1 1 7.5rem; min-width: 0; }
   #editor .editor-title-row .source-title { flex: 0 1 auto; flex-basis: auto; width: auto; font-size: 1rem; }
-  #editor .editor-title-row .workspace-heading-actions { flex: none; flex-wrap: nowrap; gap: 0; }
+  #editor .editor-title-row .workspace-heading-actions { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; gap: 0; min-width: 0; }
   #editor .editor-title-row .workspace-heading-actions .edit-history-actions { margin: 0; }
-  #editor .editor-title-row .change-source { min-height: 44px; padding-inline: 14px; font-size: .875rem; }
-}
-@media (max-width: 359px) {
-  #editor .editor-title-row { flex-wrap: wrap; }
+  #editor .editor-title-row .change-source { min-height: 44px; max-width: 100%; padding-inline: 12px; font-size: .875rem; }
+  #editor .workspace-toolstrip :is(.text-button, .crop-editor > summary) { min-width: 44px; justify-content: center; }
 }
