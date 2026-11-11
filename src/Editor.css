@@ -328,7 +328,7 @@
   #editor .format-picker button { min-height: 44px; }
   #editor .moment-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   #editor .moment-preview { flex: 1 1 6.5em; }
-  #editor .moment-boundaries > div:not(.moment-duration) { flex: 1 1 7em; min-width: min-content; }
+  #editor .moment-boundaries > div:not(.moment-duration) { flex: 1 1 7em; }
   #editor .moment-boundaries { display: contents; }
   #editor .moment-duration { display: none; }
   #editor .moment-preview > .button { width: 100%; padding-inline: 8px; }
@@ -336,7 +336,7 @@
   #editor .moment-boundaries .marker-button, #editor .moment-boundaries .time-value { min-height: 44px; }
   #editor .moment-boundaries .marker-button { flex: none; width: 44px; }
   #editor .moment-boundaries > div:not(.moment-duration) { height: 48px; }
-  #editor .moment-boundaries .time-value { flex: 1 1 auto; min-width: max-content; justify-content: flex-start; }
+  #editor .moment-boundaries .time-value { flex: 1 1 auto; justify-content: flex-start; }
   #editor .moment-boundaries .marker-button kbd { display: none; }
   #editor .moment-boundaries .marker-bracket { display: inline; font-size: 1.125rem; color: var(--ink); }
   #editor .moment-boundaries .time-value { padding-inline: 2px; color: var(--ink); }
@@ -430,4 +430,13 @@
   #editor .editor-title-row .workspace-heading-actions .edit-history-actions { margin: 0; }
   #editor .editor-title-row .change-source { min-height: 44px; max-width: 100%; padding-inline: 12px; font-size: .875rem; }
   #editor .workspace-toolstrip :is(.text-button, .crop-editor > summary) { min-width: 44px; justify-content: center; }
+}
+@media not all and (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  /* Smallest phones: the play button and both boundary pills share one row with
+     room for whole-second times. */
+  @media (max-width: 360px) {
+    #editor .moment-actions { column-gap: 6px; }
+    #editor .moment-boundaries > div:not(.moment-duration) { padding-left: 6px; }
+    #editor .moment-boundaries .time-value { font-size: .8125rem; }
+  }
 }
