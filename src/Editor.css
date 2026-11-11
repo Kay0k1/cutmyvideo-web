@@ -328,7 +328,7 @@
   #editor .format-picker button { min-height: 44px; }
   #editor .moment-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   #editor .moment-preview { flex: 1 1 6.5em; }
-  #editor .moment-boundaries > div:not(.moment-duration) { flex: 1 1 7em; }
+  #editor .moment-boundaries > div:not(.moment-duration) { flex: 1 1 7em; min-width: min-content; }
   #editor .moment-boundaries { display: contents; }
   #editor .moment-duration { display: none; }
   #editor .moment-preview > .button { width: 100%; padding-inline: 8px; }
