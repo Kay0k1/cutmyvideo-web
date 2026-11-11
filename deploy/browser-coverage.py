@@ -39,11 +39,23 @@ def cases(report):
     return result
 
 
+def collected(inventories):
+    """Merge the disjoint inventories of one job, such as a shard and its separately run group."""
+    expected = {}
+    for inventory in inventories:
+        for key, value in cases(inventory).items():
+            require(key not in expected, 'Overlapping browser inventories')
+            expected[key] = value
+    identities = [inventory['config']['metadata']['ci'] for inventory in inventories]
+    require(identities and all(identity == identities[0] for identity in identities),
+            'Collected inventories belong to different sources, runs or attempts')
+    return expected, identities[0]
+
+
 def verify(inventory, reports, project=None):
-    expected = cases(inventory)
+    expected, identity = collected(inventory if isinstance(inventory, list) else [inventory])
     projects = {key[0] for key in expected}
     require(projects == ({project} if project else PROJECTS), 'Collected project set is incomplete')
-    identity = inventory['config']['metadata']['ci']
     require(identity == {'commit': os.environ.get('GITHUB_SHA', 'local'),
                          'run': os.environ.get('GITHUB_RUN_ID', 'local'),
                          'attempt': os.environ.get('GITHUB_RUN_ATTEMPT', 'local')},
@@ -88,12 +100,12 @@ def verify(inventory, reports, project=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--inventory', type=Path, required=True)
+    parser.add_argument('--inventory', type=Path, nargs='+', required=True)
     parser.add_argument('--reports', type=Path, nargs='+', required=True)
     parser.add_argument('--project', choices=sorted(PROJECTS))
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    receipt = verify(json.loads(args.inventory.read_text()),
+    receipt = verify([json.loads(path.read_text()) for path in args.inventory],
                      [json.loads(path.read_text()) for path in args.reports], args.project)
     args.output.write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps(receipt))
