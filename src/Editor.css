@@ -336,7 +336,7 @@
   #editor .moment-boundaries .marker-button, #editor .moment-boundaries .time-value { min-height: 44px; }
   #editor .moment-boundaries .marker-button { flex: none; width: 44px; }
   #editor .moment-boundaries > div:not(.moment-duration) { height: 48px; }
-  #editor .moment-boundaries .time-value { flex: 1 1 auto; justify-content: flex-start; }
+  #editor .moment-boundaries .time-value { flex: 1 1 auto; min-width: max-content; justify-content: flex-start; }
   #editor .moment-boundaries .marker-button kbd { display: none; }
   #editor .moment-boundaries .marker-bracket { display: inline; font-size: 1.125rem; color: var(--ink); }
   #editor .moment-boundaries .time-value { padding-inline: 2px; color: var(--ink); }
