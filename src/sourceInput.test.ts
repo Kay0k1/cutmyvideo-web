@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
-import { canonicalSourceUrl, canonicalYouTubeUrl, validateVideo, videoProvider, videoProviders } from './sourceInput';
+import { canonicalSourceUrl, canonicalYouTubeUrl, looksLikeLink, validateVideo, videoProvider, videoProviders } from './sourceInput';
 
 describe('website source boundaries', () => {
+  it('recognizes pasted links but not ordinary text', () => {
+    expect(looksLikeLink(' https://example.com/video.mp4 ')).toBe(true);
+    expect(looksLikeLink('youtu.be/aqz-KE-bpKQ')).toBe(true);
+    expect(looksLikeLink('notes about a video')).toBe(false);
+    expect(looksLikeLink('example.com')).toBe(false);
+    expect(looksLikeLink('https://user:secret@example.com/video.mp4')).toBe(false);
+    expect(looksLikeLink('https://example.com/a https://example.com/b')).toBe(false);
+  });
   it('normalizes common YouTube sharing links without carrying playlist or tracking data', () => {
     for (const url of ['youtu.be/aqz-KE-bpKQ?si=tracking', 'http://www.youtube.com/watch?v=aqz-KE-bpKQ&list=PL123', 'https://m.youtube.com/shorts/aqz-KE-bpKQ', 'youtube.com/live/aqz-KE-bpKQ', '//youtube.com/watch?v=aqz-KE-bpKQ', 'https://www.youtube.com./watch?v=aqz-KE-bpKQ', 'https://youtube-nocookie.com/embed/aqz-KE-bpKQ', 'https://youtu.be/%61qz-KE-bpKQ', 'https://youtube.com/%77atch?v=aqz-KE-bpKQ']) {
       expect(canonicalYouTubeUrl(url)).toBe('https://www.youtube.com/watch?v=aqz-KE-bpKQ');

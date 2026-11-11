@@ -1,18 +1,19 @@
-import { createPortal } from 'react-dom';
 import { useLanguage } from './Language';
-import { useEffect, useEffectEvent, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
 import type { ClipRange } from './types';
-import { formatTimecode } from './timecode';
+import { durationLabel, formatTimecode } from './timecode';
 import { keyboardTrimValue, panTimelineView, pointerSeekValue, pointerTimelineTime, pointerTrimValue, trimBoundaryLimits, zoomTimelineView } from './timelineControls';
 import type { PlaybackPosition } from './playbackPosition';
-import { Waveform } from './Waveform';
-import { Storyboard } from './Storyboard';
-import { Icon } from './Icons';
+import { waveformPath } from './waveformData';
+import type { WaveformWindow } from './waveformData';
+import { frameCellMS, frameCells, loadStoryboard, loadWaveform, mediaWindowMS, useMediaWindows, visibleMediaWindows } from './trackMedia';
+import type { FrameStrip } from './trackMedia';
+import { useSourceBase } from './SourceAccess';
 import { TimelineSection } from './TimelineSection';
 import './Timeline.css';
 
-export function Timeline({ duration, position, ranges, selected, section, view, maximumRange = Infinity, showOverview = true, compact = false, toolsContainer, sourceID, active, audioTrack, noAudio, onSeek, onRange, onReveal, onSection, onView, onBeginChange, onEndChange }: {
+export function Timeline({ duration, position, ranges, selected, section, view, maximumRange = Infinity, showOverview = true, compact = false, zoomInFooter = false, sourceID, active, audioTrack, noAudio, cutting, onSeek, onRange, onReveal, onSection, onView, onSelectRange, onBeginChange, onEndChange }: {
   duration: number;
   position: PlaybackPosition;
   ranges: ClipRange[];
@@ -22,28 +23,35 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
   maximumRange?: number;
   showOverview?: boolean;
   compact?: boolean;
-  toolsContainer?: HTMLElement | null;
+  /** Puts the zoom buttons in the label row under the track instead of above it. */
+  zoomInFooter?: boolean;
   sourceID: string;
   active: boolean;
   audioTrack?: number;
   noAudio?: boolean;
+  /** While the selection is being cut: the encoding percent when the server reports one. */
+  cutting?: { percent?: number } | null;
   onSeek(ms: number): void;
   onRange(start: number, end: number): void;
   onReveal(ms: number): void;
   onSection(start: number): void;
   onView(view: [number, number]): void;
+  /** Double-clicking another clip on the track makes it the edited one. */
+  onSelectRange?(id: string): void;
   onBeginChange?(): void;
   onEndChange?(): void;
 }) {
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   const current = useSyncExternalStore(position.subscribe, position.getSnapshot);
   const track = useRef<HTMLDivElement>(null);
+  const framesLayer = useRef<HTMLDivElement>(null);
+  const [frameHeight, setFrameHeight] = useState(0);
+  const sourceBase = useSourceBase(sourceID);
   const drag = useRef<{ which: 'start' | 'end'; pointer: number; x: number; value: number; width: number; span: number } | null>(null);
   const scrub = useRef<{ pointer: number; x: number; y: number; started: boolean } | null>(null);
   const [dragging, setDragging] = useState<'start' | 'end' | null>(null);
   const [scrubbing, setScrubbing] = useState(false);
   const [trackWidth, setTrackWidth] = useState(0);
-  const [mediaOpen, setMediaOpen] = useState(false);
   const wheelView = useRef(view);
   const gesture = useRef<{ view: [number, number]; anchor: number } | null>(null);
   wheelView.current = view;
@@ -96,17 +104,52 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
     for (const name of events) node.addEventListener(name, listener, { passive: false });
     return () => { for (const name of events) node.removeEventListener(name, listener); };
   }, []);
-  useEffect(() => { setMediaOpen(false); }, [sourceID]);
+  const footer = useRef<HTMLDivElement>(null);
+  const labels = useRef<HTMLDivElement>(null);
+  const durationPill = useRef<HTMLSpanElement>(null);
+  const [footerBox, setFooterBox] = useState<{ trackLeft: number; first: number; last: number; top: number; height: number; pill: number; pillHeight: number } | null>(null);
   useEffect(() => {
-    const node = track.current;
-    if (!node) return;
-    const measure = () => setTrackWidth(node.getBoundingClientRect().width);
+    const node = track.current, frames = framesLayer.current, row = footer.current, ticks = labels.current;
+    if (!node || !frames || !row || !ticks) return;
+    const measure = () => {
+      const trackBox = node.getBoundingClientRect(), rowBox = row.getBoundingClientRect(), ticksBox = ticks.getBoundingClientRect();
+      const [first, last] = [ticks.firstElementChild, ticks.lastElementChild].map(label => label?.getBoundingClientRect());
+      setTrackWidth(trackBox.width); setFrameHeight(frames.getBoundingClientRect().height);
+      setFooterBox(first && last ? { trackLeft: trackBox.left - rowBox.left, first: first.right - rowBox.left, last: last.left - rowBox.left, top: ticksBox.top - rowBox.top, height: ticksBox.height, pill: durationPill.current?.offsetWidth ?? 0, pillHeight: durationPill.current?.offsetHeight ?? 0 } : null);
+    };
     measure();
-    const observer = new ResizeObserver(measure); observer.observe(node);
+    const observer = new ResizeObserver(measure);
+    for (const target of [node, frames, row, ticks, ...ticks.children]) observer.observe(target);
+    if (durationPill.current) observer.observe(durationPill.current);
     return () => observer.disconnect();
   }, []);
+
+  // Frames and the waveform live in the track. Only windows crossing the
+  // visible part are prepared, nearest to the playhead first.
+  const cellWidth = span > 0 ? frameCellMS / span * trackWidth : 0;
+  const framesShown = cellWidth >= 20;
+  const playheadWindow = Math.floor(current / mediaWindowMS);
+  const windows = useMemo(() => visibleMediaWindows(view, duration, playheadWindow * mediaWindowMS), [view[0], view[1], duration, playheadWindow]);
+  const storyboards = useMediaWindows<FrameStrip>({
+    cacheKey: `${sourceID}|${sourceBase}`, starts: framesShown ? windows : [], enabled: active && framesShown,
+    delay: 700, retries: 9, timeout: 15000, maxEntries: 8, maxBytes: 8 * 1024 * 1024,
+    load: (start, signal) => loadStoryboard(sourceBase, start, duration, signal), release: strip => URL.revokeObjectURL(strip.url),
+  });
+  const waves = useMediaWindows<WaveformWindow>({
+    cacheKey: `${sourceBase}|${audioTrack ?? 'default'}`, starts: noAudio ? [] : windows, enabled: active && !noAudio,
+    delay: 1000, retries: 8, timeout: 25000, maxEntries: 256, maxBytes: Infinity,
+    load: (start, signal) => loadWaveform(sourceBase, start, duration, audioTrack, signal),
+  });
+  const waveWindows = useMemo(() => [...waves.ready.values()], [waves.ready]);
+  const wavePath = useMemo(() => waveformPath(waveWindows, view), [waveWindows, view[0], view[1]]);
+  const focusWindow = windows.find(start => current >= start && current < start + mediaWindowMS) ?? windows[0];
+  const focusWave = focusWindow === undefined ? undefined : waves.ready.get(focusWindow);
+  const text = (ru: string, en: string) => locale === 'en' ? en : ru;
+  const waveLabel = focusWave && !focusWave.has_audio ? text('В источнике нет звука', 'This source has no audio')
+    : focusWindow !== undefined && waves.failed.has(focusWindow) ? text('Звуковая волна недоступна', 'Audio waveform unavailable')
+      : !focusWave ? text('Готовим звуковую волну…', 'Preparing audio waveform…') : text('Звуковая волна', 'Audio waveform');
   const pct = (ms: number) => Math.max(0, Math.min(100, (ms - view[0]) / span * 100));
-  const valueAt = (event: PointerEvent) => {
+  const valueAt = (event: { clientX: number }) => {
     const rect = track.current!.getBoundingClientRect();
     return pointerSeekValue(event.clientX, rect.left, rect.width, view);
   };
@@ -164,24 +207,49 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
     ><span className="trim-grip" aria-hidden="true" /><span className={`trim-tooltip ${pct(value) < 50 ? 'align-start' : 'align-end'}`} aria-hidden="true">{which === 'start' ? t('Начало') : t('Конец')}<strong>{formatTimecode(value, true)}</strong></span></button>;
   };
 
-  const mediaTools = <>
-    <Waveform sourceID={sourceID} duration={duration} current={current} view={view} active={active} audioTrack={audioTrack} noAudio={noAudio} onSeek={ms => { onSeek(ms); onReveal(ms); }} />
-    <Storyboard sourceID={sourceID} duration={duration} current={current} active={active} onSeek={ms => { onSeek(ms); onReveal(ms); }} />
-  </>;
+  // Playback re-renders the timeline on every tick; frames depend only on the view.
+  const frames = useMemo(() => (framesShown ? frameCells(view, duration) : []).map(cell => {
+    const windowStart = Math.floor(cell.ms / mediaWindowMS) * mediaWindowMS;
+    const strip = storyboards.ready.get(windowStart);
+    const index = (cell.ms - windowStart) / frameCellMS;
+    const ready = !!strip && index < strip.frames;
+    // A frame keeps its own five seconds: wide cells repeat it, narrow cells
+    // show its middle.
+    const frameWidth = frameHeight * (strip?.aspect ?? 16 / 9);
+    const cellPixels = cell.width / 100 * trackWidth;
+    const copies = ready && frameWidth > 0 ? Math.max(1, Math.ceil(cellPixels / frameWidth)) : 0;
+    const offset = copies === 1 ? (cellPixels - frameWidth) / 2 : 0;
+    return <span key={cell.ms} className="track-frame" data-ms={cell.ms} data-ready={ready || undefined} style={{ left: `${cell.left}%`, width: `${cell.width}%` }}>
+      {Array.from({ length: copies }, (_, copy) => <i key={copy} style={{ left: offset + copy * frameWidth, width: frameWidth, backgroundImage: `url(${strip!.url})`, backgroundSize: `${frameWidth * 6}px 100%`, backgroundPosition: `${-index * frameWidth}px 0` }} />)}
+    </span>;
+  }), [framesShown, view[0], view[1], duration, storyboards.ready, frameHeight, trackWidth]);
+  const selectionLeft = pct(selected.start_ms), selectionRight = pct(selected.end_ms);
+  // The duration sits under the middle of the selection, between the edge
+  // times, so it never covers them or the zoom buttons.
+  const durationCenter = (selectionLeft + selectionRight) / 2;
+  const durationStyle = (() => {
+    if (!footerBox) return { left: `${Math.max(8, Math.min(92, durationCenter))}%` };
+    const half = footerBox.pill / 2, low = footerBox.first + 6 + half, high = footerBox.last - 6 - half;
+    const center = footerBox.trackLeft + durationCenter / 100 * trackWidth;
+    return { left: `${low <= high ? Math.max(low, Math.min(high, center)) : (footerBox.first + footerBox.last) / 2}px`, top: `${footerBox.top + (footerBox.height - footerBox.pillHeight) / 2}px` };
+  })();
+  const others = ranges.filter(range => range.id !== selected.id && range.end_ms > view[0] && range.start_ms < view[1]);
 
   const zoomTools = <div className="timeline-detail-label"><span>{t('Уточните границы')}</span><div className="timeline-zoom-buttons"><button type="button" aria-label={t('Отдалить шкалу')} title={t('Отдалить шкалу')} disabled={!zoomed} onClick={() => zoomAt(2)}>−</button><button type="button" aria-label={t('Приблизить шкалу')} title={t('Приблизить шкалу')} disabled={span <= Math.min(1000, sectionSpan) + 1} onClick={() => zoomAt(.5)}>+</button>{closeHandles && span > 1000 ? <button type="button" className="text-button" onClick={fitBoundaries}>{t('Приблизить границы')}</button> : <button type="button" className="text-button" aria-label={t('Показать весь участок')} disabled={!zoomed} onClick={() => onView(section)}>{t('Весь участок')}</button>}</div></div>;
 
-  const mediaDisclosure = <details className="timeline-media-disclosure" open={mediaOpen} onToggle={event => setMediaOpen(event.currentTarget.open)}>
-      <summary>{t('Кадры и звук')}<Icon name="chevron" size={15} /></summary>
-      {mediaOpen && <div className="timeline-media-content">{mediaTools}</div>}
-    </details>;
-
   return <div className={`timeline${compact ? ' timeline-compact' : ''}${showOverview ? ' timeline-overview' : ''}`} data-section-start={section[0]} data-section-end={section[1]} data-view-start={view[0]} data-view-end={view[1]}>
     <TimelineSection duration={duration} section={section} ranges={ranges} selected={selected} current={current} onSeek={onSeek} showPlayback={showOverview} onChange={onSection} onBeginChange={onBeginChange} onEndChange={onEndChange} />
-    {toolsContainer ? createPortal(zoomTools, toolsContainer) : zoomTools}
-    <div className="trim-track" ref={track}>
-      <div className="trim-ticks" aria-hidden="true">{Array.from({ length: 21 }, (_, i) => <i key={i} />)}</div>
-      <div className="trim-selection" style={{ left: `${pct(selected.start_ms)}%`, width: `${Math.max(0, pct(selected.end_ms) - pct(selected.start_ms))}%` }} aria-hidden="true" />
+    {!zoomInFooter && zoomTools}
+    <div className="trim-track" ref={track} data-frames={framesShown || undefined}>
+      <div className="track-media">
+        <div className="track-frames" ref={framesLayer} aria-hidden="true">{frames}</div>
+        <div className="track-wave">{!noAudio && !waves.saveData && <div className="audio-waveform"><span className="waveform-label sr-only">{waveLabel}</span><svg className="waveform-detail" viewBox="0 0 600 40" preserveAspectRatio="none" aria-hidden="true"><path d={wavePath} /></svg></div>}</div>
+        <span className="track-dim" style={{ left: 0, width: `${selectionLeft}%` }} aria-hidden="true" />
+        <span className="track-dim" style={{ left: `${selectionRight}%`, right: 0 }} aria-hidden="true" />
+      </div>
+      {others.map(range => <span key={range.id} className="track-range" style={{ left: `${pct(range.start_ms)}%`, width: `${Math.max(0, pct(range.end_ms) - pct(range.start_ms))}%` }} aria-hidden="true" />)}
+      <div className="trim-selection" style={{ left: `${selectionLeft}%`, width: `${Math.max(0, selectionRight - selectionLeft)}%` }} aria-hidden="true" />
+      {cutting && <span className="track-progress" data-indeterminate={cutting.percent === undefined || undefined} style={{ left: `${selectionLeft}%`, width: `${Math.max(0, selectionRight - selectionLeft)}%` }} aria-hidden="true"><i style={cutting.percent === undefined ? undefined : { width: `${Math.max(0, Math.min(100, cutting.percent))}%` }} /></span>}
       <div className="track-scrubber" role="slider" tabIndex={0} aria-label={t('Позиция плеера')}
         aria-valuemin={0} aria-valuemax={duration} aria-valuenow={Math.min(duration, current)} aria-valuetext={formatTimecode(current, true)} aria-orientation="horizontal" aria-describedby="seek-hint"
         data-scrubbing={scrubbing || undefined}
@@ -215,13 +283,21 @@ export function Timeline({ duration, position, ranges, selected, section, view, 
           event.currentTarget.focus({ preventScroll: true }); onSeek(Math.min(duration, valueAt(event))); endScrub(event.pointerId);
         }}
         onPointerCancel={event => endScrub(event.pointerId)} onLostPointerCapture={event => endScrub(event.pointerId)}
+        onDoubleClick={event => {
+          const ms = valueAt(event);
+          const other = onSelectRange && others.find(range => ms >= range.start_ms && ms <= range.end_ms);
+          if (other) onSelectRange!(other.id);
+        }}
       />
       {handle('start')}{handle('end')}
       {current >= view[0] && current <= view[1] && <div className="playhead" style={{ left: `${pct(current)}%` }} aria-hidden="true" />}
     </div>
-    <div className="tick-labels" aria-hidden="true"><span>{formatTimecode(view[0], span < 10000)}</span><span>{formatTimecode((view[0] + view[1]) / 2, span < 10000)}</span><span>{formatTimecode(view[1], span < 10000)}</span></div>
+    <div className="timeline-footer" ref={footer}>
+      <div className="tick-labels" ref={labels} aria-hidden="true"><span>{formatTimecode(view[0], span < 10000)}</span><span>{formatTimecode(view[1], span < 10000)}</span></div>
+      <span className="track-duration" ref={durationPill} hidden={!(selected.end_ms > view[0] && selected.start_ms < view[1])} style={durationStyle} aria-hidden="true">{durationLabel(selected.end_ms - selected.start_ms, locale)}</span>
+      {zoomInFooter && zoomTools}
+    </div>
     <div className="timeline-zoom-hint"><span>{t('Колесо или жест сведения — масштаб; жест вбок — перемещение.')}</span></div>
-    {compact ? (toolsContainer ? createPortal(mediaDisclosure, toolsContainer) : mediaDisclosure) : mediaTools}
     <p id="trim-hint" className="sr-only">{t('Двигайте ручки начала и конца. Стрелки меняют время на 0,1 секунды, Shift — на секунду.')}</p>
     <p id="seek-hint" className="sr-only">{t('Нажмите на шкалу или двигайте указатель, чтобы перемотать. Стрелки — 0,1 секунды, Shift — секунда; Home и End — начало и конец видео.')}</p>
   </div>;

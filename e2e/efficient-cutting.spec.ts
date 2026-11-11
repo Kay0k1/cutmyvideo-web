@@ -1,7 +1,7 @@
 import { readBrowserProject } from './browserProjectStorage';
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
-import { goToClips, goToExport, goToSource, showExactTimes, showEditorTools, closeEditorTools } from './helpers';
+import { goToClips, goToExport, goToSource, showExactTimes, showEditorTools, closeEditorTools, showResults } from './helpers';
 
 const source = { id: 'efficient-source', title: 'Long recording.mp4', duration_ms: 3600000, width: 640, height: 360, kind: 'upload', preview_kind: 'native', preview_url: '/efficient-source.mp4', embed_url: null, thumbnail_url: null };
 const cuts = [{ id: 'later', label: 'Later', start_ms: 8000, end_ms: 8500 }, { id: 'excluded', label: 'Excluded', start_ms: 5000, end_ms: 5500 }, { id: 'earlier', label: 'Earlier', start_ms: 1000, end_ms: 1500 }];
@@ -42,7 +42,7 @@ async function saveNext(page: Page) {
 
 for (const count of [2, 10, 20]) test(`create ${count} cuts without leaving the player and undo one add`, async ({ page }) => {
   await prepare(page, { ranges: [cuts[0]], selected_range_ids: [cuts[0].id] });
-  const next = page.getByRole('button', { name: 'Добавить фрагмент', exact: true });
+  const next = page.getByRole('button', { name: 'Ещё фрагмент', exact: true });
   for (let index = 1; index < count; index++) {
     await next.click();
     await expect(page.locator('.editor-workspace')).toBeVisible();
@@ -106,14 +106,16 @@ test('phone controls fit 320 and 360 pixels and retain the compact frame disclos
   await prepare(page);
   for (const width of [320, 360]) {
     await page.setViewportSize({ width, height: 780 });
-    const next = page.getByRole('button', { name: 'Добавить фрагмент', exact: true }); await next.scrollIntoViewIfNeeded();
+    const next = page.getByRole('button', { name: 'Ещё фрагмент', exact: true }); await next.scrollIntoViewIfNeeded();
     await expect(next).toBeVisible();
     const box = await next.boundingBox(); expect(box!.height).toBeGreaterThanOrEqual(44); expect(box!.width).toBeLessThanOrEqual(width);
     const frame = await page.locator('.player-frame').boundingBox(); expect(frame).toBeTruthy();
     for (const name of ['Начало по позиции плеера', 'Конец по позиции плеера']) {
       const marker = page.getByRole('button', { name, exact: true }); await expect(marker).toHaveCount(1);
       const bounds = await marker.boundingBox(); expect(bounds).toBeTruthy(); expect(bounds!.height).toBeGreaterThanOrEqual(44);
-      expect(bounds!.y - (frame!.y + frame!.height)).toBeLessThanOrEqual(100);
+      // Boundary buttons follow the timeline directly, which sits under the player.
+      const track = await page.locator('.trim-track').boundingBox(); expect(track!.y).toBeGreaterThan(frame!.y + frame!.height);
+      expect(bounds!.y - (track!.y + track!.height)).toBeLessThanOrEqual(100);
       await expect(marker.locator('kbd')).toHaveText(name.startsWith('Начало') ? 'I' : 'O');
     }
     await expect(page.locator('.page-heading h1')).toContainText(source.title);
@@ -146,7 +148,8 @@ for (const loseResponse of [false, true]) test(`selective retry retains earlier 
   await goToClips(page);
   await moveClipUp(page, 3);
   await moveClipUp(page, 2);
-  await goToExport(page);
+  // Retrying failed clips belongs to the result that takes the cutting form's place.
+  await showResults(page);
   await page.getByRole('button', { name: 'Повторить неудавшиеся', exact: true }).click();
   await expect.poll(() => requests.length).toBe(1);
   expect(requests[0].body.ranges).toEqual(cuts.slice(1).map(({ label, start_ms, end_ms }) => ({ label, start_ms, end_ms })));
@@ -275,7 +278,7 @@ for (const playhead of [0, 3000, 12000]) test(`library add opens an editable cut
     await page.route(`**/api/v1/sources/${source.id}`, route => route.fulfill({ json: { ...source, duration_ms: 12000 } }));
   });
   await goToClips(page);
-  await page.getByRole('button', { name: 'Добавить фрагмент', exact: true }).click();
+  await page.getByRole('button', { name: 'Ещё фрагмент', exact: true }).click();
   await expect(page.locator('.editor-workspace')).toBeVisible();
   await expect(page.locator('.clip-list > li')).toHaveCount(2);
   await expect(page.getByRole('button', { name: 'Редактировать фрагмент 2', exact: true })).toHaveAttribute('aria-pressed', 'true');
@@ -334,7 +337,7 @@ for (const savedPosition of [3000, 8000]) test(`restored playhead ${savedPositio
     await expect.poll(() => page.locator('.window-player video').evaluate(node => (node as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
     await expect(windowSeek).toHaveValue(String(savedPosition));
     await expect(page.locator('#overview')).toHaveValue(String(savedPosition));
-    await goToClips(page); await page.getByRole('button', { name: 'Добавить фрагмент', exact: true }).click();
+    await goToClips(page); await page.getByRole('button', { name: 'Ещё фрагмент', exact: true }).click();
     await expect(page.locator('#range-start')).toHaveValue(savedPosition === 3000 ? '00:00:03.000' : '00:00:08.000');
   } finally { releaseTracks(); releaseMetadata(); }
 });

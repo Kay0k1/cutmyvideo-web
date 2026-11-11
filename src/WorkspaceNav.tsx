@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useLanguage } from './Language';
 import { Icon } from './Icons';
@@ -11,6 +11,7 @@ import type { WorkbenchPanel } from './workflowHistory';
 
 type Panel = Exclude<WorkbenchPanel, null>;
 const sampleUrl = 'https://www.youtube.com/watch?v=aqz-KE-bpKQ';
+const coreUrl = 'https://github.com/Kay0k1/cutmyvideo-core';
 const wallets = [
   { network: 'TRON', address: 'TEaL7LYGWKLGMALr8QZKV412xAjC6x4MdE' },
   { network: 'Solana', address: 'AfFgZ9Se53R9xKzoEpHrZnULmVKpm6iSE3aBx9DtBMdj' },
@@ -50,17 +51,48 @@ export function WorkspaceNav({ panel, onOpen, onClose, preferences, onSave, onEx
 
   const close = () => { void onClose(); };
 
-  const open = (value: Panel, control: HTMLElement) => {
-    trigger.current = control;
+  const open = (value: Panel) => {
+    trigger.current = menuButton.current;
     onOpen(value);
   };
+
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const initialItem = useRef<'first' | 'last'>('first');
+  const menuItems = () => [...menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? []];
+  function showMenu(item: 'first' | 'last') { initialItem.current = item; setMenuOpen(true); }
+  function hideMenu(returnFocus: boolean) { setMenuOpen(false); if (returnFocus) menuButton.current?.focus(); }
+  useLayoutEffect(() => {
+    if (!menuOpen) return;
+    const items = menuItems();
+    (initialItem.current === 'last' ? items.at(-1) : items[0])?.focus();
+    const outside = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!menu.current?.contains(target) && !menuButton.current?.contains(target)) setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', outside);
+    return () => document.removeEventListener('pointerdown', outside);
+  }, [menuOpen]);
+  function menuKey(event: KeyboardEvent<HTMLDivElement>) {
+    const items = menuItems();
+    const index = items.indexOf(document.activeElement as HTMLElement);
+    const move = (next: number) => { event.preventDefault(); items[(next + items.length) % items.length]?.focus(); };
+    if (event.key === 'ArrowDown') move(index + 1);
+    else if (event.key === 'ArrowUp') move(index < 0 ? items.length - 1 : index - 1);
+    else if (event.key === 'Home') move(0);
+    else if (event.key === 'End') move(items.length - 1);
+    else if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); hideMenu(true); }
+    else if (event.key === 'Tab') setMenuOpen(false);
+  }
+  function choose(action: () => void) { setMenuOpen(false); action(); }
 
   useEffect(() => {
     let returnFocusFrame: number | undefined;
     if (panel === 'settings') { setDraft(preferences); setDraftTheme(themePreference); setSettingsNotice(''); }
     if (panel && dialog.current && !dialog.current.open) dialog.current.showModal();
     if (!panel && dialog.current?.open) {
-      const control = trigger.current;
+      const control = trigger.current ?? menuButton.current;
       dialog.current.close();
       control?.focus();
       // Fragment history traversal can blur the invoker after close() returns.
@@ -112,13 +144,19 @@ export function WorkspaceNav({ panel, onOpen, onClose, preferences, onSave, onEx
   const title = panel === 'examples' ? 'Примеры и помощь' : panel === 'settings' ? 'Настройки по умолчанию' : 'Поддержать cutmyvideo';
 
   return <>
-    <nav className="workspace-nav" aria-label={t('Навигация')}>
-      <button type="button" aria-current={panel ? undefined : 'page'} onClick={() => { close(); document.getElementById('editor')?.scrollIntoView({ block: 'start' }); }}>{t('Редактор')}</button>
-      <button type="button" aria-haspopup="dialog" aria-controls="workspace-dialog" aria-expanded={panel === 'examples'} onClick={event => open('examples', event.currentTarget)}>{t('Примеры')}</button>
-      <button type="button" aria-haspopup="dialog" aria-controls="workspace-dialog" aria-expanded={panel === 'settings'} onClick={event => open('settings', event.currentTarget)}>{t('Настройки')}</button>
-      <button type="button" aria-haspopup="dialog" aria-controls="workspace-dialog" aria-expanded={panel === 'support'} onClick={event => open('support', event.currentTarget)}>{t('Поддержать')}</button>
-      {onCollectionOpen && <button type="button" disabled={collectionDisabled} onClick={onCollectionOpen}>{t('Коллекции')}</button>}
-    </nav>
+    <div className="site-menu">
+      <button ref={menuButton} type="button" className="icon-button site-menu-button" aria-label={t('Меню')} title={t('Меню')} aria-haspopup="menu" aria-expanded={menuOpen} aria-controls={menuOpen ? 'site-menu' : undefined}
+        onClick={() => menuOpen ? setMenuOpen(false) : showMenu('first')}
+        onKeyDown={event => { if (event.key === 'ArrowDown' || event.key === 'ArrowUp') { event.preventDefault(); showMenu(event.key === 'ArrowUp' ? 'last' : 'first'); } }}><Icon name="menu" size={20} /></button>
+      {menuOpen && <div ref={menu} id="site-menu" className="site-menu-list" role="menu" aria-label={t('Меню')} onKeyDown={menuKey}>
+        <button type="button" role="menuitem" tabIndex={-1} onClick={() => choose(() => open('examples'))}>{t('Примеры')}</button>
+        <button type="button" role="menuitem" tabIndex={-1} onClick={() => choose(() => open('settings'))}>{t('Настройки')}</button>
+        {onCollectionOpen && <button type="button" role="menuitem" tabIndex={-1} disabled={collectionDisabled} onClick={() => choose(onCollectionOpen)}>{t('Коллекции')}</button>}
+        <button type="button" role="menuitem" tabIndex={-1} onClick={() => choose(() => open('support'))}>{t('Поддержать')}</button>
+        <hr />
+        <a role="menuitem" tabIndex={-1} href={coreUrl} target="_blank" rel="noreferrer" onClick={() => setMenuOpen(false)}>{t('Открытое ядро на GitHub')}</a>
+      </div>}
+    </div>
     <dialog ref={dialog} id="workspace-dialog" className="workspace-dialog" aria-labelledby="dialog-title" onKeyDown={trapFocus} onCancel={event => { event.preventDefault(); close(); }} onClick={event => { if (event.target === dialog.current) { const rect = dialog.current.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close(); } }}>
       <div className="dialog-header"><h2 id="dialog-title">{t(title)}</h2><button type="button" className="icon-button" aria-label={t('Закрыть')} onClick={close}><Icon name="close" size={22} /></button></div>
       <div className="dialog-body">

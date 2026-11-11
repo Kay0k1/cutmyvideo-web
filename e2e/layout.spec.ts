@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { writeFile } from 'node:fs/promises'
 import { expect, test, type CDPSession, type Locator, type Page, type TestInfo } from '@playwright/test'
 import { diagnoseNativePreview } from './nativeDiagnostics'
-import { addClip, api, assertFirstFrameMatchesSource, goToClips, goToExport, goToMoment, goToSource, saveClip, setTheme, showExactTimes, showEditorTools, closeEditorTools, showExportSettings, closeExportSettings, uploadThroughUI, waitJob } from './helpers'
+import { addClip, api, assertFirstFrameMatchesSource, goToClips, goToExport, goToMoment, goToSource, saveClip, setTheme, showExactTimes, showEditorTools, closeEditorTools, showExportSettings, closeExportSettings, showResults, uploadThroughUI, waitJob } from './helpers'
 
 const desktopSizes = [
   { width: 1440, height: 900 }, { width: 1366, height: 768 },
@@ -19,10 +19,11 @@ const phoneSizes = [
 ]
 const labels = {
   preview: /^(Посмотреть фрагмент|Preview clip)$/,
-  add: /^(Добавить фрагмент|Add a clip)$/,
+  add: /^(Ещё фрагмент|Another clip)$/,
   precision: /^(Точное время и шкала|Exact time and timeline)$/,
   download: /^(Скачать|Download)$/,
   cut: /^(Вырезать фрагменты|Cut clips)$/,
+  again: /^(Вырезать ещё|Cut another)$/,
 }
 
 async function settle(page: Page) {
@@ -103,7 +104,8 @@ async function checkLayout(page: Page, state: LayoutState, touch: boolean, descr
   expect(result.controls.filter(control => control.clippedHorizontally), `${description}: horizontally clipped controls`).toEqual([])
   expect(result.controls.filter(control => control.smallTouchTarget), `${description}: targets smaller than 44 CSS px`).toEqual([])
   if (state === 'workspace' || state === 'files') {
-    const primary = ['video', '.trim-handle.start', '.trim-handle.end', await page.locator('.workspace-export-toggle').isVisible() ? '.workspace-export-toggle' : '.export-submit', ...(state === 'workspace' ? ['.clip-library', '.clip-list'] : ['.workspace-results'])]
+    // Ready files take the place of the cutting form in the action row.
+    const primary = ['video', '.trim-handle.start', '.trim-handle.end', ...(state === 'workspace' ? ['.export-submit', '.clip-library', '.clip-list'] : ['.cut-again', '.workspace-results'])]
     for (const selector of primary) {
       await reachableByScrolling(page.locator(selector), `${description}: ${selector}`)
     }
@@ -117,12 +119,12 @@ async function checkLayout(page: Page, state: LayoutState, touch: boolean, descr
     expect(video!.height, `${description}: readable native controls`).toBeGreaterThanOrEqual(140)
   }
   if (state === 'source') {
-    for (const selector of ['.source-choice', '.source-form input', '.source-open']) {
+    for (const selector of ['.source-form input', '.source-open', '.upload-button']) {
       await reachableByScrolling(page.locator(selector), `${description}: ${selector}`)
     }
   } else if (state === 'workspace' || state === 'files') {
-    const primary = [...(await page.locator('.workspace-export-toggle').isVisible() ? [page.locator('.workspace-export-toggle')] : [page.locator('.format-picker'), page.locator('.export-submit')]),
-      ...(state === 'workspace' ? [page.getByRole('button', { name: labels.add })] : await page.getByRole('link', { name: labels.download }).all())]
+    const primary = state === 'workspace' ? [page.locator('.format-picker'), page.locator('.export-submit'), page.getByRole('button', { name: labels.add })]
+      : [page.getByRole('button', { name: labels.again }), ...await page.getByRole('link', { name: labels.download }).all()]
     for (const control of primary) await reachableByScrolling(control, `${description}: workspace action`)
   } else {
     const dialog = page.getByRole('dialog').last()
@@ -221,7 +223,7 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
       if (touch) {
         // GTK mobile emulation applies the new layout viewport after navigation.
         await target.reload()
-        await goToExport(target)
+        await showResults(target)
         await expect(target.getByRole('link', { name: labels.download })).toHaveCount(2)
       }
       await settle(target)
@@ -234,27 +236,30 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
       for (const state of ['source', 'workspace', 'tools', 'export-settings', 'files'] as const) {
         if (state === 'source') {
           await goToSource(target)
-          await target.getByRole('button', { name: /^(Ссылка|Link)$/ }).click()
         } else {
           await goToMoment(target)
           const precision = target.getByRole('button', { name: labels.precision })
           if (await precision.getAttribute('aria-expanded') === 'true') await precision.click()
           await expect(precision).toHaveAttribute('aria-expanded', 'false')
-          if (state === 'workspace') await goToClips(target)
-          if (state === 'files') await goToExport(target)
+          if (state === 'workspace') { await goToClips(target); await goToExport(target) }
+          if (state === 'files') await showResults(target)
           if (state === 'tools') await showEditorTools(target)
           if (state === 'export-settings') await showExportSettings(target)
         }
         const key = `${browserName}-${size.width}x${size.height}-${locale}-${theme}-${state}`
         evidence.push({ key, state, locale, theme, touch, ...await checkLayout(target, state, touch, key) })
         if (state === 'source') {
-          await target.getByRole('button', { name: /^(Файл|File)$/ }).click()
+          // Link and file share one screen; the header menu is the other source-screen surface.
+          await target.getByRole('button', { name: /^(Меню|Menu)$/ }).click()
+          await expect(target.getByRole('menu')).toBeVisible()
           await settle(target)
-          const uploadLayout = await collectLayout(target, touch)
-          expect(uploadLayout.overflow, `${key}: file chooser overflow`).toBeLessThanOrEqual(1)
-          expect(uploadLayout.controls.filter(control => control.clippedHorizontally || control.smallTouchTarget), `${key}: file controls`).toEqual([])
-          await reachableByScrolling(target.locator('.upload-button'), `${key}: choose video`)
-          evidence.push({ key: `${key}-upload`, ...uploadLayout })
+          const menuLayout = await collectLayout(target, touch)
+          expect(menuLayout.overflow, `${key}: header menu overflow`).toBeLessThanOrEqual(1)
+          expect(menuLayout.controls.filter(control => control.clippedHorizontally || control.smallTouchTarget), `${key}: header menu controls`).toEqual([])
+          for (const item of await target.getByRole('menuitem').all()) await reachableByScrolling(item, `${key}: header menu item`)
+          await target.keyboard.press('Escape')
+          await expect(target.getByRole('menu')).toHaveCount(0)
+          evidence.push({ key: `${key}-menu`, ...menuLayout })
         }
         if (state === 'workspace' || size.width === 1280 && size.height === 720 || size.width === 320) {
           await screen(target, testInfo, key)
@@ -318,7 +323,7 @@ test('real clips remain usable across laptop, desktop, tablet and touch viewport
       await expect.poll(() => touchPage.locator('video').evaluate(element => (element as HTMLVideoElement).paused)).toBe(true)
     })
     await matrix(touchPage, phoneSizes, true)
-    await goToExport(touchPage)
+    await showResults(touchPage)
     const pending = touchPage.waitForEvent('download')
     await touchPage.getByRole('link', { name: labels.download }).first().tap()
     const download = await pending

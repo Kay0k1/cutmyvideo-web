@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
-import { api, chooseOption, goToExport, goToSource, probeDownloadedFile, showExactTimes, stepButton, uploadThroughUI, waitJob, showExportSettings, closeExportSettings, showTimelineMedia } from './helpers';
+import { api, chooseOption, goToExport, goToSource, probeDownloadedFile, showExactTimes, stepButton, uploadThroughUI, waitJob, showExportSettings, closeExportSettings } from './helpers';
 
 const cropPresets = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '4:5', '5:4', '21:9'];
 const sourceID = 'release-source';
@@ -97,26 +97,31 @@ test('Frame stays compact, all aspect presets and custom ratios work, and crop g
 
 test('waveform follows the selected track and source-time positions, and silent sources remain usable', async ({ page }) => {
   await releaseMock(page); await page.goto('/?lang=en');
-  await showTimelineMedia(page);
-  const waveform = page.locator('.audio-waveform'); await expect(waveform).toBeVisible();
+  // The waveform is the lower band of the track itself, without a separate control.
+  const waveform = page.locator('.trim-track .audio-waveform'); await expect(waveform).toBeVisible();
+  const track = page.locator('.trim-track');
+  const trackBox = (await track.boundingBox())!, waveBox = (await waveform.boundingBox())!;
+  expect(waveBox.y).toBeGreaterThan(trackBox.y + trackBox.height / 2);
+  expect(waveBox.y + waveBox.height).toBeLessThanOrEqual(trackBox.y + trackBox.height + 1);
+  expect(Math.abs(waveBox.width - trackBox.width)).toBeLessThanOrEqual(1);
+  await expect(waveform.locator('button, [role=slider], [tabindex]')).toHaveCount(0);
   await expect(waveform.locator('.waveform-detail path')).toHaveAttribute('d', /M400,16\.00V24\.00/);
-  await expect(waveform.locator('.waveform-overview path')).toHaveAttribute('d', /M400,4\.80V7\.20/);
   const changedTrack = page.waitForRequest(request => request.url().includes('/waveform?') && new URL(request.url()).searchParams.get('audio_track') === '1');
   await showExportSettings(page);
   await chooseOption(page, page.locator('#audio-track-export'), /Audio #1.*rus/); await closeExportSettings(page); await changedTrack;
   await expect(waveform.locator('.waveform-detail path')).toHaveAttribute('d', /M100,0\.00V40\.00/);
   await expect(waveform.locator('.waveform-detail path')).not.toHaveAttribute('d', /M400,16\.00V24\.00/);
-  const overview = waveform.getByRole('slider', { name: 'Whole recording audio overview; visited areas are prepared', exact: true }); await overview.scrollIntoViewIfNeeded(); const box = await overview.boundingBox(); expect(box).toBeTruthy();
-  await overview.click({ position: { x: box!.width / 2, y: box!.height / 2 } });
-  await expect.poll(async () => Math.abs(Number(await page.getByRole('slider', { name: 'Player position', exact: true }).last().getAttribute('aria-valuenow')) - 6000)).toBeLessThanOrEqual(50);
-  await overview.press('Home'); await expect(overview).toHaveAttribute('aria-valuenow', '0'); await overview.press('ArrowRight'); await expect(overview).toHaveAttribute('aria-valuenow', '1000');
+  // Pressing on the waveform band seeks like the rest of the track; the track slider keeps its keys.
+  const scrubber = page.getByRole('slider', { name: 'Player position', exact: true }).last();
+  await page.mouse.click(waveBox.x + waveBox.width / 2, waveBox.y + waveBox.height / 2);
+  await expect.poll(async () => Math.abs(Number(await scrubber.getAttribute('aria-valuenow')) - 6000)).toBeLessThanOrEqual(100);
+  await scrubber.press('Home'); await expect(scrubber).toHaveAttribute('aria-valuenow', '0'); await scrubber.press('Shift+ArrowRight'); await expect(scrubber).toHaveAttribute('aria-valuenow', '1000');
   await showExportSettings(page);
   await chooseOption(page, page.locator('#audio-track-export'), 'No sound'); await closeExportSettings(page); await expect(waveform).toHaveCount(0); await expect(page.locator('#range-start')).toBeEnabled();
 });
 
 test('no-audio waveform is explained without disabling cutting', async ({ page }) => {
   await releaseMock(page, { noSourceAudio: true }); await page.goto('/?lang=en');
-  await showTimelineMedia(page);
   await expect(page.locator('.audio-waveform')).toContainText('This source has no audio'); await expect(page.locator('#range-start')).toBeEnabled();
   await expect(page.locator('.audio-waveform .waveform-detail path')).toHaveAttribute('d', /M0,19\.50V20\.50/);
 });
@@ -143,9 +148,8 @@ test('real square crop keeps selected audio and cleanup removes original media w
   await showExactTimes(page); await page.getByLabel('Start', { exact: true }).fill('00:00:02.000'); await page.getByLabel('Start', { exact: true }).press('Tab'); await page.getByLabel('End', { exact: true }).fill('00:00:05.000'); await page.getByLabel('End', { exact: true }).press('Tab');
   await showExportSettings(page);
   await chooseOption(page, page.locator('#audio-track-export'), /Audio #1.*rus/);
-  await closeExportSettings(page); await showTimelineMedia(page);
-  await expect(page.locator('.audio-waveform .waveform-detail path')).toHaveAttribute('d', /M\d+,/);
-  await page.locator('.timeline-media-disclosure > summary').click();
+  await closeExportSettings(page);
+  await expect(page.locator('.trim-track .audio-waveform .waveform-detail path')).toHaveAttribute('d', /M\d+,/);
   const { frame, aspect } = await openFrame(page); await aspect.selectOption('1:1'); await frame.locator('summary').click();
   await showExportSettings(page); await expect(page.getByRole('checkbox', { name: 'Delete source after export', exact: true })).toBeChecked();
   const accepted = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith(`${api}/jobs`));

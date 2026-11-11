@@ -107,7 +107,9 @@ test('bulk duplication and deletion preserve independent clips and an explicitly
   await bulkAction(page, 'Удалить выбранные')
   await expect(page.locator('.range-list > li')).toHaveCount(1)
   await expect(page.getByLabel('Название фрагмента 1', { exact: true })).toHaveValue('Original')
-  await page.getByRole('checkbox', { name: 'Выбрать все фрагменты', exact: true }).check()
+  // With a single clip only its own checkbox and the action menu remain.
+  await expect(page.getByRole('checkbox', { name: 'Выбрать все фрагменты', exact: true })).toHaveCount(0)
+  await page.getByRole('checkbox', { name: 'Выбрать фрагмент 1', exact: true }).check()
   await bulkAction(page, 'Удалить выбранные')
   await expect(page.getByText('Пока нет фрагментов', { exact: true })).toBeVisible()
   await expect(page.locator('.trim-handle')).toHaveCount(0)
@@ -155,9 +157,13 @@ test('the server clip limit prevents partial bulk duplication and still permits 
   await expect(duplicate).toBeDisabled()
   await expect(page.locator('.clip-compact-hint')).toContainText(String(maximum))
   await selectFirst(maximum - target)
+  // Choosing clips closes the actions panel; it is opened again before acting.
+  await openBulkActions(page)
   await duplicate.click()
   await expect(page.locator('.range-list > li')).toHaveCount(maximum)
-  await expect(page.getByRole('button', { name: 'Добавить фрагмент', exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Ещё фрагмент', exact: true })).toBeDisabled()
+  // The actions panel closes after an action; reopened, it shows duplication blocked at the limit.
+  await openBulkActions(page)
   await expect(duplicate).toBeDisabled()
   await all.check()
   await bulkAction(page, 'Удалить выбранные')

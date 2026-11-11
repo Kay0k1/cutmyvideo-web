@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
-import { addClip, chooseOption, goToClips, goToExport, goToMoment, goToSource, showExactTimes, showExportSettings, closeExportSettings, uploadThroughUI } from './helpers'
+import { addClip, chooseOption, goToClips, goToExport, goToMoment, goToSource, showExactTimes, showExportSettings, closeExportSettings, uploadThroughUI, openMenuItem, menuButton } from './helpers'
 
 // Text-only resizing leaves the viewport and layout media queries unchanged.
 // It complements the 320 CSS-pixel reflow matrix; device scale is not text zoom.
@@ -170,7 +170,6 @@ test('long Unicode source and clip names keep actions reachable on a narrow phon
   await page.goto('/')
   await page.getByRole('button', { name: 'English', exact: true }).click()
   const filename = `${'🎬'.repeat(35)}семейное-видео.mp4`
-  await page.getByRole('button', { name: 'File', exact: true }).click()
   await expect(page.locator('.upload-button')).toBeEnabled()
   await page.locator('input[type=file]').setInputFiles({ name: filename, mimeType: 'video/mp4', buffer: await readFile(process.env.CUTMY_E2E_MEDIA!) })
   await expect(page.locator('video')).toBeVisible()
@@ -215,8 +214,8 @@ test('keyboard source and workspace navigation preserves exact edits and restore
   await page.getByRole('button', { name: 'English', exact: true }).click()
   await page.waitForFunction(() => Boolean(history.state?.cutmyWorkflow))
   await page.locator('.skip-link').focus(); await page.keyboard.press('Enter')
-  const settings = page.getByRole('button', { name: 'Settings', exact: true })
-  await settings.click()
+  const settings = menuButton(page)
+  await openMenuItem(page, 'Settings')
   const dialog = page.getByRole('dialog')
   await dialog.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(dialog).not.toBeVisible(); await expect(settings).toBeFocused()
@@ -237,8 +236,10 @@ test('keyboard source and workspace navigation preserves exact edits and restore
   await resume.focus(); await page.keyboard.press('Enter')
   await expect(page.locator('.editor-workspace')).toBeVisible()
   await expect(page.locator('.page-heading h1')).toBeFocused()
+  // The video title heads the header row; Tab continues to the editor's own
+  // actions beside it (undo is available after the exact edits above).
   await page.keyboard.press('Tab')
-  expect(await page.evaluate(() => !!document.activeElement?.closest('#editor'))).toBe(true)
+  await expect(page.getByRole('group', { name: 'Edit history', exact: true }).getByRole('button', { name: 'Undo change', exact: true })).toBeFocused()
   await showExactTimes(page)
   await expect(page.getByLabel('Start', { exact: true })).toHaveValue('1.250')
   await expect(page.getByLabel('End', { exact: true })).toHaveValue('4.750')
@@ -250,8 +251,8 @@ test('settings stay dismissible and keep native focus containment on short scree
   await page.setViewportSize({ width: 844, height: 390 })
   await page.goto('/')
   await page.getByRole('button', { name: 'English', exact: true }).click()
-  const settings = page.getByRole('button', { name: 'Settings', exact: true })
-  await settings.click()
+  const settings = menuButton(page)
+  await openMenuItem(page, 'Settings')
   const dialog = page.getByRole('dialog')
   const close = dialog.getByRole('button', { name: 'Close', exact: true })
   await close.focus(); await page.keyboard.press('Shift+Tab')
@@ -271,7 +272,7 @@ test('settings stay dismissible and keep native focus containment on short scree
   await page.reload()
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await page.setViewportSize({ width: 320, height: 480 })
-  await settings.click(); await assertReflow(page, 'Narrow short settings')
+  await openMenuItem(page, 'Settings'); await assertReflow(page, 'Narrow short settings')
   await page.keyboard.press('Escape'); await expect(settings).toBeFocused()
 })
 
@@ -366,10 +367,8 @@ test('new editing controls keep full touch targets on narrow phones', async ({ b
       await uploadThroughUI(page)
       await expect(page.locator('.editor-workspace')).toBeVisible()
       await showExactTimes(page)
-      await page.locator('.timeline-media-disclosure > summary').click()
-      await expect(page.locator('.audio-waveform')).toBeVisible()
-      await measure('history and waveform', '.edit-history-actions,.audio-waveform')
-      await page.locator('.timeline-media-disclosure > summary').click()
+      await expect(page.locator('.trim-track .audio-waveform')).toBeVisible()
+      await measure('history and track', '.edit-history-actions,.trim-track')
       const frame = page.locator('.crop-editor')
       await expect(frame.locator('select')).not.toBeVisible()
       await frame.locator('summary').click()

@@ -1,273 +1,177 @@
+/* The editor shows its clips as a strip of compact chips. Chips wrap; the
+   strip has a bounded height and scrolls inside itself. */
 .clip-library.compact {
   display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
   min-width: 0;
   min-height: 0;
-  padding: 14px;
-  overflow: hidden;
 }
 
-.clip-library.compact .clip-library-heading {
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-height: 44px;
-  margin-bottom: 8px;
-}
-
-.clip-library.compact .clip-library-heading h2 {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-  font-size: .9375rem;
-  font-weight: 550;
-  letter-spacing: -.2px;
-}
-
-.clip-library.compact .clip-total {
-  display: inline-grid;
-  place-items: center;
-  min-width: 24px;
-  min-height: 24px;
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--soft);
-  color: var(--muted);
-  font-size: .75rem;
-  font-weight: 450;
-  font-variant-numeric: tabular-nums;
-}
-
-.clip-library.compact .clip-add-button {
-  flex: 0 0 auto;
-  width: auto;
-  margin-left: auto;
-  min-height: 44px;
-  padding: 7px 9px;
-  gap: 5px;
-  border-color: var(--line);
-  font-size: .8125rem;
-}
-
-.clip-library.compact .clip-bulkbar {
-  flex: 0 0 auto;
-  gap: 0 4px;
-  margin-bottom: 10px;
-  padding: 0 0 4px;
-  border-top: 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.clip-library.compact .clip-select-all {
-  flex: 1;
-  min-width: 0;
-  gap: 0;
-  margin-left: -8px;
-  font-size: .8125rem;
-}
-
-.clip-library.compact .clip-selected-count {
-  color: var(--muted);
-  font-size: .75rem;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.clip-library.compact .clip-checkbox > span {
-  width: 19px;
-  height: 19px;
-  border-radius: 5px;
-  background: var(--surface);
-}
-
-.clip-library.compact .clip-checkbox input:checked + span,
-.clip-library.compact .clip-checkbox input:indeterminate + span {
-  background: var(--accent);
-}
-
-.clip-library.compact .clip-checkbox input:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: -4px;
-}
-
-.clip-library.compact summary {
-  list-style: none;
-  cursor: pointer;
-}
-
+.clip-library.compact summary { list-style: none; cursor: pointer; }
 .clip-library.compact summary::-webkit-details-marker { display: none; }
 .clip-library.compact summary::marker { content: ''; }
-.clip-library.compact summary > span { font-size: 1.375rem; line-height: 1; letter-spacing: 2px; }
+.clip-library.compact summary > span { font-size: 1.25rem; line-height: 1; letter-spacing: 2px; }
 .clip-library.compact summary[aria-disabled="true"] { opacity: .4; cursor: default; }
-.clip-library.compact summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
+.clip-library.compact summary:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 
-.clip-library.compact .clip-bulk-menu { flex: 0 0 44px; }
-.clip-library.compact .clip-bulk-menu[open] { flex-basis: 100%; }
-.clip-library.compact .clip-bulk-menu[open] > summary { float: right; }
+.clip-library.compact .clip-checkbox > span { width: 19px; height: 19px; border-radius: 5px; background: var(--surface); }
+.clip-library.compact .clip-checkbox input:checked + span,
+.clip-library.compact .clip-checkbox input:indeterminate + span { background: var(--accent); }
+.clip-library.compact .clip-checkbox input:focus-visible { outline: 3px solid var(--focus); outline-offset: -5px; }
 
-.clip-library.compact .clip-bulk-actions {
-  clear: both;
-  flex-direction: column;
-  align-items: stretch;
-  flex-wrap: nowrap;
+.clip-library.compact .clip-bulkbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 0;
-  margin: 0 0 5px;
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--soft);
-}
-
-.clip-library.compact .clip-bulk-actions .text-button {
-  justify-content: flex-start;
   min-height: 44px;
-  text-align: left;
-  font-size: .8125rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 0 2px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 22px;
 }
+/* One clip: only the action menu (duplicate, delete) remains. */
+.clip-library.compact .clip-bulkbar:not(:has(.clip-select-all)) { order: 1; padding: 0; border: 0; }
+.clip-library.compact .clip-select-all { display: flex; align-items: center; gap: 0; font-size: .875rem; white-space: nowrap; }
+.clip-library.compact .clip-select-all > label:not(.clip-checkbox) { padding-right: 6px; cursor: pointer; }
+.clip-library.compact .clip-selected-count { color: var(--muted); font-size: .8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Bulk actions open as a small panel so the strip keeps its width. */
+.clip-library.compact .clip-bulk-menu { position: relative; display: flex; align-items: center; max-width: 100%; }
+.clip-library.compact .clip-bulk-menu > summary {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 40px; padding: 0 12px; border-radius: 999px;
+  color: var(--muted); font-size: .8125rem; font-weight: 500; white-space: nowrap;
+}
+.clip-library.compact .clip-bulk-menu > summary:hover { color: var(--ink); background: var(--hover); }
+.clip-library.compact .clip-bulk-menu > summary > svg { transform: rotate(90deg); }
+.clip-library.compact .clip-bulk-menu[open] > summary { color: var(--ink); }
+.clip-library.compact .clip-bulk-menu[open] > summary > svg { transform: rotate(-90deg); }
+.clip-library.compact .clip-bulk-actions {
+  position: absolute; z-index: 25; bottom: calc(100% + 6px); left: 0; display: grid; min-width: max-content; padding: 6px;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--surface); box-shadow: var(--pop-shadow);
+}
+.clip-library.compact .clip-bulk-actions .text-button { justify-content: flex-start; min-height: 40px; padding: 0 10px; border-radius: 8px; font-size: .875rem; white-space: nowrap; text-decoration: none; }
+.clip-library.compact .clip-bulk-actions .text-button:hover:not(:disabled) { background: var(--hover); }
 
 .clip-library.compact .clip-list {
+  display: flex;
   flex: 1 1 auto;
-  min-height: 0;
-  max-height: none;
-  padding: 2px;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px;
+  min-width: min(100%, 18rem);
+  max-height: var(--clip-strip-height, 96px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
   overflow: auto;
-  overflow-x: hidden;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  /* No reserved gutter: one row of chips keeps its full width. */
+  scrollbar-gutter: auto;
 }
 
 .clip-library.compact .clip-list > li {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 44px;
-  align-items: start;
-  gap: 0;
-  padding: 3px;
-  margin-bottom: 8px;
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  height: 44px;
+  /* Rows are spaced by the list gap alone. */
+  margin: 0;
+  padding: 0 2px 0 0;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 999px;
   background: var(--surface);
 }
+.clip-library.compact .clip-list > li.editing { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
 
-.clip-library.compact .clip-list > li:last-child { margin-bottom: 0; }
-
-.clip-library.compact .clip-list > li.editing {
-  border-color: var(--accent);
-  box-shadow: inset 3px 0 var(--accent);
-  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
-}
-
-.clip-library.compact .clip-row-body { grid-column: 2; grid-row: 1; }
-
+/* Times give way long before the name does. */
+.clip-library.compact .clip-row-body { display: flex; flex: 0 1 auto; min-width: 4em; }
+.clip-library.compact .clip-list .clip-compact-edit { flex: 0 12 auto; min-width: 4.5em; overflow: hidden; }
+.clip-library.compact .clip-row-title { display: flex; min-width: 0; }
 .clip-library.compact .clip-row-name {
-  min-height: 44px;
-  padding: 5px 4px;
-  border-radius: 5px;
+  min-width: 0;
+  width: auto;
+  max-width: 22ch;
+  min-height: 34px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
   color: var(--ink);
   font-size: .875rem;
-  font-weight: 480;
+  font-weight: 500;
 }
-
+.clip-library.compact .clip-row-name::placeholder { color: var(--ink); opacity: 1; }
 .clip-library.compact .clip-row-name:hover:not(:disabled) { border-color: var(--line); }
-.clip-library.compact .clip-row-name:focus { border-color: var(--accent); background: var(--input); }
+.clip-library.compact .clip-row-name:focus { border-color: var(--strong-line); background: var(--input); }
 
 .clip-library.compact .clip-list .clip-compact-edit {
-  display: grid;
-  grid-column: 1 / -1;
-  grid-row: 2;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
-  gap: 4px 8px;
-  width: 100%;
-  min-width: 0;
-  min-height: 64px;
-  padding: 9px 11px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: var(--soft);
-  color: var(--ink);
-  text-align: left;
+  min-height: 40px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: .8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-
-.clip-library.compact .clip-compact-edit:hover:not(:disabled) {
-  border-color: var(--strong-line);
-  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
-}
-
-.clip-library.compact .clip-compact-edit:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: -2px;
-}
-
+.clip-library.compact .clip-compact-edit:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.clip-library.compact .clip-compact-edit[aria-pressed="true"] { color: var(--ink); }
 .clip-library.compact .clip-compact-edit:disabled { opacity: .5; }
-.clip-library.compact .clip-row-times { display: contents; }
+.clip-library.compact .clip-row-times { display: inline-flex; gap: 6px; min-width: 0; }
+.clip-library.compact .clip-row-times > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.clip-library.compact .clip-row-times > span:last-child,
+.clip-library.compact .clip-edit-label { display: none; }
 
-.clip-library.compact .clip-row-times > span:first-child {
-  grid-column: 1 / -1;
-  color: var(--ink);
-  font-size: .8125rem;
-  font-weight: 450;
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+.clip-library.compact .clip-row-menu { display: flex; flex: none; align-items: center; }
+.clip-library.compact .clip-list > li > .clip-checkbox { flex: none; }
+.clip-library.compact .clip-row-menu > summary { width: 40px; min-height: 40px; }
+.clip-library.compact .clip-row-actions { display: flex; align-items: center; gap: 0; }
+.clip-library.compact .clip-row-actions .icon-button { width: 40px; min-height: 40px; }
+
+.clip-library.compact .clip-add-button { order: 2; flex: none; min-height: 44px; padding-inline: 4px; color: var(--muted); white-space: nowrap; }
+.clip-library.compact .clip-add-button:hover:not(:disabled) { color: var(--ink); }
+
+.clip-library.compact .clip-empty { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 44px; }
+.clip-library.compact .clip-empty > svg { display: none; }
+.clip-library.compact .clip-empty h3 { font-size: .875rem; font-weight: 500; }
+.clip-library.compact .clip-empty p { color: var(--muted); font-size: .8125rem; }
+
+.clip-library.compact .clip-compact-hint { flex-basis: 100%; margin: 0; color: var(--muted); font-size: .8125rem; line-height: 1.5; }
+
+@media (hover: none) and (pointer: coarse), (max-width: 899px) {
+  .clip-library.compact .clip-list .clip-compact-edit,
+  .clip-library.compact .clip-row-menu > summary,
+  .clip-library.compact .clip-row-actions .icon-button,
+  .clip-library.compact .clip-bulk-menu > summary,
+  .clip-library.compact .clip-bulk-actions .text-button { min-height: 44px; }
+  .clip-library.compact .clip-row-menu > summary,
+  .clip-library.compact .clip-row-actions .icon-button { width: 44px; }
+  .clip-library.compact .clip-row-name { min-height: 44px; }
+  .clip-library.compact .clip-list > li { height: 48px; }
+  .clip-library.compact .clip-bulkbar { min-height: 48px; }
 }
 
-.clip-library.compact .clip-row-times > span:last-child {
-  grid-column: 1;
-  color: var(--muted);
-  font-size: .75rem;
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
+.clip-library.compact details:not([open]) > :not(summary) { display: none; }
+.clip-library.compact .clip-bulk-menu > summary > .clip-bulk-label { font-size: inherit; line-height: inherit; letter-spacing: 0; }
+/* On a fine pointer the checkboxes fit inside the 44px chips and bar. */
+@media (hover: hover) and (pointer: fine) and (min-width: 900px) {
+  .clip-library.compact :is(.clip-bulkbar, .clip-list > li) .clip-checkbox,
+  .clip-library.compact :is(.clip-bulkbar, .clip-list > li) .clip-checkbox input { height: 42px; min-height: 42px; }
 }
-
-.clip-library.compact .clip-edit-label {
-  display: inline-flex;
-  grid-column: 2;
-  grid-row: 2;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 5px;
-  color: var(--accent);
-  font-size: .75rem;
-  line-height: 1.4;
-  font-weight: 480;
-}
-
-.clip-library.compact .clip-row-menu { grid-column: 3; grid-row: 1; min-width: 0; }
-.clip-library.compact .clip-row-menu[open] { grid-column: 1 / -1; grid-row: 3; margin-top: 4px; border-top: 1px solid var(--line); }
-.clip-library.compact .clip-row-menu[open] > summary { float: right; }
-.clip-library.compact .clip-row-actions { display: flex; align-items: center; gap: 4px; min-height: 44px; padding: 3px 0 0 4px; }
-.clip-library.compact .clip-row-actions .delete-range { margin-left: auto; }
-.clip-library.compact .clip-row-actions .icon-button { grid-column: auto; grid-row: auto; }
-
-.clip-library.compact .clip-empty { flex: 1; min-height: 0; padding: 20px 4px 12px; }
-.clip-library.compact .clip-empty > svg { color: var(--accent); }
-.clip-library.compact .clip-empty h3 { font-size: .9375rem; }
-.clip-library.compact .clip-empty p { max-width: 29ch; margin-inline: auto; font-size: .8125rem; }
-.clip-library.compact .clip-empty .button { width: 100%; margin-top: 16px; font-size: .8125rem; }
-
-.clip-library.compact .clip-compact-hint {
-  flex: 0 0 auto;
-  margin: 10px 0 0;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--soft);
-  color: var(--muted);
-  font-size: .75rem;
-  line-height: 1.5;
-}
-
-.clip-library.compact .clip-compact-preview {
-  flex: 0 0 auto;
-  width: 100%;
-  min-height: 44px;
-  margin-top: 12px;
-  border-color: var(--line);
-  font-size: .8125rem;
-}
-
-@media (max-width: 380px) {
-  .clip-library.compact { padding: 12px; }
+@media (hover: hover) and (pointer: fine) and (min-width: 900px) {
+  .clip-library.compact .clip-bulkbar { max-height: 44px; }
+  .clip-library.compact .clip-select-all, .clip-library.compact .clip-select-all > label { min-height: 0; max-height: 42px; }
+  /* The strip scrolls by whole chip rows, so a wheel step never leaves a
+     half-hidden chip, even where Firefox limits a step to the strip height. */
+  .clip-library.compact .clip-list { scroll-snap-type: y mandatory; }
+  .clip-library.compact .clip-list > li { scroll-snap-align: start; }
 }

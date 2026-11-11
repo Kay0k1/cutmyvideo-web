@@ -2,7 +2,7 @@ import { readBrowserDraft } from './browserProjectStorage';
 import { expect, test, type Page } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { api, goToClips, goToExport, probeDownloadedFile, showExactTimes, showEditorTools, closeEditorTools, showTimelineMedia, uploadThroughUI, waitJob } from './helpers';
+import { api, goToClips, goToExport, probeDownloadedFile, showExactTimes, showEditorTools, closeEditorTools, trackFrames, clickTrackAt, uploadThroughUI, waitJob } from './helpers';
 
 const source = { id: 'src_cutting_controls', title: 'Recorded interview', kind: 'upload', duration_ms: 12000, width: 640, height: 360,
   preview_kind: 'native', preview_url: `${api}/sources/src_cutting_controls/file`, embed_url: null, thumbnail_url: null };
@@ -74,10 +74,20 @@ test('small cut steps, boundary checks and frame search use actual source positi
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).paused)).toBe(true);
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(4.4, 2);
   await closeEditorTools(page);
-  await showTimelineMedia(page);
-  const frames = page.getByRole('button', { name: /^Go to frame/ });
+  // Each prepared frame stands on its own five seconds of the track, and a
+  // click through a frame seeks to the time under the pointer.
+  const frames = trackFrames(page);
   await expect(frames).toHaveCount(3);
-  await frames.nth(2).click();
+  const track = (await page.locator('.trim-track').boundingBox())!;
+  for (const [index, ms] of [[0, 0], [1, 5000], [2, 10000]]) {
+    await expect(frames.nth(index)).toHaveAttribute('data-ms', String(ms));
+    const cell = (await frames.nth(index).boundingBox())!;
+    expect(Math.abs(cell.x - (track.x + track.width * ms / 12000)), `frame ${ms} starts at its time`).toBeLessThanOrEqual(1);
+    expect(cell.y).toBeGreaterThanOrEqual(track.y - 1);
+    expect(cell.y + cell.height).toBeLessThanOrEqual(track.y + track.height + 1);
+  }
+  expect(await frames.first().evaluate(node => node.closest('[aria-hidden="true"]') !== null && getComputedStyle(node).pointerEvents === 'none')).toBe(true);
+  await clickTrackAt(page, 10000);
   await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(10, 2);
   await expect(page.locator('#overview')).toHaveValue('10000');
   await page.getByRole('button', { name: 'Русский', exact: true }).click();
@@ -194,9 +204,8 @@ test('a source expiring during export offers recovery immediately without losing
 
 test('frames still prepare after three refusals while foreground preview is busy', async ({ page }) => {
   await prepare(page, {}, false, source.duration_ms, 3);
-  await showTimelineMedia(page);
-  await expect(page.getByRole('button', { name: /^Go to frame/ })).toHaveCount(3);
-  await page.getByRole('button', { name: 'Go to frame 00:00:10', exact: true }).click();
+  await expect(trackFrames(page)).toHaveCount(3);
+  await clickTrackAt(page, 10000);
   await expect(page.locator('#overview')).toHaveValue('10000');
 });
 
@@ -205,20 +214,61 @@ test('late frame preparation keeps scrolled precision controls in place on a sho
   const storyboardReady = new Promise<void>(resolve => { release = resolve; });
   await page.setViewportSize({ width: 360, height: 640 });
   await prepare(page, { precision_open: false }, false, source.duration_ms, 0, storyboardReady);
-  await showTimelineMedia(page);
   const precision = page.getByRole('button', { name: 'Exact time and timeline', exact: true });
   await expect(precision).toBeVisible();
+  // Placeholders hold the geometry of the frames that are still being prepared.
+  await expect(trackFrames(page, { ready: false })).toHaveCount(3);
+  await expect(trackFrames(page)).toHaveCount(0);
   await precision.scrollIntoViewIfNeeded();
   const before = await precision.boundingBox();
+  const trackBefore = await page.locator('.trim-track').boundingBox();
+  const cellsBefore = await trackFrames(page, { ready: false }).evaluateAll(cells => cells.map(cell => cell.getBoundingClientRect().toJSON()));
   expect(before).not.toBeNull();
   release();
-  await showTimelineMedia(page);
-  await expect(page.getByRole('button', { name: /^Go to frame/ })).toHaveCount(3);
+  await expect(trackFrames(page)).toHaveCount(3);
+  expect(await page.locator('.trim-track').boundingBox()).toEqual(trackBefore);
+  expect(await trackFrames(page).evaluateAll(cells => cells.map(cell => cell.getBoundingClientRect().toJSON()))).toEqual(cellsBefore);
   const after = await precision.boundingBox();
   expect(after).not.toBeNull();
   expect(Math.abs(after!.y - before!.y)).toBeLessThanOrEqual(1);
   expect(after!.y).toBeGreaterThanOrEqual(-1);
   expect(after!.y + after!.height).toBeLessThanOrEqual(641);
+});
+
+function countMediaRequests(page: Page) {
+  const requests: string[] = [];
+  page.on('request', request => { if (/\/(storyboard|waveform)\?/.test(request.url())) requests.push(request.url()); });
+  return requests;
+}
+
+test('saving data prepares no frames or waveform and keeps the placeholders', async ({ page }) => {
+  const requests = countMediaRequests(page);
+  await page.addInitScript(() => Object.defineProperty(navigator, 'connection', { configurable: true, value: { saveData: true } }));
+  await prepare(page);
+  await expect(page.locator('.editor-workspace')).toBeVisible();
+  await expect(trackFrames(page, { ready: false })).toHaveCount(3);
+  await page.waitForTimeout(2500);
+  expect(requests).toEqual([]);
+  await expect(trackFrames(page)).toHaveCount(0);
+});
+
+test('a hidden tab prepares no frames or waveform until it is shown', async ({ page }) => {
+  const requests = countMediaRequests(page);
+  await page.addInitScript(() => {
+    let hiddenTab = true;
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hiddenTab });
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => hiddenTab ? 'hidden' : 'visible' });
+    (window as Window & { showTab?: () => void }).showTab = () => { hiddenTab = false; document.dispatchEvent(new Event('visibilitychange')); };
+  });
+  await prepare(page);
+  await expect(page.locator('.editor-workspace')).toBeVisible();
+  await expect(trackFrames(page, { ready: false })).toHaveCount(3);
+  await page.waitForTimeout(2500);
+  expect(requests).toEqual([]);
+  await page.evaluate(() => (window as Window & { showTab?: () => void }).showTab!());
+  await expect(trackFrames(page)).toHaveCount(3);
+  expect(requests.filter(url => url.includes('/storyboard?'))).toEqual([expect.stringContaining('/storyboard?start_ms=0&')]);
+  await expect.poll(() => requests.filter(url => url.includes('/waveform?'))).toEqual([expect.stringContaining('/waveform?start_ms=0')]);
 });
 
 test('foreground preview retries brief contention promptly with bounded attempts', async ({ page }) => {
@@ -297,8 +347,7 @@ test('a real upload keeps precise boundaries from audition through decoded downl
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).paused)).toBe(true);
     await expect.poll(() => video.evaluate(node => (node as HTMLVideoElement).currentTime)).toBeCloseTo(5.375, 2);
     await closeEditorTools(page);
-    await showTimelineMedia(page);
-    await expect(page.getByRole('button', { name: /^Go to frame/ })).toHaveCount(3);
+    await expect(trackFrames(page)).toHaveCount(3);
     await page.screenshot({ path: testInfo.outputPath('cutting-editor.png'), fullPage: true });
     await testInfo.attach('cutting-editor.png', { path: testInfo.outputPath('cutting-editor.png'), contentType: 'image/png' });
     await page.getByRole('button', { name: 'Preview clip', exact: true }).click();

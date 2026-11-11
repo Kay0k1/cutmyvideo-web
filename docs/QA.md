@@ -1,5 +1,42 @@
 # Acceptance and UX review
 
+## Timeline editor — 10 November 2026
+
+The one-column timeline editor (see [UX](UX.md#timeline-editor--10-november-2026))
+was checked on local stacks with core 1.6.0, PostgreSQL and the Vite build of
+this branch. Before/after sheets are in
+[interface-refresh-2026-11-10](interface-refresh-2026-11-10/).
+
+- **Unit and build:** `npm run typecheck`, `npm test` (36 files, 326 tests),
+  `npm run build` and `npm run test:e2e-contract-types` pass.
+- **Browser suites (local, two lanes of one worker):** Chromium `desktop` 223
+  passed, 9 skipped, 1 failed (`platform.spec.ts:461`, a window-preview timing
+  check that missed a seek while both lanes were busy; 4 of 4 repeats pass on an
+  idle machine); `mobile` 136 passed, 2 skipped; `layout-chromium` 1 passed;
+  `usability-chromium` 111 passed, 2 skipped. Firefox: `usability-firefox` 73
+  passed, 2 skipped, 38 failed and `layout-firefox` 1 failed. Every Firefox
+  failure waits for native H.264 MP4 decoding (ready state, metadata or video
+  size); the local Firefox build has no system FFmpeg libraries for it. The
+  layout itself was measured in Firefox with a VP9 copy of the sample.
+- **Geometry, measured in real windows:** at 1440×900 the ribbon background
+  spans the column (160–1280 px, the same edges as the action row) and the
+  grips stay inside it. The video keeps one size in the editor, while a job runs,
+  with one ready file and after Cut another: 979×550 at 1440×900, 680×382 at
+  1280×720, 538×302 at 1200×560, 488×274 at 1024×640 and 374×210 at 900×500
+  (Chromium; the same at 1440×900 and 900×500 in Firefox with a VP9 copy of the
+  sample). On 390×844 the player, ribbon and Cut button are on the first screen;
+  scrolled to the end, the secondary tools end 24 px above the pinned form, which
+  is the last item of the editor. Clip chips span the row with one-line times at
+  390 and 360 px.
+- **Manual review:** light and dark themes, Russian and English at 1440×900,
+  1280×720, 900×500 and 390×844, including the job, ready-file, several-clip
+  and exact-time states. Tab order follows the screen (ribbon sliders, zoom,
+  moment controls, cutting form, chips); the focus ring is visible on zoom, Cut
+  and Download.
+- **Bundle:** JavaScript 230.28 kB gzip (main chunk 188.10 kB) against 228.45 kB
+  (186.27 kB) before the redesign, +1.83 kB within the 15 kB budget. CSS
+  21.78 kB gzip.
+
 ## Core 1.6.0 runtime integration
 
 Web 0.7.1 integrates the immutable core revision in [core.version](../core.version)

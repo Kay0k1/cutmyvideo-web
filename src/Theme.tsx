@@ -35,7 +35,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.dataset.theme = effective;
     document.documentElement.style.colorScheme = effective;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', effective === 'dark' ? '#14191f' : '#f2f4f7');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', effective === 'dark' ? '#131415' : '#f4f5f3');
   }, [effective]);
   return <context.Provider value={{ preference, effective, setPreference }}>{children}</context.Provider>;
 }
@@ -46,5 +46,5 @@ export function ThemeToggle() {
   const { effective, setPreference } = useTheme();
   const { t } = useLanguage();
   const label = t(effective === 'light' ? 'Включить тёмную тему' : 'Включить светлую тему');
-  return <button type="button" className="theme-toggle icon-button" aria-label={label} title={label} onClick={() => setPreference(effective === 'light' ? 'dark' : 'light')}><Icon name={effective === 'light' ? 'moon' : 'sun'} size={20} /></button>;
+  return <button type="button" className="theme-toggle icon-button" aria-label={label} title={label} onClick={() => setPreference(effective === 'light' ? 'dark' : 'light')}><Icon name="theme" size={20} /></button>;
 }

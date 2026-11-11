@@ -1,48 +1,67 @@
-/* The start screen owns the viewport; expanding history never moves the form.
-   Narrow screens and enlarged text keep the ordinary document flow. */
+/* The start screen is one centred column: heading, the link field, then the
+   history toggles with their lists below. Desktop gives it the whole window;
+   expanding history never moves the form. Narrow screens, touch devices and
+   enlarged text keep the ordinary document flow. */
+.source-shell .stage-1 { width: 100%; max-width: 808px; padding-top: clamp(28px, 8dvh, 72px); }
+.source-heading { flex-direction: column; justify-content: center; gap: 16px; margin-bottom: 40px; text-align: center; }
+.source-heading h1 { font-size: 2.75rem; line-height: 48px; font-weight: 320; letter-spacing: -.02em; text-wrap: balance; }
+.source-heading h1 + p { max-width: none; margin: 14px 0 0; font-size: 1.0625rem; line-height: 26px; text-wrap: balance; }
+.source-entry, .source-history { min-width: 0; }
+.source-entry .draft-recovery { text-align: left; }
+
+.source-history { display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: 24px; margin-top: 56px; border-top: 1px solid var(--line); }
+.source-history > :is(.project-library, .source-library, .job-library) { display: contents; }
+.source-history > :is(.project-library, .source-library, .job-library) > button { order: 0; gap: 6px; color: var(--muted); font-size: .9375rem; font-weight: 450; }
+.source-history > :is(.project-library, .source-library, .job-library) > button:hover:not(:disabled),
+.source-history > :is(.project-library, .source-library, .job-library) > button[aria-expanded='true'] { color: var(--ink); }
+.source-history > :is(.source-library, .job-library) > button svg { transform: rotate(90deg); }
+.source-history > :is(.source-library, .job-library) > button[aria-expanded='true'] svg { transform: rotate(-90deg); }
+.source-history > :is(.project-library, .source-library, .job-library) > div { order: 1; flex: 1 0 100%; min-width: 0; margin: 0; padding: 4px 0 16px; border: 0; border-radius: 0; background: none; }
+.source-history > :not(.project-library, .source-library, .job-library) { order: 2; flex: 1 0 100%; min-width: 0; }
+.source-history .source-retention { margin: 12px 0; }
+.source-history :is(.project-library, .source-library) ul { padding: 0; margin: 8px 0 0; }
+.source-history :is(.project-library li, .source-library li, .job-library-list > li) { padding: 12px 0; border-bottom: 1px solid var(--line); }
+
+@media (max-width: 640px) {
+  .source-shell .stage-1 { padding-top: 24px; }
+  .source-heading { margin-bottom: 28px; }
+  .source-heading h1 { font-size: 1.875rem; line-height: 36px; }
+  .source-heading h1 + p { margin-top: 10px; font-size: .9375rem; line-height: 22px; }
+  .source-history { column-gap: 16px; margin-top: 40px; }
+}
+
 html:has(.source-docked:not(.workspace-reflow)),
 body:has(.source-docked:not(.workspace-reflow)) { overflow: hidden; overscroll-behavior: none; }
-.source-entry, .source-history { min-width: 0; }
 
 @media (min-width: 900px) and (hover: hover) and (pointer: fine) {
   .source-docked:not(.workspace-reflow) {
     position: fixed; inset: 0; height: var(--workspace-height, 100dvh); min-height: 0;
     display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: clip;
   }
-  .source-docked:not(.workspace-reflow) .header-inner { min-height: 56px; padding-block: 4px; flex-wrap: nowrap; gap: 8px 12px; }
-  .source-docked:not(.workspace-reflow) .workspace-nav { order: 0; width: auto; margin-left: auto; flex-wrap: nowrap; }
-  .source-docked:not(.workspace-reflow) .workspace-nav button { padding-inline: 8px; flex: none; }
-  .source-docked:not(.workspace-reflow) .header-actions { margin-left: 0; }
+  .source-docked:not(.workspace-reflow) .header-inner { flex-wrap: nowrap; }
   .source-docked:not(.workspace-reflow) .stage-1 {
-    display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px;
-    width: 100%; max-width: 1160px; min-height: 0; margin: 0 auto; padding: 12px 24px 0;
+    display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+    min-height: 0; margin: 0 auto; padding: clamp(16px, calc(15dvh - 48px), 104px) 24px 0;
   }
-  .source-docked:not(.workspace-reflow) .page-heading { margin: 0; }
-  .source-docked:not(.workspace-reflow) .source-workspace {
-    display: grid; grid-template-columns: minmax(0, 1fr) 300px; min-height: 0; gap: 20px;
-  }
+  .source-docked:not(.workspace-reflow) .page-heading { margin: 0 0 clamp(20px, 5dvh, 40px); }
+  /* History keeps room for its toggles and a few rows; a tall form scrolls instead. */
+  .source-docked:not(.workspace-reflow) .source-workspace { display: grid; grid-template-rows: minmax(0, auto) minmax(max(calc(44px + clamp(10px, 5dvh, 50px)), min(14rem, 40%)), 1fr); min-height: 0; }
+  /* Focus rings stay visible inside the scroll regions. */
   .source-docked:not(.workspace-reflow) :is(.source-entry, .source-history) {
-    min-height: 0; overflow: auto; overscroll-behavior: contain;
-    scrollbar-gutter: stable; padding: 3px;
+    min-height: 0; margin-inline: -6px; padding-inline: 6px; overflow: auto; overscroll-behavior: contain;
   }
-  .source-docked:not(.workspace-reflow) .source-history {
-    padding: 4px 16px; border-left: 1px solid var(--line);
+  .source-docked:not(.workspace-reflow) .source-entry { padding-block: 6px; margin-top: -6px; }
+  .source-docked:not(.workspace-reflow) .source-history { scroll-padding-top: 44px; align-content: flex-start; margin-top: clamp(10px, 5dvh, 50px); border-top: 0; }
+  /* The toggles stay on a full-width sticky band while their lists scroll. */
+  .source-docked:not(.workspace-reflow) .source-history::before {
+    content: ''; position: sticky; top: 0; z-index: 1; order: -1; flex: 1 0 100%; height: 44px; margin-bottom: -44px;
+    background: var(--page); box-shadow: 0 1px 0 var(--line);
   }
-  .source-docked:not(.workspace-reflow) .source-history :is(.project-library, .source-library, .job-library) {
-    margin: 0; padding: 8px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none;
-  }
-  .source-docked:not(.workspace-reflow) .source-history > section > button { width: 100%; justify-content: space-between; }
-  .source-docked:not(.workspace-reflow) .source-history :is(.project-plan-actions, .project-library li, .source-library li, .job-library-heading) { flex-wrap: wrap; }
+  .source-docked:not(.workspace-reflow) .source-history > :is(.project-library, .source-library, .job-library) > button { position: sticky; top: 0; z-index: 2; }
   .source-docked:not(.workspace-reflow) .source-history :is(.project-library ul, .source-library ul, .job-library-list) { max-height: none; overflow: visible; }
-  .source-docked:not(.workspace-reflow) .page-footer { padding: 0 0 4px; }
-  .source-docked:not(.workspace-reflow) .source-chooser { padding: 16px; }
-  .source-docked:not(.workspace-reflow) .source-choice { margin-bottom: 16px; }
-  .source-docked:not(.workspace-reflow) .file-dropzone {
-    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px;
-    min-height: 0; padding: 20px; text-align: left; justify-items: start;
-  }
-  .source-docked:not(.workspace-reflow) .upload-symbol { grid-column: 1; grid-row: 1 / 3; align-self: start; margin: 0; }
-  .source-docked:not(.workspace-reflow) .file-dropzone :is(.drop-label, .field-hint, .upload-button) { grid-column: 2; }
-  .source-docked:not(.workspace-reflow) .file-dropzone .field-hint { margin: 0; }
-  .source-docked:not(.workspace-reflow) .upload-button { margin-top: 4px; }
+  .source-docked:not(.workspace-reflow) .page-footer { padding: 8px 0 max(8px, env(safe-area-inset-bottom)); }
+}
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) and (max-height: 640px) {
+  .source-docked:not(.workspace-reflow) .source-heading h1 { font-size: 2rem; line-height: 38px; }
+  .source-docked:not(.workspace-reflow) .source-heading h1 + p { margin-top: 8px; }
 }

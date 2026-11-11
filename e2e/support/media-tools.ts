@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, type APIRequestContext, type Page } from '@playwright/test'
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 import { api, uploadThroughUI, waitJob } from '../helpers'
 
 export interface MediaToolsFixtures { directory: string; video: string; audio: string; dispose(): void }
@@ -62,6 +62,13 @@ export async function removeOwnedSources(request: APIRequestContext, owned: Set<
         await waitJob(request, job.id)
       }
       response = await request.delete(`${api}/sources/${source}`)
+      // A media read the page aborted (for example on reload) can hold the core's
+      // source reader lease until it expires (60 s) even with no active job.
+      if (response.status() === 409) test.info().setTimeout(test.info().timeout + 75_000)
+      for (const deadline = Date.now() + 70_000; response.status() === 409 && Date.now() < deadline;) {
+        await new Promise(resolve => setTimeout(resolve, 2_000))
+        response = await request.delete(`${api}/sources/${source}`)
+      }
     }
     expect([204, 404], await response.text()).toContain(response.status())
   }

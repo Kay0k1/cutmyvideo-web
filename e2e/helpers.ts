@@ -79,14 +79,14 @@ export async function goToMoment(page: Page) {
 }
 
 export async function goToExport(page: Page) {
-  if (await page.locator('.workspace-export-dialog').isVisible() && !await page.locator('.export-settings-dialog').isVisible()) return
   await closeWorkspaceDialogs(page)
   if (await unifiedWorkspace(page) || await page.locator('.export-panel').isVisible()) {
-    const files = page.getByRole('tab', { name: /^(Готовые файлы|Ready files)$/ })
-    if (await files.isVisible() && await files.isEnabled()) await files.click()
-    const review = page.locator('.workspace-export-toggle')
-    if (await review.isVisible()) await review.click()
-    await expect(page.locator('.export-panel').first()).toBeVisible()
+    // The action row holds either the cutting form or the latest result;
+    // "Cut another" returns to the form. A running job keeps its progress there.
+    const form = page.locator('.export-panel').first()
+    const again = page.getByRole('button', { name: /^(Вырезать ещё|Cut another)$/ })
+    if (!await form.isVisible() && await again.isVisible()) await again.click()
+    await expect(page.locator('.export-panel:visible, #workspace-results:visible').first()).toBeVisible()
     return
   } else {
     const downloads = page.getByRole('button', { name: /^(Вернуться к скачиванию|Return to downloads)$/ })
@@ -106,6 +106,23 @@ export async function goToExport(page: Page) {
   if (await advanced.count() && !await advanced.evaluate(element => (element as HTMLDetailsElement).open)) {
     await advanced.locator('summary').click()
   }
+}
+
+/** Shows the ready files (or the running job) in place of the cutting form. */
+export async function showResults(page: Page) {
+  await closeWorkspaceDialogs(page)
+  const results = page.locator('#workspace-results')
+  if (!await unifiedWorkspace(page)) {
+    await expect(page.locator('.output-stage')).toBeVisible()
+    return
+  }
+  if (!await results.isVisible()) {
+    const toggle = page.getByRole('button', { name: /^(Готовые файлы|Ready files)$/ })
+    await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    await toggle.click()
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+  }
+  await expect(results).toBeVisible()
 }
 
 export async function showExportSettings(page: Page) {
@@ -144,19 +161,22 @@ export async function closeEditorTools(page: Page) {
   }
 }
 
-export async function showTimelineMedia(page: Page) {
-  await goToMoment(page)
-  const disclosure = page.locator('details.timeline-media-disclosure')
-  if (await disclosure.count() && !await disclosure.evaluate(node => (node as HTMLDetailsElement).open)) {
-    await disclosure.locator('summary').click()
-  }
+/** Storyboard frames drawn inside the timeline track; placeholders lack `data-ready`. */
+export function trackFrames(page: Page, { ready = true }: { ready?: boolean } = {}) {
+  return page.locator(ready ? '.trim-track .track-frame[data-ready]' : '.trim-track .track-frame')
+}
+
+/** Clicks through a frame cell at its left edge, where its own time begins. */
+export async function clickTrackAt(page: Page, ms: number) {
+  const track = page.locator('.trim-track')
+  const [start, end] = await page.locator('.timeline').evaluate(node => [Number(node.getAttribute('data-view-start')), Number(node.getAttribute('data-view-end'))])
+  const box = (await track.boundingBox())!
+  await page.mouse.click(box.x + (ms - start) / (end - start) * box.width + 1, box.y + box.height / 2)
 }
 
 export async function goToClips(page: Page) {
   await closeWorkspaceDialogs(page)
   if (await unifiedWorkspace(page)) {
-    const clips = page.getByRole('tab', { name: /^(Фрагменты|Clips)$/ })
-    if (await clips.isVisible()) await clips.click()
     await expect(page.locator('.clip-library')).toBeVisible()
     return
   }
@@ -192,7 +212,7 @@ export async function saveClip(page: Page) {
 
 export async function addClip(page: Page) {
   await goToClips(page)
-  await page.getByRole('button', { name: /^(Добавить фрагмент|Add a clip)$/ }).click()
+  await page.getByRole('button', { name: /^(Ещё фрагмент|Another clip)$/ }).click()
   if (await page.locator('.editor-workspace').isVisible()) {
     await expect(page.locator('.moments-stage')).toBeVisible()
     return
@@ -214,9 +234,26 @@ export async function chooseOption(page: Page, control: Locator, name: string | 
   await expect(control).toHaveAttribute('aria-expanded', 'false')
 }
 
+export function menuButton(page: Page) {
+  return page.getByRole('button', { name: /^(Меню|Menu)$/ })
+}
+
+/** Opens a header menu item and returns the menu button that receives focus back. */
+export async function openMenuItem(page: Page, name: string | RegExp, options: { tap?: boolean } = {}) {
+  const button = menuButton(page)
+  if (await button.getAttribute('aria-expanded') !== 'true') {
+    if (options.tap) await button.tap(); else await button.click()
+    await expect(button).toHaveAttribute('aria-expanded', 'true')
+  }
+  const item = page.getByRole('menu').getByRole('menuitem', typeof name === 'string' ? { name, exact: true } : { name })
+  if (options.tap) await item.tap(); else await item.click()
+  await expect(page.getByRole('menu')).toHaveCount(0)
+  return button
+}
+
 export async function setTheme(page: Page, theme: 'light' | 'dark' | 'system') {
   await closeWorkspaceDialogs(page)
-  await page.getByRole('button', { name: /^(Настройки|Settings)$/ }).click()
+  await openMenuItem(page, /^(Настройки|Settings)$/)
   const dialog = page.getByRole('dialog')
   const labels = { system: /^(Как в системе|System)$/, light: /^(Светлая|Light)$/, dark: /^(Тёмная|Dark)$/ }
   await chooseOption(page, dialog.getByRole('combobox', { name: /^(Тема оформления|Appearance)$/ }), labels[theme])
@@ -227,7 +264,6 @@ export async function setTheme(page: Page, theme: 'light' | 'dark' | 'system') {
 
 export async function uploadThroughUI(page: Page, filename = process.env.CUTMY_E2E_MEDIA!) {
   await goToSource(page)
-  await page.getByRole('button', { name: /^(Файл|File)$/ }).click()
   const button = page.locator('button.upload-button')
   await expect(button).toBeEnabled()
   const chooser = page.waitForEvent('filechooser')

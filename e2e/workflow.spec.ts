@@ -178,7 +178,6 @@ test('the website rejects unsupported files and unsafe URLs before an API mutati
     await expect(page.getByLabel('Video link', { exact: true })).toHaveValue(url)
   }
   await goToSource(page)
-  await page.getByRole('button', { name: 'File', exact: true }).click()
   const wav = await readFile(process.env.CUTMY_E2E_AUDIO!)
   for (const file of [process.env.CUTMY_E2E_AUDIO!, { name: 'renamed.mp4', mimeType: 'video/webm', buffer: wav }, { name: 'renamed.mp4', mimeType: 'video/mp4', buffer: wav }]) {
     const chooser = page.waitForEvent('filechooser')
@@ -243,7 +242,8 @@ test('a completed job does not override the chosen moments or source step on rel
   await goToMoment(page)
   await showExactTimes(page)
   await expect(page.getByLabel('Начало', { exact: true })).toHaveValue('00:00:02.000')
-  await goToExport(page)
+  // The restored result takes the place of the form without another click.
+  await expect(page.locator('#workspace-results')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Скачать', exact: true })).toHaveAttribute('href', job.items[0].artifact.download_url)
   const probe = await probeDownloadedFile(page.request, job.items[0].artifact.download_url, 'restored-original-job.mp4', testInfo)
   expect(Math.abs(Number(probe.format.duration) - 2.5)).toBeLessThan(0.2)
