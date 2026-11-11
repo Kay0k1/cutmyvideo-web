@@ -15,7 +15,165 @@ Link / MP4 → Player + trim rail          → Video / audio + Cut
              Optional Clip list           Job status + Download
 ```
 
-The tokens remain intentional and consistent: light page #f4f6f5, white surface #ffffff, ink #203431, muted text #5c7067, action #35645b and amber trim #eac389. Dark appearance uses page #18201f, surface #222c29, ink #e7eeea, muted text #a4b7ac and action #a8cbb9. Self-hosted Geologica Variable covers Cyrillic and Latin; restrained weights explain hierarchy, and timecodes use tabular numerals. Core text uses relative font units; supporting copy generally starts at14px, with16px text inputs to preserve comfortable phone editing. No new typeface, decorative hero or unrelated illustration is introduced.
+Colors, type and radii are listed in the token table of the timeline editor section. Self-hosted Geologica Variable covers Cyrillic and Latin; restrained weights explain hierarchy, and timecodes use tabular numerals. Core text uses relative font units, with 16px text inputs to preserve comfortable phone editing. No decorative hero or unrelated illustration is introduced.
+
+## Timeline editor — 10 November 2026
+
+The editor is one centered column up to 1120 px wide, without a sidebar. From top
+to bottom: the player, a thin overview of the whole video, the timeline ribbon, the
+label row, the action row and the clip strip with secondary tools.
+
+```text
+header: mark · title 0:52 ………… ↶ ↷ [Change video]   RU EN ◐ ≡
+┌────────────────────────── player ──────────────────────────┐
+└────────────────────────────────────────────────────────────┘
+(overview of the whole video: when the ribbon shows part of it, or Exact time is open)
+┌──────────── ribbon: frames · waveform · selection · grips ────────────┐
+└───────────────────────────────────────────────────────────────────────┘
+0:00            [30 s]                            0:52     − + Entire section
+[▶ Clip] [Start 0:00 | I] [End 0:30 | O] 30 s       [MP4|MP3] [⚙] [Cut a clip · 30 s]
+                                   one file MP4 · Up to 1080p · Source deleted after export
+[☑ Clip 1 0:00 — 0:30 ···] With selected ▾ + Another clip   Exact time ▸ Frame Tools
+```
+
+### Window and column
+
+On a desktop (900 px and wider with a fine pointer) the editor fills the window
+without page scrolling from 1920×1080 down to 900×500. The header is one 56 px
+row: the mark, the video title with its duration, Undo, Redo and Change video,
+then RU / EN, the theme toggle and Menu (Examples, Settings, Collections,
+Support, the open core on GitHub). The player takes the remaining height but
+keeps at least min(240 px, 42 % of the window); on short windows the frames
+shrink to 44 px and the waveform band gives way below about 620 px of height.
+The column, the player and the ribbon keep one size while the cutting form, a
+running job, one ready file or the form after Cut another is shown. A list of
+several files, partial failures and long warnings take extra height in the row
+and scroll inside it (the list up to 40 % of the window height). Enlarged text
+switches the desktop canvas to ordinary page flow.
+
+### Timeline ribbon
+
+The ribbon (`.trim-track`) spans the column: frames (84 px) above the waveform
+band (24 px) on the soft background, radius 14. Each frame covers its own five
+seconds; a wider cell repeats it, a narrower cell shows its middle, and cells
+under 20 px are left empty. Frames come from 30-second storyboard windows and
+the waveform from the same windows of audio. Only windows crossing the visible
+part are prepared, nearest to the playhead first and at most four, with one
+background request at a time for frames and waveform together. Requests wait
+700 ms (frames) and 1 s (waveform) after the view settles, are cancelled when
+the view moves away, retry server-busy answers and are not made with Save-Data
+or 2G, in a hidden tab, or while a dialog covers the editor. Until a window is
+ready its cells are even placeholders of the same geometry, so nothing moves
+when frames arrive. Without audio the band is a flat line, and the existing
+waveform status stays available to assistive technology.
+
+The selection is framed in yellow; outside it frames and waveform are dimmed.
+The 16 px yellow grips stand outside the selection and have 44 px hit areas;
+when the boundaries are close, both hit areas move fully outside so they never
+overlap. The grip shows its time while hovered, focused or dragged. Other clips
+appear as a thin outline; double-clicking one makes it the edited clip. The
+playhead is a 2 px line across the ribbon. Clicking or dragging the ribbon
+seeks, the wheel and pinch zoom around the pointer, and a sideways gesture
+pans. While a job runs, a thin yellow bar under the selection shows the real
+encoding percentage, or moves without a value when the server reports none.
+
+The label row under the ribbon shows the start and end of the visible part at
+its edges and the selection length under the middle of the selection, kept
+between the two edge times. Zoom out, Zoom in and Entire section (Zoom
+to boundaries when the grips are close) sit at its right end. On phones narrower
+than the full row, zoom takes its own row.
+
+### Action row and cutting
+
+The left side holds the moment: Clip (preview the selection; Stop while
+playing), the Start and End pills and the selection length. A pill shows the
+time, which turns into a text field when pressed, and a marker button that sets
+the boundary at the player position; its key, I or O, is printed on it. Exact
+time shows both fields at once with millisecond precision.
+
+The right side is the cutting form, always visible: MP4 | MP3, the export
+settings button (opens the Export settings dialog) and the main button. Its
+visible label is the action and the length that will be cut ("Cut a clip · 30 s";
+several clips add their count). The accessible name stays the action; count and
+length are its description. One quiet line under the button states the result:
+one file or separate files, format, quality, sound and crop, and that the source
+is deleted after export. Reasons why cutting is unavailable (no clip selected,
+limits, track, crop or enhancement conflicts, a pending request to recover)
+appear under the inactive button with their corrective actions.
+
+A job replaces the form in the same place. While it runs: the real stage in
+words, its description, the encoding progress where the server reports one,
+Cancel processing and the option to open another video meanwhile. One ready
+file is one row: Cut another and Download, with the name, size, actual
+boundaries, retention date and Result boundaries and tracks on the quiet line
+below.
+Several files form a list with Download all ZIP and Cut another. Partial
+results, per-clip failures and their retry live in this area too. Cut another
+returns the form; Ready files N among the secondary tools switches back to the
+files (`aria-pressed`), and is unavailable while a job runs. Focus moves to the
+results heading when files become ready.
+
+### Clip strip and secondary tools
+
+Each clip is a chip: a checkbox (included in export), its editable name, its
+times (a button that makes it the edited clip) and the ··· menu with move up,
+move down and delete. Another clip ends the strip. With two clips or more the
+strip adds Select all with the selected count and With selected ▾ (Duplicate
+selected, Delete selected), which opens as a small panel and closes on Escape,
+outside clicks and after an action. On a desktop the strip wraps up to two rows
+(one row on windows up to 760 px tall), scrolls inside and keeps the edited chip
+in view. The secondary tools follow on the right: Exact time, Frame (crop),
+Tools (analysis and helper dialog), Preview selection for two clips or more and
+Ready files N after a job.
+
+### Phones and touch screens
+
+Below 900 px or with touch input the page scrolls naturally. Under the header a
+row holds the title, duration, Undo, Redo and Change video. Then come the
+player, the ribbon with its label row, three buttons in a row (preview, Start
+with `[`, End with `]`), the chips — each spanning the row with its times on one
+line — the strip actions, the secondary tools and the job area. The cutting form
+(format, settings, "Cut · 30 s") is pinned to the bottom of the window with the
+safe-area inset. It is the last item of the editor, so scrolling to the end
+leaves every control above it. Touch targets are at least 44×44 px. On 390×844
+the player, the ribbon and the main button are visible on the first screen.
+
+### Keyboard
+
+Every control is reachable with Tab in visual order. The ribbon exposes three
+sliders: Player position and the Start and End grips. Arrows move by 0.1 s,
+Shift with an arrow by 1 s, Page Up and Page Down by 5 s, Home and End go to the
+limits. Outside text fields,
+I and O set the start and end at the player position, N saves the clip and adds
+the next one, [ and ] move to the previous and next clip, and Space plays or
+pauses. The header menu opens with Enter, Space or the arrows, moves with the
+arrows, Home and End, and closes with Escape, returning focus to its button.
+Dialogs keep focus inside and return it to their trigger. Focus is a 3 px ring in
+the focus color with a 2 px offset. Reduced motion stops the optional
+animations, including the ribbon progress bar.
+
+### Tokens
+
+| Token | Light | Dark | Role |
+|---|---|---|---|
+| `--page` | `#F4F5F3` | `#131415` | page |
+| `--surface` | `#FFFFFF` | `#1C1E20` | menus, dialogs, fields, pills |
+| `--soft` | `#E9EBE7` | `#232628` | ribbon background, calm fills |
+| `--ink` | `#17191B` | `#F1F2F0` | text, main action background |
+| `--muted` | `#62686D` | `#A0A6AB` | secondary text |
+| `--line` | `#E0E2DE` | `#2C2F32` | dividers |
+| `--strong-line` | `#868C91` | `#6F767C` | field and button borders (3:1) |
+| `--trim` | `#FFC400` | `#FFD23F` | selection frame and grips only |
+| `--trim-line` | `#B88A00` | `#FFD23F` | grip outline, other clips |
+| `--focus` | `#2B6BE4` | `#7FB0FF` | focus ring |
+| `--error` | `#B3261E` | `#FF9E91` | errors |
+
+Color appears only on the ribbon selection, the focus ring and errors; links
+and text buttons use the text color with an underline on hover. The typeface is
+self-hosted Geologica: interface text 15/22 at weight 380, buttons 500,
+timecodes 500 with tabular numerals. The player and ribbon have a 14 px radius,
+fields and panels 12 px, buttons are 44 px pills. Only menus and dialogs cast a
+shadow. Text keeps 4.5:1 and controls 3:1 contrast in both themes.
 
 ## Optional helpers in 0.7.0
 

@@ -4,6 +4,15 @@ Notable product changes are recorded here.
 
 ## Unreleased
 
+### Changed
+- One-column timeline editor. The player, a ribbon with frames and the selected-track waveform, the action row and the clip chips share a centered column up to 1120 px; the sidebar with Clips / Ready files tabs is removed. The desktop canvas fits windows from 1920×1080 down to 900×500, and the column, player and ribbon keep their size while cutting, with one ready file and after Cut another.
+- The cutting form is always visible beside the moment controls: MP4 | MP3, Export settings and a main button that states what will be cut ("Cut a clip · 30 s"). The Export toolbar button and its floating panel are removed. Progress and ready files take the place of the form; Cut another returns it and Ready files N shows the files again.
+- Frames and the waveform live in the ribbon itself. Windows crossing the visible part load nearest to the playhead first, one background request at a time, never with Save-Data, in a hidden tab or under an open dialog; placeholders keep the geometry. The Frames and audio disclosure, Go to frame buttons and the separate waveform overview slider are removed.
+- The yellow selection with 16 px grips outside it, other clips as outlines (double-click to edit one) and a 2 px playhead. Edge times, the selection length and zoom share one row under the ribbon.
+- Clips are compact chips with a checkbox, name, times and an action menu; With selected ▾ holds duplicate and delete for two clips or more. On phones each chip spans the row and the cutting form is pinned to the bottom of the window.
+- Header in one 56 px row with the video title, Undo, Redo and Change video; Examples, Settings, Collections, Support and the core link move into a keyboard-accessible Menu. The start screen offers the link field and the file button together, accepts a file dropped anywhere in the window and fills the field from a pasted link.
+- Neutral light and dark palettes with color reserved for the selection, focus and errors; 44 px pill buttons and a 3 px focus ring. The client JavaScript grows by about 1.8 kB gzip.
+
 ### Fixed
 - Dragging a part boundary or crop in the collection workspace saves the project at most once per second and once when the gesture ends, instead of rewriting browser storage on every pointer move.
 - The expired-file status of a collection clip is translated in the English interface.
