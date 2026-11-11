@@ -115,7 +115,7 @@ permitted only before opening public traffic is attempted.
 Release acceptance requires fresh evidence for the actual final refs:
 
 - Bind `core.version` and Compose's `v1.5.0`, source commit and genuine UTC build
-  timestamp to the final merged core. All Product checks jobs must succeed for
+  timestamp to the final merged core. Every Product checks job must succeed for
   the final website ref, including database access, both recovery drills, all
   eight browser projects and the complete-browser-coverage gate.
 - The core release must verify all 18 assets and their provenance, SPDX and SDK
@@ -220,7 +220,7 @@ Publication and activation require fresh evidence tied to the actual merged
 core pin, its genuine release build metadata and the final website commit.
 The following are requirements, not results inferred from the benchmark:
 
-- All 12 Product jobs must succeed for the final website's genuine annotated
+- Every Product checks job must succeed for the final website's genuine annotated
   `v0.6.1` tag: scope, frontend, database access, all eight browser projects and
   the complete-browser-coverage gate. The database job must execute the actual
   immutable 007 → 008 → 007 database/media restore drill, including the old
