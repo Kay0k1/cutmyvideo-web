@@ -37,6 +37,17 @@ this branch. Before/after sheets are in
   (186.27 kB) before the redesign, +1.83 kB within the 15 kB budget. CSS
   21.78 kB gzip.
 
+## Core 1.7.0 runtime integration — 11 November 2026
+
+[core.version](../core.version) pins core 1.7.0 (`4e8f2f8`), and the Compose
+build arguments carry the same version, commit and UTC commit time. Core 1.7.0
+keeps the HTTP API, SDK methods and database schema 10 of 1.6.0; its new
+`sync`, `analyze repeats`, `sheet` and `qc` operations are CLI/Go only, so the
+editor is unchanged. The server releases a source reader lease left by a client
+that aborted mid-admission, and the 409 `source_in_use` message names reads as
+well as exports. Product CI runs the full browser matrix and the deployment
+recovery drills against this pin.
+
 ## Core 1.6.0 runtime integration
 
 Web 0.7.1 integrates the immutable core revision in [core.version](../core.version)
