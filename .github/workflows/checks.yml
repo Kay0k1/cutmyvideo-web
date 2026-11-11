@@ -167,6 +167,7 @@ jobs:
           retention-days: 3
 
   integration:
+    name: integration (${{ matrix.project }}${{ matrix.shards > 1 && format(' {0}/{1}', matrix.shard, matrix.shards) || '' }})
     needs: scope
     if: needs.scope.outputs.full == 'true'
     runs-on: ubuntu-24.04
@@ -174,7 +175,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: [desktop, mobile, layout-chromium, layout-firefox, usability-chromium, usability-firefox]
+        # desktop is the longest serial project; two shards keep every browser job near ten minutes.
+        include:
+          - {project: desktop, shard: 1, shards: 2}
+          - {project: desktop, shard: 2, shards: 2}
+          - {project: mobile, shard: 1, shards: 1}
+          - {project: layout-chromium, shard: 1, shards: 1}
+          - {project: layout-firefox, shard: 1, shards: 1}
+          - {project: usability-chromium, shard: 1, shards: 1}
+          - {project: usability-firefox, shard: 1, shards: 1}
     container:
       image: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:7852dc5a7d72f5fe458a597d690f6c42fbc8e9e26ddfa95f8e6ef552558d9bbf
       options: --init --ipc=host
@@ -240,7 +249,10 @@ jobs:
         run: |
           mkdir "$RUNNER_TEMP/browser-evidence"
           printf 'CUTMY_E2E_JSON_OUTPUT=%s\n' "$RUNNER_TEMP/browser-evidence/tests.json" >> "$GITHUB_ENV"
-          node node_modules/@playwright/test/cli.js test --config=e2e/playwright.config.ts --project="${{ matrix.project }}" --list --reporter=json > "$RUNNER_TEMP/browser-evidence/inventory.json"
+          node node_modules/@playwright/test/cli.js test --config=e2e/playwright.config.ts --project="${{ matrix.project }}" --shard="${{ matrix.shard }}/${{ matrix.shards }}" --grep-invert='current core database contract' --list --reporter=json > "$RUNNER_TEMP/browser-evidence/inventory.json"
+          if [ "${{ matrix.project }}" = desktop ] && [ "${{ matrix.shard }}" = 1 ]; then
+            node node_modules/@playwright/test/cli.js test --config=e2e/playwright.config.ts --project=desktop --grep='current core database contract' --list --reporter=json > "$RUNNER_TEMP/browser-evidence/contract-inventory.json"
+          fi
       - name: Start real backend and website
         run: |
           /tmp/cutmy server > /tmp/cutmy-server.log 2>&1 &
@@ -260,31 +272,35 @@ jobs:
           cat /tmp/cutmy-server.log /tmp/cutmy-web.log
           exit 1
       - name: Verify actual database fault contract first
-        if: matrix.project == 'desktop'
+        if: matrix.project == 'desktop' && matrix.shard == 1
         env:
           CUTMY_E2E_JSON_OUTPUT: ${{ runner.temp }}/browser-evidence/contract.json
         run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed --project=desktop --grep='current core database contract'
         working-directory: web
       - name: Run isolated browser project with a virtual display
-        run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed --project="${{ matrix.project }}" --grep-invert='current core database contract'
+        run: xvfb-run -a --server-args='-screen 0 2560x1440x24' npm run test:e2e -- --headed --project="${{ matrix.project }}" --shard="${{ matrix.shard }}/${{ matrix.shards }}" --grep-invert='current core database contract'
         working-directory: web
       - name: Require every collected case in this project
         working-directory: web
         run: |
+          inventories=("$RUNNER_TEMP/browser-evidence/inventory.json")
           reports=("$RUNNER_TEMP/browser-evidence/tests.json")
-          if [ "${{ matrix.project }}" = desktop ]; then reports+=("$RUNNER_TEMP/browser-evidence/contract.json"); fi
-          python3 deploy/browser-coverage.py --project "${{ matrix.project }}" --inventory "$RUNNER_TEMP/browser-evidence/inventory.json" --reports "${reports[@]}" --output "$RUNNER_TEMP/browser-evidence/coverage.json"
+          if [ -f "$RUNNER_TEMP/browser-evidence/contract-inventory.json" ]; then
+            inventories+=("$RUNNER_TEMP/browser-evidence/contract-inventory.json")
+            reports+=("$RUNNER_TEMP/browser-evidence/contract.json")
+          fi
+          python3 deploy/browser-coverage.py --project "${{ matrix.project }}" --inventory "${inventories[@]}" --reports "${reports[@]}" --output "$RUNNER_TEMP/browser-evidence/coverage.json"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
-          name: browser-evidence-${{ matrix.project }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: browser-evidence-${{ matrix.project }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/browser-evidence/
           retention-days: 3
           if-no-files-found: error
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
-          name: integration-diagnostics-${{ matrix.project }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: integration-diagnostics-${{ matrix.project }}-${{ matrix.shard }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             web/playwright-report
             web/test-results

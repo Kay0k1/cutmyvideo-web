@@ -34,6 +34,16 @@ class BrowserCoverageTests(unittest.TestCase):
         result = coverage.verify(self.inventory, [self.execution, second], 'desktop')
         self.assertEqual(result['projects']['desktop'], {'collected': 2, 'passed': 2, 'skipped': 0})
 
+    def test_shard_and_separate_group_inventories_cover_one_job(self):
+        shard, group = deepcopy(self.inventory), deepcopy(self.inventory)
+        group['suites'][0]['specs'] = [shard['suites'][0]['specs'].pop()]
+        result = coverage.verify([shard, group], [self.execution], 'desktop')
+        self.assertEqual(result['projects']['desktop']['collected'], 2)
+        with self.assertRaises(ValueError): coverage.verify([shard], [self.execution], 'desktop')
+        with self.assertRaises(ValueError): coverage.verify([self.inventory, group], [self.execution], 'desktop')
+        group['config']['metadata']['ci'] = {'commit': 'other', 'run': 'other', 'attempt': 'other'}
+        with self.assertRaises(ValueError): coverage.verify([shard, group], [self.execution], 'desktop')
+
     def test_all_eight_projects_are_required(self):
         inventory = report(count=0, executed=False)
         reports = [report(project) for project in sorted(coverage.PROJECTS)]
