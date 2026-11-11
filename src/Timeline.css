@@ -1,6 +1,8 @@
 .timeline-detail-label { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; flex-wrap: wrap; color: var(--muted); font-size: .8125rem; }
 .timeline-zoom-buttons { display: flex; align-items: center; gap: 2px; }
-.timeline-zoom-buttons > button:not(.text-button) { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--ink); font-size: 1.25rem; }
+/* The glyph's font box is taller than a short-window button; clipping keeps it
+   from making the timeline scrollable. */
+.timeline-zoom-buttons > button:not(.text-button) { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: var(--ink); font-size: 1.25rem; overflow: clip; }
 .timeline-zoom-buttons > button:not(.text-button):hover:not(:disabled) { background: var(--hover); }
 .timeline-zoom-buttons > button:disabled { opacity: .45; }
 .timeline-zoom-buttons > .text-button { font-size: .75rem; min-height: 44px; }
