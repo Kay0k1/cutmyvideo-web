@@ -80,6 +80,8 @@
   min-width: 0;
   max-width: 100%;
   height: 44px;
+  /* Rows are spaced by the list gap alone. */
+  margin: 0;
   padding: 0 2px 0 0;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -168,4 +170,8 @@
 @media (hover: hover) and (pointer: fine) and (min-width: 900px) {
   .clip-library.compact .clip-bulkbar { max-height: 44px; }
   .clip-library.compact .clip-select-all, .clip-library.compact .clip-select-all > label { min-height: 0; max-height: 42px; }
+  /* The strip scrolls by whole chip rows, so a wheel step never leaves a
+     half-hidden chip, even where Firefox limits a step to the strip height. */
+  .clip-library.compact .clip-list { scroll-snap-type: y mandatory; }
+  .clip-library.compact .clip-list > li { scroll-snap-align: start; }
 }
